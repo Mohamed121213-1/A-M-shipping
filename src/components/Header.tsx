@@ -308,14 +308,6 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            <button
-              onClick={onResetData}
-              title="استعادة البيانات التجريبية الافتراضية"
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden lg:inline text-[11px] font-bold">استعادة التجريبية</span>
-            </button>
           </div>
         </div>
       </div>
