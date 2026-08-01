@@ -1,0 +1,324 @@
+import React, { useState } from 'react';
+import { 
+  Package, 
+  Truck, 
+  Building2, 
+  Search, 
+  PlusCircle, 
+  Wallet, 
+  BarChart3, 
+  Calculator, 
+  SearchCode,
+  CheckCircle2,
+  Bell,
+  RefreshCw,
+  Trash2,
+  LogIn,
+  LogOut,
+  User,
+  ShieldCheck
+} from 'lucide-react';
+import { AppUserRole, MerchantWallet, UserSession } from '../types';
+
+interface HeaderProps {
+  currentRole: AppUserRole;
+  onRoleChange: (role: AppUserRole) => void;
+  onOpenCreateModal: () => void;
+  onSearchTracking: (trackingNum: string) => void;
+  merchantWallet: MerchantWallet;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  onResetData: () => void;
+  onClearData?: () => void;
+  currentUser?: UserSession | null;
+  onOpenLogin?: () => void;
+  onLogout?: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  currentRole,
+  onRoleChange,
+  onOpenCreateModal,
+  onSearchTracking,
+  merchantWallet,
+  activeTab,
+  setActiveTab,
+  onResetData,
+  onClearData,
+  currentUser,
+  onOpenLogin,
+  onLogout,
+}) => {
+  const [searchInput, setSearchInput] = useState('');
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchInput.trim()) {
+      onSearchTracking(searchInput.trim());
+    }
+  };
+
+  return (
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+      {/* Top Banner & Multi-Role Switcher */}
+      <div className="bg-slate-900 text-slate-200 text-xs py-1.5 px-4 sm:px-6 flex flex-wrap justify-between items-center gap-2">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 font-medium text-red-400">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+            A&M shipping
+          </span>
+          <span className="hidden md:inline text-slate-500">|</span>
+          <span className="hidden md:inline text-slate-400">تغطية شاملة لجميع المحافظات المصرية</span>
+        </div>
+
+        {/* Role Selector */}
+        <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700">
+          <span className="text-slate-400 text-[11px] px-2 font-medium">عرض بصفة:</span>
+          
+          <button
+            onClick={() => { onRoleChange('merchant'); setActiveTab('shipments'); }}
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentRole === 'merchant'
+                ? 'bg-red-600 text-white shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            بوابة التجار (Merchant)
+          </button>
+
+          <button
+            onClick={() => { onRoleChange('hub_manager'); setActiveTab('shipments'); }}
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentRole === 'hub_manager'
+                ? 'bg-red-600 text-white shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+            }`}
+          >
+            <Package className="w-3.5 h-3.5" />
+            إدارة المستودعات (Hub)
+          </button>
+
+          <button
+            onClick={() => { onRoleChange('courier'); setActiveTab('courier_app'); }}
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentRole === 'courier'
+                ? 'bg-red-600 text-white shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+            }`}
+          >
+            <Truck className="w-3.5 h-3.5" />
+            تطبيق المندوب (Courier)
+          </button>
+
+          <button
+            onClick={() => { onRoleChange('public_tracker'); setActiveTab('tracking'); }}
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              currentRole === 'public_tracker'
+                ? 'bg-red-600 text-white shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+            }`}
+          >
+            <SearchCode className="w-3.5 h-3.5" />
+            تتبع الشحنة
+          </button>
+        </div>
+      </div>
+
+      {/* Main Header Bar */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+        {/* Brand & Logo */}
+        <div className="flex items-center gap-4">
+          <div 
+            onClick={() => setActiveTab('shipments')}
+            className="flex items-center gap-2.5 cursor-pointer group"
+          >
+            <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 overflow-hidden shadow-sm shadow-slate-200 group-hover:scale-105 transition-transform flex items-center justify-center p-0.5">
+              <img
+                src="/src/assets/images/am_shipping_new_logo_1785454536501.jpg"
+                alt="A&M Shipping Logo"
+                className="w-full h-full object-cover rounded-lg"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-black text-xl tracking-tight text-slate-900">
+                  A&M <span className="text-red-600">shipping</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">منصة الشحن واللوجستيات المتكاملة</p>
+            </div>
+          </div>
+
+          {/* Quick Search Tracking Box */}
+          <form onSubmit={handleSearchSubmit} className="hidden lg:flex items-center relative min-w-[280px]">
+            <input
+              type="text"
+              placeholder="ابحث برقم البوليصة (مثال: BST-804101)..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full pl-3 pr-9 py-1.5 text-xs bg-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-all text-slate-800 placeholder-slate-400"
+            />
+            <button type="submit" className="absolute right-2.5 text-slate-400 hover:text-red-600">
+              <Search className="w-4 h-4" />
+            </button>
+          </form>
+        </div>
+
+        {/* Action Controls & Navigation Tabs */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          {/* Main Navigation Tabs */}
+          {currentRole !== 'public_tracker' && currentRole !== 'courier' && (
+            <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/80">
+              <button
+                onClick={() => setActiveTab('shipments')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'shipments'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Package className="w-4 h-4 text-slate-500" />
+                الشحنات
+              </button>
+
+              {currentRole === 'merchant' && (
+                <button
+                  onClick={() => setActiveTab('wallet')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    activeTab === 'wallet'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Wallet className="w-4 h-4 text-slate-500" />
+                  المحفظة (COD)
+                </button>
+              )}
+
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'analytics'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 text-slate-500" />
+                التقارير
+              </button>
+
+              <button
+                onClick={() => setActiveTab('calculator')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'calculator'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Calculator className="w-4 h-4 text-slate-500" />
+                حاسبة الأسعار
+              </button>
+            </nav>
+          )}
+
+          {/* Quick Wallet Pill for Merchant */}
+          {currentRole === 'merchant' && (
+            <div 
+              onClick={() => setActiveTab('wallet')}
+              className="cursor-pointer hidden sm:flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors"
+            >
+              <Wallet className="w-4 h-4 text-emerald-600" />
+              <div>
+                <p className="text-[10px] text-emerald-600 leading-none">رصيد الكاش الجاهز</p>
+                <p className="text-xs font-extrabold">{merchantWallet.availableBalance.toLocaleString()} ج.م</p>
+              </div>
+            </div>
+          )}
+
+          {/* Create Shipment CTA */}
+          {currentRole === 'merchant' && (
+            <button
+              onClick={onOpenCreateModal}
+              className="bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1.5"
+            >
+              <PlusCircle className="w-4 h-4" />
+              إنشاء شحنة جديدة
+            </button>
+          )}
+
+          {/* User Profile & Auth Section */}
+          <div className="flex items-center gap-2 border-r border-slate-200 pr-3 mr-1">
+            {currentUser ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onOpenLogin}
+                  title="تغيير الحساب أو تسجيل الدخول بصفة أخرى"
+                  className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200 transition-colors text-right"
+                >
+                  <img
+                    src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
+                    alt={currentUser.name}
+                    className="w-7 h-7 rounded-lg object-cover border border-slate-300"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="hidden xl:block">
+                    <p className="text-[11px] font-extrabold text-slate-900 leading-tight">{currentUser.name}</p>
+                    <p className="text-[9px] text-slate-500 font-bold">
+                      {currentUser.role === 'merchant' && 'تاجر متجر'}
+                      {currentUser.role === 'courier' && 'مندوب توصيل'}
+                      {currentUser.role === 'hub_manager' && 'مدير مستودع'}
+                      {currentUser.role === 'public_tracker' && 'زائر متتبع'}
+                    </p>
+                  </div>
+                </button>
+
+                {onLogout && (
+                  <button
+                    onClick={onLogout}
+                    title="تسجيل الخروج"
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={onOpenLogin}
+                className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-3.5 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1.5"
+              >
+                <LogIn className="w-4 h-4 text-red-500" />
+                <span>تسجيل الدخول</span>
+              </button>
+            )}
+          </div>
+
+          {/* Clear Data & Reset Data Buttons */}
+          <div className="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1">
+            {onClearData && (
+              <button
+                onClick={onClearData}
+                title="مسح كافة البيانات الشحنات والمحفظة"
+                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="hidden lg:inline text-[11px] font-bold">مسح البيانات</span>
+              </button>
+            )}
+
+            <button
+              onClick={onResetData}
+              title="استعادة البيانات التجريبية الافتراضية"
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span className="hidden lg:inline text-[11px] font-bold">استعادة التجريبية</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};

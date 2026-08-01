@@ -1,0 +1,6 @@
+{
+  "name": "A&M shipping",
+  "description": "منصة لوجستيات متكاملة لشركة A&Mshipping تشمل إدارة الشحنات، طباعة البوليصة والباركود، متابعة المندوبين، المحفظة المالية، وتتبع الطلبات المباشر الذكي.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

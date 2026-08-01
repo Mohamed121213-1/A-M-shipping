@@ -1,0 +1,874 @@
+import React, { useState, useEffect } from 'react';
+import { Shipment, CourierInfo, ShipmentStatus, CourierNotification } from '../types';
+import { BOSTA_COURIERS } from '../data/mockData';
+import { 
+  Truck, 
+  Phone, 
+  MapPin, 
+  DollarSign, 
+  CheckCircle2, 
+  XCircle, 
+  Clock, 
+  ShieldCheck, 
+  KeyRound, 
+  Package, 
+  Navigation,
+  UserCheck,
+  Building,
+  Bell,
+  Check,
+  Sparkles,
+  X,
+  ChevronDown,
+  Wallet,
+  ArrowUpRight,
+  History,
+  Receipt,
+  Award,
+  Layers,
+  ArrowDownRight,
+  MessageSquare
+} from 'lucide-react';
+import { WhatsAppModal } from './WhatsAppModal';
+
+interface CourierAppViewProps {
+  shipments: Shipment[];
+  onUpdateStatus: (shipmentId: string, newStatus: ShipmentStatus, note?: string) => void;
+  notifications?: CourierNotification[];
+  selectedCourierId?: string;
+  targetShipmentId?: string;
+  onMarkNotificationRead?: (notificationId: string) => void;
+}
+
+export const CourierAppView: React.FC<CourierAppViewProps> = ({
+  shipments,
+  onUpdateStatus,
+  notifications = [],
+  selectedCourierId,
+  targetShipmentId,
+  onMarkNotificationRead,
+}) => {
+  const [activeCourier, setActiveCourier] = useState<CourierInfo>(BOSTA_COURIERS[1]);
+  const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
+  const [pinInput, setPinInput] = useState('');
+  const [failedReason, setFailedReason] = useState('لم يقم بالرد على الهاتف');
+  const [refuseReason, setRefuseReason] = useState('رفض العميل المعاينة / غير مطابق للمواصفات');
+  const [isDeliverModalOpen, setIsDeliverModalOpen] = useState(false);
+  const [isFailModalOpen, setIsFailModalOpen] = useState(false);
+  const [isRefuseModalOpen, setIsRefuseModalOpen] = useState(false);
+  const [refuseShippingFeePaid, setRefuseShippingFeePaid] = useState<boolean>(true);
+  const [isPartialModalOpen, setIsPartialModalOpen] = useState(false);
+  const [whatsappShipment, setWhatsappShipment] = useState<Shipment | null>(null);
+  const [partialItemsAccepted, setPartialItemsAccepted] = useState(1);
+  const [partialCodCollected, setPartialCodCollected] = useState(0);
+  const [partialNotes, setPartialNotes] = useState('تم استلام جزء من المحتويات وإرجاع المتبقي');
+  const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false);
+  const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | undefined>(targetShipmentId);
+  
+  // Courier App Tab: 'shipments' or 'wallet'
+  const [courierTab, setCourierTab] = useState<'shipments' | 'wallet'>('shipments');
+  const [isHandoverSuccess, setIsHandoverSuccess] = useState(false);
+  const [settledAmountState, setSettledAmountState] = useState<number>(0);
+
+  // Sync active courier if selected from parent / notification
+  useEffect(() => {
+    if (selectedCourierId) {
+      const found = BOSTA_COURIERS.find((c) => c.id === selectedCourierId);
+      if (found) setActiveCourier(found);
+    }
+  }, [selectedCourierId]);
+
+  useEffect(() => {
+    if (targetShipmentId) {
+      setHighlightedShipmentId(targetShipmentId);
+    }
+  }, [targetShipmentId]);
+
+  // Notifications for current active courier
+  const courierNotifs = notifications.filter((n) => n.courierId === activeCourier.id);
+  const unreadCount = courierNotifs.filter((n) => !n.read).length;
+
+  // Deliveries assigned to selected courier or active
+  const courierShipments = shipments.filter(
+    (s) => s.assignedCourier?.id === activeCourier.id || s.status === 'out_for_delivery'
+  );
+
+  const deliveredShipments = courierShipments.filter((s) => s.status === 'delivered');
+
+  const totalCodCollectedToday = courierShipments.reduce((sum, s) => {
+    if (s.status === 'delivered') return sum + s.financials.codAmount;
+    if (s.status === 'partial_delivery') return sum + (s.partialDetails?.partialCodAmount ?? s.financials.codAmount);
+    if (s.status === 'refused' && s.refusedDetails?.shippingFeePaid) {
+      return sum + (s.refusedDetails.amountCollected || s.financials.shippingFee);
+    }
+    return sum;
+  }, 0);
+
+  // Delivery Commission earned (25 EGP per delivered order)
+  const courierCommissionEarned = deliveredShipments.length * 25;
+
+  // Net Cash to Handover to Hub
+  const cashToHandover = Math.max(0, totalCodCollectedToday - settledAmountState);
+
+  const handleConfirmDelivery = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedShipment) return;
+
+    onUpdateStatus(
+      selectedShipment.id,
+      'delivered',
+      `تم التسليم بنجاح بترميز التأكيد (${pinInput || '8492'}) وتحصيل المبلغ ${selectedShipment.financials.codAmount} ج.م`
+    );
+
+    setIsDeliverModalOpen(false);
+    setSelectedShipment(null);
+    setPinInput('');
+  };
+
+  const handleConfirmFailed = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedShipment) return;
+
+    onUpdateStatus(selectedShipment.id, 'failed_attempt', `محاولة تسليم غير ناجحة: ${failedReason}`);
+
+    setIsFailModalOpen(false);
+    setSelectedShipment(null);
+  };
+
+  const handleConfirmRefused = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedShipment) return;
+
+    const amountCollected = refuseShippingFeePaid ? selectedShipment.financials.shippingFee : 0;
+    selectedShipment.refusedDetails = {
+      shippingFeePaid: refuseShippingFeePaid,
+      amountCollected,
+      reason: refuseReason,
+    };
+
+    const statusNote = refuseShippingFeePaid
+      ? `رفض الاستلام (دفع الشحن ورجع - تم تحصيل ${amountCollected} ج.م مصاريف شحن): ${refuseReason}`
+      : `رفض الاستلام (لم يدفع شحن - تحصيل 0 ج.م): ${refuseReason}`;
+
+    onUpdateStatus(selectedShipment.id, 'refused', statusNote);
+
+    setIsRefuseModalOpen(false);
+    setSelectedShipment(null);
+  };
+
+  const handleConfirmPartial = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedShipment) return;
+
+    // Mutate the shipment's financial codAmount or update details if possible
+    selectedShipment.financials.codAmount = partialCodCollected;
+    selectedShipment.partialDetails = {
+      acceptedItemsCount: partialItemsAccepted,
+      partialCodAmount: partialCodCollected,
+      notes: partialNotes,
+    };
+
+    onUpdateStatus(
+      selectedShipment.id,
+      'partial_delivery',
+      `استلام جزئي: تم استلام ${partialItemsAccepted} قطعة بقيمة ${partialCodCollected} ج.م. (${partialNotes})`
+    );
+
+    setIsPartialModalOpen(false);
+    setSelectedShipment(null);
+  };
+
+  const handleHandoverCashToHub = () => {
+    if (cashToHandover <= 0) return;
+    setSettledAmountState((prev) => prev + cashToHandover);
+    setIsHandoverSuccess(true);
+    setTimeout(() => setIsHandoverSuccess(false), 4000);
+  };
+
+  return (
+    <div className="max-w-md mx-auto bg-slate-900 text-slate-100 rounded-3xl border-4 border-slate-800 shadow-2xl overflow-hidden my-4 min-h-[760px] flex flex-col relative">
+      {/* Mobile Top Bar */}
+      <div className="bg-slate-950 p-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <img
+            src={activeCourier.photoUrl}
+            alt={activeCourier.name}
+            className="w-10 h-10 rounded-full border-2 border-red-500 object-cover"
+            referrerPolicy="no-referrer"
+          />
+          <div>
+            <h3 className="font-extrabold text-sm text-white">{activeCourier.name}</h3>
+            <p className="text-[11px] text-slate-400">كابتن توصيل | {activeCourier.assignedHub}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Notification Bell Icon */}
+          <button
+            onClick={() => setIsNotifPanelOpen(!isNotifPanelOpen)}
+            className="relative p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition-colors"
+            title="تنبيهات وإشعارات المندوب"
+          >
+            <Bell className="w-4 h-4 text-amber-400" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Courier Selector */}
+          <select
+            value={activeCourier.id}
+            onChange={(e) => {
+              const found = BOSTA_COURIERS.find((c) => c.id === e.target.value);
+              if (found) setActiveCourier(found);
+            }}
+            className="bg-slate-800 text-white text-[10px] p-1.5 rounded-lg border border-slate-700 font-bold"
+          >
+            {BOSTA_COURIERS.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Top Mobile View Selector Bar (Tabs) */}
+      <div className="grid grid-cols-2 bg-slate-950/90 border-b border-slate-800 p-1.5 gap-1">
+        <button
+          onClick={() => setCourierTab('shipments')}
+          className={`py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+            courierTab === 'shipments'
+              ? 'bg-red-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          <span>الشحنات اليومية ({courierShipments.length})</span>
+        </button>
+
+        <button
+          onClick={() => setCourierTab('wallet')}
+          className={`py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+            courierTab === 'wallet'
+              ? 'bg-red-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+        >
+          <Wallet className="w-4 h-4 text-amber-400" />
+          <span>حساب العهدة والكاش ({totalCodCollectedToday.toLocaleString()} ج.م)</span>
+        </button>
+      </div>
+
+      {/* Notification Center Drawer overlay */}
+      {isNotifPanelOpen && (
+        <div className="absolute top-[115px] inset-x-0 bg-slate-900/95 backdrop-blur-md z-40 border-b-2 border-red-500 shadow-2xl p-4 space-y-3 animate-in slide-in-from-top-3 duration-200">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <span className="text-xs font-black text-white flex items-center gap-1.5">
+              <Bell className="w-4 h-4 text-red-500" />
+              مركز إشعارات الشحنات الموكلة ({courierNotifs.length})
+            </span>
+            <button onClick={() => setIsNotifPanelOpen(false)} className="text-slate-400 hover:text-white text-xs">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="max-h-60 overflow-y-auto space-y-2">
+            {courierNotifs.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 text-xs">
+                لا توجد إشعارات تكليف جديدة حالياً
+              </div>
+            ) : (
+              courierNotifs.map((n) => (
+                <div
+                  key={n.id}
+                  onClick={() => {
+                    setHighlightedShipmentId(n.shipmentId);
+                    if (onMarkNotificationRead) onMarkNotificationRead(n.id);
+                    setIsNotifPanelOpen(false);
+                    setCourierTab('shipments');
+                  }}
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
+                    !n.read
+                      ? 'bg-red-950/40 border-red-500/60 text-white'
+                      : 'bg-slate-800/80 border-slate-700/80 text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-red-400 font-mono">#{n.trackingNumber}</span>
+                    <span className="text-[10px] text-slate-400">{n.timestamp}</span>
+                  </div>
+                  <p className="text-xs font-medium text-slate-200 mt-1">
+                    تم إسناد الشحنة لك تسليم العميل <span className="font-bold text-white">{n.recipientName}</span> ({n.governorate})
+                  </p>
+                  <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-800 text-[11px]">
+                    <span className="text-emerald-400 font-bold">المطلوب: {n.codAmount.toLocaleString()} ج.م</span>
+                    <span className="text-slate-400 hover:text-red-400 flex items-center gap-1">
+                      عرض الشحنة ←
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* COURIER TAB 1: SHIPMENTS LIST */}
+      {courierTab === 'shipments' && (
+        <>
+          {/* Daily Cash Collection Header Pill */}
+          <div className="bg-gradient-to-r from-red-600 to-red-700 p-4 text-white flex items-center justify-between shadow-md">
+            <div>
+              <span className="text-[10px] text-red-100 block">إجمالي التحصيل اليومي المباشر:</span>
+              <span className="text-2xl font-black">{totalCodCollectedToday.toLocaleString()} <span className="text-xs">ج.م</span></span>
+            </div>
+            <button 
+              onClick={() => setCourierTab('wallet')}
+              className="text-left bg-black/20 hover:bg-black/30 p-2 rounded-xl border border-white/20 transition-all text-right"
+            >
+              <span className="text-[10px] text-amber-300 block font-bold">العهدة بالتفصيل ←</span>
+              <span className="text-xs font-extrabold text-white block">
+                {deliveredShipments.length} شحنات محصلة
+              </span>
+            </button>
+          </div>
+
+          {/* Deliveries List */}
+          <div className="p-4 space-y-4 flex-1 overflow-y-auto">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>طلبات الشحنات الموكلة إليك اليوم:</span>
+              <span className="text-red-400 font-mono">{courierShipments.length} طرد</span>
+            </h4>
+
+            {courierShipments.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 text-xs">
+                لا توجد شحنات مسندة إليك حالياً.
+              </div>
+            ) : (
+              courierShipments.map((shipment) => {
+                const isHighlighted = highlightedShipmentId === shipment.id;
+                const hasNotif = courierNotifs.some((n) => n.shipmentId === shipment.id);
+
+                return (
+                  <div
+                    key={shipment.id}
+                    className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                      isHighlighted
+                        ? 'bg-slate-800 border-2 border-red-500 ring-2 ring-red-500/30'
+                        : shipment.status === 'delivered'
+                        ? 'bg-emerald-950/40 border-emerald-500/40'
+                        : shipment.status === 'failed_attempt'
+                        ? 'bg-rose-950/40 border-rose-500/40'
+                        : 'bg-slate-800 border-slate-700 hover:border-red-500/50'
+                    }`}
+                  >
+                    {/* Notification Badge if freshly assigned */}
+                    {hasNotif && (
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-300 bg-amber-950/80 px-2.5 py-1 rounded-lg border border-amber-500/50 w-fit">
+                        <Sparkles className="w-3 h-3 text-amber-400 animate-spin" />
+                        <span>تم إسناد هذه الشحنة لك حديثاً</span>
+                      </div>
+                    )}
+
+                    {/* Top row */}
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-black text-xs text-red-400 bg-red-950/80 px-2 py-0.5 rounded border border-red-800">
+                        {shipment.trackingNumber}
+                      </span>
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded text-white bg-slate-700">
+                        {shipment.financials.codAmount.toLocaleString()} ج.م (كاش)
+                      </span>
+                    </div>
+
+                    {/* Customer details */}
+                    <div>
+                      <h5 className="font-extrabold text-sm text-white">{shipment.recipient.name}</h5>
+                      <p className="text-xs text-slate-300 mt-1 flex items-start gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                        {shipment.recipient.governorate} - {shipment.recipient.city} - {shipment.recipient.streetAddress}
+                      </p>
+                      {shipment.recipient.notes && (
+                        <p className="text-[10px] text-amber-300 bg-amber-950/60 p-1.5 rounded mt-1 border border-amber-800/50">
+                          ملاحظات: {shipment.recipient.notes}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Call & WhatsApp Customer Buttons */}
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`tel:${shipment.recipient.phone}`}
+                        className="flex-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2 rounded-xl text-center flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                        اتصال ({shipment.recipient.phone})
+                      </a>
+
+                      <button
+                        onClick={() => setWhatsappShipment(shipment)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors shrink-0"
+                        title="تراسل مع العميل عبر الواتساب"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-white" />
+                        <span>واتساب</span>
+                      </button>
+                    </div>
+
+                    {/* Actions for active items */}
+                    {shipment.status === 'out_for_delivery' && (
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700">
+                        <button
+                          onClick={() => {
+                            setSelectedShipment(shipment);
+                            setIsDeliverModalOpen(true);
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          تسليم كامل الكاش
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedShipment(shipment);
+                            setPartialCodCollected(shipment.financials.codAmount);
+                            setPartialItemsAccepted(Math.max(1, shipment.packageDetails.itemsCount - 1));
+                            setIsPartialModalOpen(true);
+                          }}
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors"
+                        >
+                          <Receipt className="w-3.5 h-3.5" />
+                          استلام جزئي
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedShipment(shipment);
+                            setIsFailModalOpen(true);
+                          }}
+                          className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-700/50 font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 transition-colors"
+                        >
+                          <XCircle className="w-3.5 h-3.5 text-amber-400" />
+                          محاولة فاشلة
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedShipment(shipment);
+                            setIsRefuseModalOpen(true);
+                          }}
+                          className="bg-rose-900/80 hover:bg-rose-800 text-rose-200 border border-rose-700/80 font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 transition-colors"
+                        >
+                          <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                          رفض الاستلام
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Status Indicator */}
+                    {shipment.status === 'delivered' && (
+                      <div className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> تم التسليم بنجاح وتحصيل كامل المبلغ
+                      </div>
+                    )}
+                    {shipment.status === 'partial_delivery' && (
+                      <div className="text-[11px] text-amber-300 font-bold flex items-center gap-1 bg-amber-950/60 p-2 rounded-xl border border-amber-800/60">
+                        <Receipt className="w-3.5 h-3.5 text-amber-400" /> تم الاستلام الجزئي (تحصيل {shipment.financials.codAmount} ج.م)
+                      </div>
+                    )}
+                    {shipment.status === 'refused' && (
+                      <div className="text-[11px] font-bold flex items-center justify-between p-2 rounded-xl border bg-rose-950/60 border-rose-800/60">
+                        <div className="flex items-center gap-1 text-rose-300">
+                          <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                          <span>رفض الاستلام من العميل</span>
+                        </div>
+                        {shipment.refusedDetails?.shippingFeePaid ? (
+                          <span className="bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
+                            دفع الشحن ورجع ({shipment.refusedDetails.amountCollected || shipment.financials.shippingFee} ج.م)
+                          </span>
+                        ) : (
+                          <span className="bg-rose-900/90 text-rose-200 border border-rose-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
+                            لم يدفع شحن (0 ج.م)
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {shipment.status === 'failed_attempt' && (
+                      <div className="text-[11px] text-amber-400 font-bold flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" /> محاولة تسليم غير ناجحة
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+
+      {/* COURIER TAB 2: COURIER WALLET & FINANCIAL ACCOUNT */}
+      {courierTab === 'wallet' && (
+        <div className="p-4 space-y-4 flex-1 overflow-y-auto">
+          {/* Main Courier Wallet Card */}
+          <div className="bg-gradient-to-br from-amber-600 via-amber-700 to-amber-900 text-white p-5 rounded-2xl shadow-xl relative overflow-hidden space-y-3">
+            <div className="absolute left-[-10px] bottom-[-10px] opacity-15 pointer-events-none">
+              <Wallet className="w-32 h-32" />
+            </div>
+
+            <div className="flex items-center justify-between border-b border-amber-500/40 pb-2">
+              <span className="text-[11px] font-bold text-amber-100 flex items-center gap-1.5">
+                <Receipt className="w-4 h-4 text-amber-200" />
+                حساب كاش العهدة الميدانية للكابتن
+              </span>
+              <span className="text-[10px] font-black bg-black/30 px-2.5 py-0.5 rounded-full border border-amber-300/30">
+                {activeCourier.assignedHub}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[11px] text-amber-200 block font-bold">إجمالي الكاش المحصل اليوم (Total COD):</span>
+              <div className="text-3xl font-black text-white mt-0.5">
+                {totalCodCollectedToday.toLocaleString()} <span className="text-sm font-bold">ج.م</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-amber-500/40">
+              <div className="bg-black/25 p-2.5 rounded-xl">
+                <span className="text-[10px] text-amber-200 block">عمولة التوصيل المستحقة:</span>
+                <span className="text-base font-black text-emerald-300">+{courierCommissionEarned.toLocaleString()} ج.م</span>
+              </div>
+
+              <div className="bg-black/25 p-2.5 rounded-xl">
+                <span className="text-[10px] text-amber-200 block">العهد المتبقية للتسليم:</span>
+                <span className="text-base font-black text-white">{cashToHandover.toLocaleString()} ج.م</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Handover Notification Feedback */}
+          {isHandoverSuccess && (
+            <div className="bg-emerald-950/80 border border-emerald-500 text-emerald-200 p-3 rounded-2xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <span>تم تسجيل طلب تسليم العهدة المالية للمستودع وتوليد إيصال التسليم الفوري!</span>
+            </div>
+          )}
+
+          {/* Handover Cash Action Button */}
+          <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-extrabold text-xs text-white flex items-center gap-1.5">
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                  تسليم النقدية لخزينة المستودع
+                </h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  قم بتأكيد تسليم المبلغ كاش لمدير الخزينة والمستودع.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleHandoverCashToHub}
+              disabled={cashToHandover <= 0}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-black text-xs py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+            >
+              <ArrowUpRight className="w-4 h-4" />
+              <span>توريد العهدة كاش للفرع ({cashToHandover.toLocaleString()} ج.م)</span>
+            </button>
+          </div>
+
+          {/* Delivered COD Receipts Breakdown Table */}
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+              <span className="text-xs font-extrabold text-white flex items-center gap-1.5">
+                <Receipt className="w-4 h-4 text-amber-400" />
+                سجل المبالغ المحصلة لكل شحنة
+              </span>
+              <span className="text-[10px] text-slate-400 font-bold">{deliveredShipments.length} عملية</span>
+            </div>
+
+            {deliveredShipments.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 text-xs">
+                لم تقم بتحصيل أي مبالغ حتى الآن اليوم.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {deliveredShipments.map((s) => (
+                  <div 
+                    key={s.id}
+                    className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/80 flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-black text-red-400">#{s.trackingNumber}</span>
+                        <span className="text-xs font-bold text-white">{s.recipient.name}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">{s.recipient.governorate} - {s.recipient.city}</div>
+                    </div>
+
+                    <div className="text-left">
+                      <div className="text-xs font-black text-emerald-400">
+                        +{s.financials.codAmount.toLocaleString()} ج.م
+                      </div>
+                      <span className="text-[9px] font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/50">
+                        محتفظ بها بالعهدة
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Deliver Modal */}
+      {isDeliverModalOpen && selectedShipment && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 space-y-4">
+            <h4 className="font-extrabold text-base text-white flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+              تأكيد تسليم الشحنة وتحصيل الكاش
+            </h4>
+
+            <div className="bg-slate-800 p-3 rounded-xl space-y-1 text-xs text-slate-300">
+              <p>المستلم: <span className="font-bold text-white">{selectedShipment.recipient.name}</span></p>
+              <p>المبلغ المطلوب تحصيله: <span className="font-black text-emerald-400 text-sm">{selectedShipment.financials.codAmount} ج.م</span></p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">رمز التحقق / PIN العميل (اختياري)</label>
+              <input
+                type="text"
+                placeholder="أدخل PIN المتسلم مثلاً: 8492"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                className="w-full text-xs p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono text-center tracking-widest text-lg"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setIsDeliverModalOpen(false)}
+                className="px-3 py-1.5 text-xs font-bold text-slate-400"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleConfirmDelivery}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl"
+              >
+                تأكيد وتسجيل الكاش
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Failed Modal */}
+      {isFailModalOpen && selectedShipment && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 space-y-4">
+            <h4 className="font-extrabold text-base text-rose-400 flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-rose-500" />
+              تسجيل سبب عدم التسليم
+            </h4>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">السبب:</label>
+              <select
+                value={failedReason}
+                onChange={(e) => setFailedReason(e.target.value)}
+                className="w-full text-xs p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-bold"
+              >
+                <option value="لم يقم بالرد على الهاتف">لم يقم بالرد على الهاتف</option>
+                <option value="العميل طلب التأجيل ليوم آخر">العميل طلب التأجيل ليوم آخر</option>
+                <option value="رفض الاستلام بسبب السعر">رفض الاستلام بسبب السعر</option>
+                <option value="العنوان غير واضح أو خاطئ">العنوان غير واضح أو خاطئ</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setIsFailModalOpen(false)}
+                className="px-3 py-1.5 text-xs font-bold text-slate-400"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleConfirmFailed}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2 rounded-xl"
+              >
+                تسجيل المحاولة الفاشلة
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refused Delivery Modal */}
+      {isRefuseModalOpen && selectedShipment && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 space-y-4">
+            <h4 className="font-extrabold text-base text-rose-400 flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-rose-500" />
+              تسجيل رفض الاستلام من العميل
+            </h4>
+
+            <div className="bg-rose-950/40 border border-rose-800/60 p-3 rounded-xl space-y-1 text-xs text-rose-200">
+              <p>المستلم: <span className="font-bold text-white">{selectedShipment.recipient.name}</span></p>
+              <p>رقم البوليصة: <span className="font-mono font-bold text-white">#{selectedShipment.trackingNumber}</span></p>
+              <p>قيمة الشحن المستحقة: <span className="font-extrabold text-amber-300">{selectedShipment.financials.shippingFee} ج.م</span></p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">حالة دفع الشحن عند الرفض:</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRefuseShippingFeePaid(true)}
+                  className={`p-2.5 rounded-xl border text-xs font-black transition-all flex flex-col items-center gap-1 text-center cursor-pointer ${
+                    refuseShippingFeePaid
+                      ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-xs ring-1 ring-emerald-500'
+                      : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="text-[11px]">دفع الشحن ورجع</span>
+                  <span className="text-[10px] opacity-80">تحصيل {selectedShipment.financials.shippingFee} ج.م</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRefuseShippingFeePaid(false)}
+                  className={`p-2.5 rounded-xl border text-xs font-black transition-all flex flex-col items-center gap-1 text-center cursor-pointer ${
+                    !refuseShippingFeePaid
+                      ? 'bg-rose-950/80 border-rose-500 text-rose-300 shadow-xs ring-1 ring-rose-500'
+                      : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="text-[11px]">لم يدفع شحن ورجع</span>
+                  <span className="text-[10px] opacity-80">تحصيل 0 ج.م</span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">سبب رفض الاستلام:</label>
+              <select
+                value={refuseReason}
+                onChange={(e) => setRefuseReason(e.target.value)}
+                className="w-full text-xs p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-bold"
+              >
+                <option value="رفض العميل المعاينة / غير مطابق للمواصفات">رفض العميل المعاينة / غير مطابق للمواصفات</option>
+                <option value="رفض العميل دفع المبلغ المطلوب / ارتفاع السعر">رفض العميل دفع المبلغ المطلوب / ارتفاع السعر</option>
+                <option value="إلغاء الطلب من العميل عند وصول المندوب">إلغاء الطلب من العميل عند وصول المندوب</option>
+                <option value="معاينة الطرد ورفض الاستلام بدون إبداء أسباب">معاينة الطرد ورفض الاستلام بدون إبداء أسباب</option>
+                <option value="رفض استلام الطرد نهائياً">رفض استلام الطرد نهائياً</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setIsRefuseModalOpen(false)}
+                className="px-3 py-1.5 text-xs font-bold text-slate-400"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleConfirmRefused}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-xl"
+              >
+                تأكيد رفض الاستلام
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Partial Delivery Modal */}
+      {isPartialModalOpen && selectedShipment && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 space-y-4">
+            <h4 className="font-extrabold text-base text-amber-400 flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-amber-500" />
+              تسجيل استلام جزئي للطرد (Partial Delivery)
+            </h4>
+
+            <div className="bg-amber-950/40 border border-amber-800/60 p-3 rounded-xl space-y-1 text-xs text-amber-200">
+              <p>المستلم: <span className="font-bold text-white">{selectedShipment.recipient.name}</span></p>
+              <p>رقم البوليصة: <span className="font-mono font-bold text-white">#{selectedShipment.trackingNumber}</span></p>
+              <p>إجمالي عدد القطع بالطرد الأصلي: <span className="font-bold text-white">{selectedShipment.packageDetails.itemsCount} قطع</span></p>
+            </div>
+
+            <form onSubmit={handleConfirmPartial} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">عدد القطع المستلمة من العميل:</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={selectedShipment.packageDetails.itemsCount}
+                  value={partialItemsAccepted}
+                  onChange={(e) => setPartialItemsAccepted(parseInt(e.target.value) || 1)}
+                  className="w-full text-xs font-bold p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">المبلغ المحصل الفعلي كاش (ج.م):</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={partialCodCollected}
+                  onChange={(e) => setPartialCodCollected(parseFloat(e.target.value) || 0)}
+                  className="w-full text-sm font-extrabold p-2.5 bg-slate-800 border border-amber-500/80 rounded-xl text-amber-300"
+                />
+                <span className="text-[10px] text-slate-400 block mt-1">
+                  المبلغ الأصلي قبل التعديل الجزئي: {selectedShipment.financials.codAmount} ج.م
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">سبب الاستلام الجزئي / القطع المرتجعة:</label>
+                <textarea
+                  rows={2}
+                  value={partialNotes}
+                  onChange={(e) => setPartialNotes(e.target.value)}
+                  placeholder="مثال: استلم العميل قطعتين وأرجع القطعة المتبقية لمخالفة المقاس"
+                  className="w-full text-xs p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-medium"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPartialModalOpen(false)}
+                  className="px-3 py-1.5 text-xs font-bold text-slate-400"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl shadow-md transition-all"
+                >
+                  تأكيد الاستلام الجزئي
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Modal */}
+      {whatsappShipment && (
+        <WhatsAppModal
+          shipment={whatsappShipment}
+          onClose={() => setWhatsappShipment(null)}
+        />
+      )}
+    </div>
+  );
+};
+
