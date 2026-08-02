@@ -1,23 +1,26 @@
 import React, { useState } from 'react';
 import { EGYPT_GOVERNORATES } from '../data/mockData';
+import { GovernorateRate } from '../types';
 import { Calculator, DollarSign, Truck, MapPin, CheckCircle } from 'lucide-react';
 
-export const RateCalculatorView: React.FC = () => {
-  const [selectedGovCode, setSelectedGovCode] = useState('ALX');
+interface RateCalculatorViewProps {
+  governorates?: GovernorateRate[];
+}
+
+export const RateCalculatorView: React.FC<RateCalculatorViewProps> = ({ governorates = EGYPT_GOVERNORATES }) => {
+  const [selectedGovCode, setSelectedGovCode] = useState(governorates[0]?.code || 'CAI');
   const [weightKg, setWeightKg] = useState<number>(2.5);
   const [isExpress, setIsExpress] = useState(false);
   const [codAmount, setCodAmount] = useState<number>(1500);
 
-  const selectedGov = EGYPT_GOVERNORATES.find((g) => g.code === selectedGovCode) || EGYPT_GOVERNORATES[0];
+  const selectedGov = governorates.find((g) => g.code === selectedGovCode) || governorates[0] || EGYPT_GOVERNORATES[0];
 
   const baseRate = selectedGov.baseRate;
   const extraWeightFee = Math.max(0, weightKg - 3) * selectedGov.additionalKgRate;
   const expressFee = isExpress ? 25 : 0;
   const totalShippingFee = Math.round(baseRate + extraWeightFee + expressFee);
 
-  const codFee = Math.round(codAmount > 0 ? Math.max(10, codAmount * 0.01) : 0);
-  const totalDeducted = totalShippingFee + codFee;
-  const netMerchantPayout = Math.max(0, codAmount - totalDeducted);
+  const netMerchantPayout = Math.max(0, codAmount - totalShippingFee);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 py-4">
@@ -41,7 +44,7 @@ export const RateCalculatorView: React.FC = () => {
               onChange={(e) => setSelectedGovCode(e.target.value)}
               className="w-full text-xs font-bold p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:ring-2 focus:ring-red-500/20"
             >
-              {EGYPT_GOVERNORATES.map((g) => (
+              {governorates.map((g) => (
                 <option key={g.code} value={g.code}>
                   {g.nameAr}
                 </option>

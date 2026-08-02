@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ShipmentsList } from './components/ShipmentsList';
 import { CreateShipmentModal } from './components/CreateShipmentModal';
@@ -9,24 +9,105 @@ import { PublicTrackingView } from './components/PublicTrackingView';
 import { WalletView } from './components/WalletView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { RateCalculatorView } from './components/RateCalculatorView';
-import { LoginView, createSessionUser } from './components/LoginView';
+import { LoginView, createSessionUser, DEMO_USERS } from './components/LoginView';
+import { AdminPanelView } from './components/AdminPanelView';
 
-import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession } from './types';
-import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET } from './data/mockData';
+import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate } from './types';
+import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES } from './data/mockData';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
 
+// Safe localStorage loader helper
+const loadLocalState = <T,>(key: string, defaultValue: T): T => {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved !== null) {
+      return JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error(`Error loading ${key} from localStorage:`, error);
+  }
+  return defaultValue;
+};
+
 export default function App() {
-  const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [wallet, setWallet] = useState<MerchantWallet>({
-    ...INITIAL_MERCHANT_WALLET,
-    availableBalance: 0,
-    pendingCod: 0,
-    totalPaidOut: 0,
-  });
-  const [currentRole, setCurrentRole] = useState<AppUserRole>('merchant');
-  const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('login');
+  const [shipments, setShipments] = useState<Shipment[]>(() =>
+    loadLocalState<Shipment[]>('bosta_shipments', INITIAL_SHIPMENTS)
+  );
+
+  const [wallet, setWallet] = useState<MerchantWallet>(() =>
+    loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET)
+  );
+
+  // Dynamic system entities customizable by Admin
+  const [users, setUsers] = useState<UserSession[]>(() =>
+    loadLocalState<UserSession[]>('bosta_users', [
+      DEMO_USERS.admin,
+      DEMO_USERS.merchant,
+      DEMO_USERS.courier
+    ])
+  );
+
+  const [couriers, setCouriers] = useState<CourierInfo[]>(() =>
+    loadLocalState<CourierInfo[]>('bosta_couriers', BOSTA_COURIERS)
+  );
+
+  const [hubs, setHubs] = useState<HubInfo[]>(() =>
+    loadLocalState<HubInfo[]>('bosta_hubs', BOSTA_HUBS)
+  );
+
+  const [governorates, setGovernorates] = useState<GovernorateRate[]>(() =>
+    loadLocalState<GovernorateRate[]>('bosta_governorates', EGYPT_GOVERNORATES)
+  );
+
+  const [currentRole, setCurrentRole] = useState<AppUserRole>(() =>
+    loadLocalState<AppUserRole>('bosta_current_role', 'merchant')
+  );
+
+  const [currentUser, setCurrentUser] = useState<UserSession | null>(() =>
+    loadLocalState<UserSession | null>('bosta_current_user', null)
+  );
+
+  const [activeTab, setActiveTab] = useState<string>(() =>
+    loadLocalState<string>('bosta_active_tab', 'login')
+  );
+
+  // Auto-sync state updates to localStorage
+  useEffect(() => {
+    localStorage.setItem('bosta_shipments', JSON.stringify(shipments));
+  }, [shipments]);
+
+  useEffect(() => {
+    localStorage.setItem('bosta_wallet', JSON.stringify(wallet));
+  }, [wallet]);
+
+  useEffect(() => {
+    localStorage.setItem('bosta_users', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    localStorage.setItem('bosta_couriers', JSON.stringify(couriers));
+  }, [couriers]);
+
+  useEffect(() => {
+    localStorage.setItem('bosta_hubs', JSON.stringify(hubs));
+  }, [hubs]);
+
+  useEffect(() => {
+    localStorage.setItem('bosta_governorates', JSON.stringify(governorates));
+  }, [governorates]);
+
+  useEffect(() => {
+    localStorage.setItem('bosta_current_role', JSON.stringify(currentRole));
+  }, [currentRole]);
+
+  useEffect(() => {
+    localStorage.setItem('bosta_current_user', JSON.stringify(currentUser));
+  }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem('bosta_active_tab', JSON.stringify(activeTab));
+  }, [activeTab]);
 
   // Auth handlers
   const handleLoginSuccess = (user: UserSession) => {
@@ -85,6 +166,7 @@ export default function App() {
     const randomNum = Math.floor(100000 + Math.random() * 900000);
     const trackingNo = `BST-${randomNum}`;
     const nowIso = new Date().toISOString();
+    const isPending = newShipmentData.status === 'pending_approval';
 
     const createdShipment: Shipment = {
       ...newShipmentData,
@@ -95,11 +177,13 @@ export default function App() {
       timeline: [
         {
           id: `tl-${Date.now()}`,
-          status: 'created',
-          title: 'تم إنشاء بوليصة الشحن بنجاح',
-          description: 'في انتظار مندوب الاستلام من المتجر',
+          status: newShipmentData.status || (currentRole === 'admin' ? 'created' : 'pending_approval'),
+          title: isPending ? '⏳ طلب جديد - بانتظار موافقة الأدمن' : '✨ تم إنشاء بوليصة الشحن بنجاح',
+          description: isPending
+            ? 'تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن'
+            : 'تم اعتماد الشحنة وجاري تجهيز الاستلام من المتجر',
           timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-          actorRole: 'merchant',
+          actorRole: currentRole === 'admin' ? 'system' : 'merchant',
         },
       ],
     };
@@ -112,7 +196,75 @@ export default function App() {
       pendingCod: prev.pendingCod + createdShipment.financials.codAmount,
     }));
 
-    showToast(`✨ تم إنشاء بوليصة الشحن رقم ${trackingNo} بنجاح!`);
+    if (isPending) {
+      showToast(`⏳ تم تسجيل الطلب ${trackingNo} وبانتظار موافقة وتأكيد الأدمن!`);
+    } else {
+      showToast(`✨ تم إنشاء بوليصة الشحن رقم ${trackingNo} وتأكيدها بنجاح!`);
+    }
+  };
+
+  // Approve single pending shipment
+  const handleApproveShipment = (shipmentId: string) => {
+    setShipments((prev) =>
+      prev.map((s) => {
+        if (s.id !== shipmentId) return s;
+
+        const updatedTimeline = [
+          ...s.timeline,
+          {
+            id: `tl-${Date.now()}`,
+            status: 'created' as ShipmentStatus,
+            title: '✅ تم تأكيد وموافقة الأوردر بواسطة الأدمن',
+            description: 'قام أدمن النظام بمراجعة بيانات الشحنة وتأكيدها لبدء التنفيذ والاستلام',
+            timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+            actorRole: 'system' as const,
+          },
+        ];
+
+        return {
+          ...s,
+          status: 'created' as ShipmentStatus,
+          updatedAt: new Date().toISOString(),
+          timeline: updatedTimeline,
+        };
+      })
+    );
+
+    showToast(`✅ تم تأكيد وموافقة الأوردر بنجاح!`);
+  };
+
+  // Approve all pending shipments
+  const handleApproveAllPending = () => {
+    let count = 0;
+    setShipments((prev) =>
+      prev.map((s) => {
+        if (s.status !== 'pending_approval') return s;
+        count++;
+        const updatedTimeline = [
+          ...s.timeline,
+          {
+            id: `tl-${Date.now()}`,
+            status: 'created' as ShipmentStatus,
+            title: '✅ تم موافقة وتأكيد الأوردر بواسطة الأدمن',
+            description: 'تمت الموافقة وتأكيد الأوردر ضمن الموافقة الجماعية بواسطة أدمن النظام',
+            timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+            actorRole: 'system' as const,
+          },
+        ];
+        return {
+          ...s,
+          status: 'created' as ShipmentStatus,
+          updatedAt: new Date().toISOString(),
+          timeline: updatedTimeline,
+        };
+      })
+    );
+
+    if (count > 0) {
+      showToast(`🎉 تم تأكيد وموافقة جميع الطلبات المعلّقة (${count} أوردر) بنجاح!`);
+    } else {
+      showToast('لا توجد أوردرات بانتظار موافقة الأدمن حالياً');
+    }
   };
 
   // Update Status Handler
@@ -127,7 +279,11 @@ export default function App() {
             id: `tl-${Date.now()}`,
             status: newStatus,
             title:
-              newStatus === 'delivered'
+              newStatus === 'created'
+                ? 'تم تأكيد واعتماد الشحنة'
+                : newStatus === 'pending_approval'
+                ? 'بانتظار موافقة الأدمن'
+                : newStatus === 'delivered'
                 ? 'تم التسليم بنجاح وتحصيل المبلغ'
                 : newStatus === 'partial_delivery'
                 ? 'استلام جزئي من العميل وتحصيل المبلغ'
@@ -259,6 +415,69 @@ export default function App() {
     showToast(`تم تحويل مبلغ ${amount.toLocaleString()} ج.م بنجاح عبر ${method}`);
   };
 
+  // Admin CRUD Handlers
+  const handleAddUser = (user: UserSession) => {
+    setUsers((prev) => [...prev, user]);
+    showToast(`✅ تم إضافة الحساب ${user.name} بنجاح`);
+  };
+
+  const handleUpdateUser = (updatedUser: UserSession) => {
+    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+    showToast(`✏️ تم تحديث بيانات الحساب ${updatedUser.name}`);
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    setUsers((prev) => prev.filter((u) => u.id !== userId));
+    showToast('🗑️ تم حذف الحساب من النظام');
+  };
+
+  const handleAddCourier = (courier: CourierInfo) => {
+    setCouriers((prev) => [...prev, courier]);
+    showToast(`🚚 تم إضافة الكابتن ${courier.name} بنجاح`);
+  };
+
+  const handleUpdateCourier = (updatedCourier: CourierInfo) => {
+    setCouriers((prev) => prev.map((c) => (c.id === updatedCourier.id ? updatedCourier : c)));
+    showToast(`✏️ تم تحديث بيانات الكابتن ${updatedCourier.name}`);
+  };
+
+  const handleDeleteCourier = (courierId: string) => {
+    setCouriers((prev) => prev.filter((c) => c.id !== courierId));
+    showToast('🗑️ تم حذف المندوب من النظام');
+  };
+
+  const handleAddHub = (hub: HubInfo) => {
+    setHubs((prev) => [...prev, hub]);
+    showToast(`🏢 تم إضافة مستودع / فرع ${hub.name}`);
+  };
+
+  const handleUpdateHub = (updatedHub: HubInfo) => {
+    setHubs((prev) => prev.map((h) => (h.id === updatedHub.id ? updatedHub : h)));
+    showToast(`✏️ تم تحديث بيانات الفرع ${updatedHub.name}`);
+  };
+
+  const handleDeleteHub = (hubId: string) => {
+    setHubs((prev) => prev.filter((h) => h.id !== hubId));
+    showToast('🗑️ تم حذف المستودع من النظام');
+  };
+
+  const handleUpdateGovernorateRate = (code: string, baseRate: number, additionalKgRate: number) => {
+    setGovernorates((prev) =>
+      prev.map((g) => (g.code === code ? { ...g, baseRate, additionalKgRate } : g))
+    );
+    showToast(`💰 تم تحديث تسعيرة الشحن للمحافظة`);
+  };
+
+  const handleUpdateWallet = (updatedWallet: MerchantWallet) => {
+    setWallet(updatedWallet);
+    showToast('💳 تم تحديث أرصدة المحفظة وقيم COD');
+  };
+
+  const handleClearAllShipments = () => {
+    setShipments([]);
+    showToast('🗑️ تم مسح جميع الشحنات والبوليصات بالكامل من النظام');
+  };
+
   // Clear All Data Handler
   const handleClearAllData = () => {
     setShipments([]);
@@ -269,14 +488,15 @@ export default function App() {
       totalPaidOut: 0,
     });
     setCourierNotifications([]);
-    showToast('🗑️ تم مسح كافة الشحنات وبيانات المحفظة بنجاح');
+    setUsers([DEMO_USERS.admin]);
+    showToast('🗑️ تم مسح كافة الشحنات والحسابات والمحفظة بنجاح');
   };
 
   // Restore Demo Data Handler
   const handleRestoreDemoData = () => {
     setShipments(INITIAL_SHIPMENTS);
     setWallet(INITIAL_MERCHANT_WALLET);
-   
+    showToast('🔄 تمت استعادة البيانات التجريبية الافتراضية بنجاح');
   };
 
   const handleHeaderSearchTracking = (trackingNum: string) => {
@@ -309,82 +529,121 @@ export default function App() {
         onOpenCourierApp={handleOpenCourierAppFromToast}
       />
 
-      {/* Navigation Header */}
-      <Header
-        currentRole={currentRole}
-        onRoleChange={(role) => {
-          setCurrentRole(role);
-          if (role === 'courier') {
-            setCurrentUser(createSessionUser('مندوب التوصيل', 'courier'));
-            setActiveTab('courier_app');
-          } else if (role === 'public_tracker') {
-            setCurrentUser(createSessionUser('زائر', 'public_tracker'));
-            setActiveTab('tracking');
-          } else if (role === 'hub_manager') {
-            setCurrentUser(createSessionUser('مدير المستودع', 'hub_manager'));
-            setActiveTab('shipments');
-          } else {
-            setCurrentUser(createSessionUser('التاجر', 'merchant'));
-            setActiveTab('shipments');
-          }
-        }}
-        onOpenCreateModal={() => setIsCreateModalOpen(true)}
-        onSearchTracking={handleHeaderSearchTracking}
-        merchantWallet={wallet}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onResetData={handleRestoreDemoData}
-        onClearData={handleClearAllData}
-        currentUser={currentUser}
-        onOpenLogin={() => setActiveTab('login')}
-        onLogout={handleLogout}
-      />
+      {/* Navigation Header - Rendered only when user is logged in */}
+      {currentUser && (
+        <Header
+          currentRole={currentRole}
+          onRoleChange={(role) => {
+            setCurrentRole(role);
+            if (role === 'courier') {
+              setActiveTab('courier_app');
+            } else if (role === 'public_tracker') {
+              setActiveTab('tracking');
+            } else {
+              setActiveTab('shipments');
+            }
+          }}
+          onOpenCreateModal={() => {
+            setIsCreateModalOpen(true);
+          }}
+          onSearchTracking={handleHeaderSearchTracking}
+          merchantWallet={wallet}
+          activeTab={activeTab}
+          setActiveTab={(tab) => {
+            setActiveTab(tab);
+          }}
+          onClearData={handleClearAllData}
+          currentUser={currentUser}
+          onOpenLogin={() => setActiveTab('login')}
+          onLogout={handleLogout}
+        />
+      )}
 
       {/* Main Content View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
-        {activeTab === 'login' && (
+        {!currentUser ? (
           <LoginView
             onLoginSuccess={handleLoginSuccess}
             onGuestTrack={handleGuestTrackFromLogin}
             currentRole={currentRole}
+            systemUsers={users}
           />
+        ) : (
+          <>
+            {activeTab === 'login' && (
+              <LoginView
+                onLoginSuccess={handleLoginSuccess}
+                onGuestTrack={handleGuestTrackFromLogin}
+                currentRole={currentRole}
+                systemUsers={users}
+              />
+            )}
+
+            {activeTab === 'shipments' && (
+              <ShipmentsList
+                shipments={shipments}
+                onOpenDetailModal={(s) => setSelectedDetailShipment(s)}
+                onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
+                onOpenCreateModal={() => setIsCreateModalOpen(true)}
+                onUpdateStatus={handleUpdateStatus}
+                onAssignCourier={handleAssignCourier}
+                onClearAllData={handleClearAllData}
+                onApproveShipment={handleApproveShipment}
+                onApproveAllPending={handleApproveAllPending}
+                currentRole={currentRole}
+              />
+            )}
+
+            {activeTab === 'admin_panel' && (
+              <AdminPanelView
+                users={users}
+                onAddUser={handleAddUser}
+                onUpdateUser={handleUpdateUser}
+                onDeleteUser={handleDeleteUser}
+                couriers={couriers}
+                onAddCourier={handleAddCourier}
+                onUpdateCourier={handleUpdateCourier}
+                onDeleteCourier={handleDeleteCourier}
+                hubs={hubs}
+                onAddHub={handleAddHub}
+                onUpdateHub={handleUpdateHub}
+                onDeleteHub={handleDeleteHub}
+                governorates={governorates}
+                onUpdateGovernorateRate={handleUpdateGovernorateRate}
+                wallet={wallet}
+                onUpdateWallet={handleUpdateWallet}
+                shipments={shipments}
+                onClearAllShipments={handleClearAllShipments}
+                onClearAllData={handleClearAllData}
+                onApproveShipment={handleApproveShipment}
+                onApproveAllPending={handleApproveAllPending}
+              />
+            )}
+
+            {activeTab === 'courier_app' && (
+              <CourierAppView
+                shipments={shipments}
+                onUpdateStatus={handleUpdateStatus}
+                notifications={courierNotifications}
+                selectedCourierId={activeCourierIdInApp}
+                targetShipmentId={activeTargetShipmentId}
+                onMarkNotificationRead={handleMarkNotificationRead}
+              />
+            )}
+
+            {activeTab === 'tracking' && (
+              <PublicTrackingView shipments={shipments} initialTrackingNumber={publicSearchTrackNum} />
+            )}
+
+            {activeTab === 'wallet' && (
+              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} />
+            )}
+
+            {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
+
+            {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
+          </>
         )}
-
-        {activeTab === 'shipments' && (
-          <ShipmentsList
-            shipments={shipments}
-            onOpenDetailModal={(s) => setSelectedDetailShipment(s)}
-            onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
-            onOpenCreateModal={() => setIsCreateModalOpen(true)}
-            onUpdateStatus={handleUpdateStatus}
-            onAssignCourier={handleAssignCourier}
-            onClearAllData={handleClearAllData}
-            onRestoreDemoData={handleRestoreDemoData}
-          />
-        )}
-
-        {activeTab === 'courier_app' && (
-          <CourierAppView
-            shipments={shipments}
-            onUpdateStatus={handleUpdateStatus}
-            notifications={courierNotifications}
-            selectedCourierId={activeCourierIdInApp}
-            targetShipmentId={activeTargetShipmentId}
-            onMarkNotificationRead={handleMarkNotificationRead}
-          />
-        )}
-
-        {activeTab === 'tracking' && (
-          <PublicTrackingView shipments={shipments} initialTrackingNumber={publicSearchTrackNum} />
-        )}
-
-        {activeTab === 'wallet' && (
-          <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} />
-        )}
-
-        {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
-
-        {activeTab === 'calculator' && <RateCalculatorView />}
       </main>
 
       {/* Modals */}
@@ -392,6 +651,9 @@ export default function App() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreateShipment={handleCreateShipment}
+        governorates={governorates}
+        hubs={hubs}
+        currentRole={currentRole}
       />
 
       <ShipmentDetailModal

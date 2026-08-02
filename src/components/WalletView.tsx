@@ -213,8 +213,8 @@ export const WalletView: React.FC<WalletViewProps> = ({ wallet, shipments, onReq
                     <th className="p-3">رقم البوليصة</th>
                     <th className="p-3">المستلم</th>
                     <th className="p-3">مبلغ التحصيل (COD)</th>
-                    <th className="p-3">رسوم الشحن والتحصيل</th>
-                    <th className="p-3">الصافي للتاجر</th>
+                    <th className="p-3">قيمة الشحن</th>
+                    <th className="p-3">مستحقات التاجر (المبلغ - الشحن)</th>
                     <th className="p-3">حالة التسوية</th>
                   </tr>
                 </thead>
@@ -229,9 +229,9 @@ export const WalletView: React.FC<WalletViewProps> = ({ wallet, shipments, onReq
                           : `${s.financials.codAmount.toLocaleString()} ج.م`}
                       </td>
                       <td className="p-3 text-red-600 font-bold">
-                        -{s.financials.shippingFee + s.financials.codFee} ج.م
+                        -{s.financials.shippingFee} ج.م
                       </td>
-                      <td className="p-3 font-black text-emerald-600">{s.financials.netPayout.toLocaleString()} ج.م</td>
+                      <td className="p-3 font-black text-emerald-600">{(s.financials.codAmount - s.financials.shippingFee).toLocaleString()} ج.م</td>
                       <td className="p-3">
                         {s.status === 'partial_delivery' ? (
                           <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-amber-300">

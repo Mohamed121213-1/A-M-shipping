@@ -104,6 +104,36 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
         </div>
 
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto text-slate-900">
+          {/* Pending Approval Action Banner */}
+          {shipment.status === 'pending_approval' && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shrink-0">
+                  ⏳
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-amber-950 text-sm">
+                    هذا الأوردر تم إضافته بواسطة التاجر وهو بانتظار موافقة الأدمن!
+                  </h4>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    قم بمراجعة العنوان والمبلغ التفصيلي ثم انقر على تأكيد اعتماد الأوردر للبدء في إجراءات الشحن والتسليم.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  onUpdateStatus(shipment.id, 'created', 'تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام');
+                  onClose();
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                تأكيد وموافقة الأوردر
+              </button>
+            </div>
+          )}
+
           {/* Timeline Status Stepper */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center justify-between">
@@ -177,12 +207,12 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
 
               <div className="grid grid-cols-2 gap-2 text-center bg-slate-50 p-2 rounded-lg">
                 <div>
-                  <span className="text-[10px] text-slate-500 block">المبلغ المطلوب (COD):</span>
-                  <span className="text-sm font-extrabold text-red-600">{shipment.financials.codAmount.toLocaleString()} ج.م</span>
+                  <span className="text-[10px] text-slate-500 block font-bold">المبلغ المحصل (COD):</span>
+                  <span className="text-sm font-extrabold text-slate-900">{shipment.financials.codAmount.toLocaleString()} ج.م</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block">صافي التاجر:</span>
-                  <span className="text-sm font-extrabold text-emerald-600">{shipment.financials.netPayout.toLocaleString()} ج.م</span>
+                  <span className="text-[10px] text-slate-500 block font-bold">مستحقات التاجر (المبلغ المحصل - الشحن):</span>
+                  <span className="text-sm font-extrabold text-emerald-600">{(shipment.financials.codAmount - shipment.financials.shippingFee).toLocaleString()} ج.م</span>
                 </div>
               </div>
 
@@ -287,7 +317,8 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                   onChange={(e) => setSelectedStatus(e.target.value as ShipmentStatus)}
                   className="w-full text-xs p-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-bold"
                 >
-                  <option value="created">تم إنشاء الشحنة</option>
+                  <option value="pending_approval">⏳ بانتظار موافقة الأدمن</option>
+                  <option value="created">تم مؤكدة / معتمدة</option>
                   <option value="pickup_requested">طلب استلام من التاجر</option>
                   <option value="picked_up">تم الاستلام من التاجر</option>
                   <option value="in_hub">في المستودع الرئيسي</option>

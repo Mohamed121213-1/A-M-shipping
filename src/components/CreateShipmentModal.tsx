@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { Shipment, GovernorateRate, AddressInfo, PackageDetails, DeliveryType } from '../types';
+import { Shipment, GovernorateRate, AddressInfo, PackageDetails, DeliveryType, HubInfo, AppUserRole } from '../types';
 import { EGYPT_GOVERNORATES, BOSTA_HUBS } from '../data/mockData';
 import { 
   X, Sparkles, MapPin, Package, DollarSign, User, Phone, AlertCircle, CheckCircle, 
@@ -12,6 +12,9 @@ interface CreateShipmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateShipment: (shipment: Omit<Shipment, 'id' | 'trackingNumber' | 'createdAt' | 'updatedAt' | 'timeline'>) => void;
+  governorates?: GovernorateRate[];
+  hubs?: HubInfo[];
+  currentRole?: AppUserRole;
 }
 
 export interface StagedShipmentRow {
@@ -33,12 +36,16 @@ export interface StagedShipmentRow {
   isFragile: boolean;
   deliveryType: DeliveryType;
   codAmount: number;
+  customShippingFee?: number | null;
 }
 
 export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   isOpen,
   onClose,
   onCreateShipment,
+  governorates = EGYPT_GOVERNORATES,
+  hubs = BOSTA_HUBS,
+  currentRole = 'merchant',
 }) => {
   if (!isOpen) return null;
 
@@ -89,8 +96,8 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   const [customShippingFee, setCustomShippingFee] = useState<number | null>(null);
   const calculatedShippingFee = customShippingFee !== null ? customShippingFee : autoShippingFee;
 
-  const calculatedCodFee = Math.round(codAmount > 0 ? Math.max(10, codAmount * 0.01) : 0);
-  const calculatedNetPayout = Math.max(0, codAmount - calculatedShippingFee - calculatedCodFee);
+  const calculatedCodFee = 0;
+  const calculatedNetPayout = Math.max(0, codAmount - calculatedShippingFee);
 
   // AI Address Parsing Handler
   const handleAiParse = async () => {
@@ -145,7 +152,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
     const matchedHub = BOSTA_HUBS.find((h) => h.governorate.includes(selectedGov.nameAr)) || BOSTA_HUBS[0];
 
     onCreateShipment({
-      status: 'created',
+      status: currentRole === 'admin' ? 'created' : 'pending_approval',
       deliveryType,
       sender: {
         id: 'merch-8841',
@@ -236,6 +243,8 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
           const countVal = parseInt(getColValue(row, ['عدد القطع', 'الكمية', 'items', 'count'], '1')) || 1;
           const weightVal = parseFloat(getColValue(row, ['الوزن', 'وزن الطرد', 'weight'], '1.5')) || 1.5;
           const codVal = parseFloat(getColValue(row, ['مبلغ التحصيل', 'المبلغ', 'الكاش', 'تحصيل', 'cod', 'amount'], '0')) || 0;
+          const customShippingVal = getColValue(row, ['سعر الشحن', 'قيمة الشحن', 'تكلفة الشحن', 'الشحن', 'سعر شحن', 'قيمة شحن', 'shipping_fee', 'shipping fee', 'shipping', 'freight'], '');
+          const parsedShippingFee = customShippingVal !== '' && !isNaN(parseFloat(customShippingVal)) ? parseFloat(customShippingVal) : null;
           const allowVal = getColValue(row, ['المعاينة', 'معاينة', 'allow opening'], 'نعم');
 
           // Match Governorate
@@ -266,6 +275,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
             isFragile: false,
             deliveryType: 'standard',
             codAmount: codVal,
+            customShippingFee: parsedShippingFee,
           };
         });
 
@@ -293,6 +303,25 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
     }
   };
 
+  // Bulk Shipping Fee Action State & Handlers
+  const [bulkShippingFeeInput, setBulkShippingFeeInput] = useState<string>('');
+
+  const handleApplyBulkShippingFee = () => {
+    if (!bulkShippingFeeInput.trim()) return;
+    const fee = parseFloat(bulkShippingFeeInput);
+    if (isNaN(fee)) return;
+    setStagedRows((prev) =>
+      prev.map((row) => ({ ...row, customShippingFee: fee }))
+    );
+  };
+
+  const handleClearBulkShippingFee = () => {
+    setStagedRows((prev) =>
+      prev.map((row) => ({ ...row, customShippingFee: null }))
+    );
+    setBulkShippingFeeInput('');
+  };
+
   // Download Sample Template
   const handleDownloadTemplate = () => {
     const sampleData = [
@@ -308,6 +337,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         'عدد القطع': 1,
         'الوزن كجم': 1,
         'مبلغ التحصيل COD': 850,
+        'سعر الشحن': '', // تترك فارغة للربط الآلي بالمحافظة أو كتابة سعر خاص
         'المعاينة مسموحة': 'نعم',
         'ملاحظات التسليم': 'الاتصال قبل الاستلام بساعة',
       },
@@ -323,6 +353,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         'عدد القطع': 3,
         'الوزن كجم': 2,
         'مبلغ التحصيل COD': 1400,
+        'سعر الشحن': '', // تترك فارغة للربط الآلي بالمحافظة أو كتابة سعر خاص
         'المعاينة مسموحة': 'نعم',
         'ملاحظات التسليم': 'التسليم بعد الساعة 5 مساء',
       },
@@ -367,6 +398,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       isFragile: false,
       deliveryType: 'standard',
       codAmount: 500,
+      customShippingFee: null,
     };
     setStagedRows((prev) => [newRow, ...prev]);
   };
@@ -386,15 +418,16 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 
     validRows.forEach((row) => {
       const govObj = EGYPT_GOVERNORATES.find((g) => g.code === row.governorateCode) || EGYPT_GOVERNORATES[0];
-      const shippingFee = Math.round(
+      const autoShippingFee = Math.round(
         govObj.baseRate + Math.max(0, row.weightKg - 3) * govObj.additionalKgRate + (row.deliveryType === 'express' ? 25 : 0)
       );
-      const codFee = Math.round(row.codAmount > 0 ? Math.max(10, row.codAmount * 0.01) : 0);
-      const netPayout = Math.max(0, row.codAmount - shippingFee - codFee);
+      const shippingFee = row.customShippingFee !== undefined && row.customShippingFee !== null ? row.customShippingFee : autoShippingFee;
+      const codFee = 0;
+      const netPayout = Math.max(0, row.codAmount - shippingFee);
       const matchedHub = BOSTA_HUBS.find((h) => h.governorate.includes(govObj.nameAr)) || BOSTA_HUBS[0];
 
       onCreateShipment({
-        status: 'created',
+        status: currentRole === 'admin' ? 'created' : 'pending_approval',
         deliveryType: row.deliveryType,
         sender: {
           id: 'merch-8841',
@@ -445,7 +478,9 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   const totalStagedCod = stagedRows.reduce((sum, r) => sum + (r.codAmount || 0), 0);
   const totalStagedShippingFees = stagedRows.reduce((sum, r) => {
     const govObj = EGYPT_GOVERNORATES.find((g) => g.code === r.governorateCode) || EGYPT_GOVERNORATES[0];
-    return sum + Math.round(govObj.baseRate + Math.max(0, r.weightKg - 3) * govObj.additionalKgRate);
+    const autoFee = Math.round(govObj.baseRate + Math.max(0, r.weightKg - 3) * govObj.additionalKgRate);
+    const rowFee = r.customShippingFee !== undefined && r.customShippingFee !== null ? r.customShippingFee : autoFee;
+    return sum + rowFee;
   }, 0);
   const totalStagedNetPayout = Math.max(0, totalStagedCod - totalStagedShippingFees);
   const validStagedCount = stagedRows.filter(isRowValid).length;
@@ -794,9 +829,9 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                 <span className="text-[11px] text-slate-400">حساب آلي بنظام بوسطة</span>
               </h4>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[11px] text-slate-300 mb-1">المبلغ المطلوب تحصيله (COD) *</label>
+                  <label className="block text-[11px] text-slate-300 mb-1">المبلغ المحصل (COD) *</label>
                   <input
                     type="number"
                     value={codAmount}
@@ -806,7 +841,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] text-slate-300 mb-1">تكلفة الشحن (ج.م) *</label>
+                  <label className="block text-[11px] text-slate-300 mb-1">قيمة الشحن (ج.م) *</label>
                   <input
                     type="number"
                     value={calculatedShippingFee}
@@ -815,14 +850,9 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                   />
                 </div>
 
-                <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 flex flex-col justify-center">
-                  <span className="text-[10px] text-slate-400 block">رسوم التحصيل (COD Fee):</span>
-                  <span className="text-sm font-bold text-amber-400">{calculatedCodFee} ج.م</span>
-                </div>
-
                 <div className="bg-emerald-950/60 border border-emerald-500/40 p-2.5 rounded-lg flex flex-col justify-center">
-                  <span className="text-[10px] text-emerald-300 block">الصافي المحول لحسابك:</span>
-                  <span className="text-base font-extrabold text-emerald-400">{calculatedNetPayout} ج.م</span>
+                  <span className="text-[10px] text-emerald-300 block font-bold">رصيد المستحقات للتاجر (المبلغ المحصل - قيمة الشحن):</span>
+                  <span className="text-base font-black text-emerald-400">{calculatedNetPayout.toLocaleString()} ج.م</span>
                 </div>
               </div>
             </div>
@@ -891,8 +921,8 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
             )}
 
             {/* Staging Actions Bar */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <div className="flex flex-wrap items-center gap-3">
                 <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 flex items-center gap-2">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                   جدول الشحنات المجهزة للاستيراد (Staging Table)
@@ -902,11 +932,40 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* Bulk Shipping Price Control */}
+              {stagedRows.length > 0 && (
+                <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-2xs text-xs">
+                  <span className="font-bold text-slate-700 shrink-0">تحديد سعر الشحن للكل:</span>
+                  <input
+                    type="number"
+                    placeholder="مثال: 50"
+                    value={bulkShippingFeeInput}
+                    onChange={(e) => setBulkShippingFeeInput(e.target.value)}
+                    className="w-16 text-xs p-1 bg-slate-50 border border-slate-300 rounded-md font-bold text-center focus:bg-white focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyBulkShippingFee}
+                    className="bg-red-600 hover:bg-red-700 text-white font-extrabold px-2.5 py-1 rounded-md transition-colors"
+                  >
+                    تطبيق
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearBulkShippingFee}
+                    className="text-slate-500 hover:text-slate-900 font-bold px-2 py-1 rounded-md hover:bg-slate-100"
+                    title="إعادة التكلفة للحساب الآلي حسب المحافظة"
+                  >
+                    إعادة للآلي
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 w-full lg:w-auto">
                 <button
                   type="button"
                   onClick={handleAddEmptyStagedRow}
-                  className="flex-1 sm:flex-none text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 px-3 py-1.5 rounded-lg flex items-center justify-center gap-1 transition-colors"
+                  className="flex-1 lg:flex-none text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 px-3 py-1.5 rounded-lg flex items-center justify-center gap-1 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5 text-red-600" />
                   إضافة سطر جديد
@@ -945,17 +1004,18 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                       <th className="p-2.5 min-w-[130px]">وصف الطرد</th>
                       <th className="p-2.5 w-[70px]">الوزن (كجم)</th>
                       <th className="p-2.5 min-w-[90px]">الكاش (COD)</th>
-                      <th className="p-2.5 min-w-[80px]">الشحن المقدر</th>
+                      <th className="p-2.5 min-w-[125px]">سعر الشحن (ج.م) *</th>
                       <th className="p-2.5 text-center w-[50px]">إجراءات</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {stagedRows.map((row, index) => {
                       const valid = isRowValid(row);
-                      const estShipping = Math.round(
-                        (EGYPT_GOVERNORATES.find((g) => g.code === row.governorateCode)?.baseRate || 50) +
-                          Math.max(0, row.weightKg - 3) * 10
+                      const govObj = EGYPT_GOVERNORATES.find((g) => g.code === row.governorateCode) || EGYPT_GOVERNORATES[0];
+                      const autoShipping = Math.round(
+                        govObj.baseRate + Math.max(0, row.weightKg - 3) * govObj.additionalKgRate
                       );
+                      const isCustom = row.customShippingFee !== undefined && row.customShippingFee !== null;
 
                       return (
                         <tr
@@ -1056,9 +1116,35 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                             />
                           </td>
 
-                          {/* Estimated Shipping */}
-                          <td className="p-2 font-bold text-red-600 text-center font-mono">
-                            {estShipping} ج.م
+                          {/* Shipping Fee (Editable) */}
+                          <td className="p-1.5">
+                            <div className="relative flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                value={isCustom ? row.customShippingFee! : ''}
+                                placeholder={`${autoShipping}`}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                                  updateStagedRow(row.id, 'customShippingFee', val !== null && !isNaN(val) ? val : null);
+                                }}
+                                className={`w-full text-xs p-1.5 rounded border text-center font-mono font-extrabold focus:outline-none focus:ring-1 focus:ring-red-500 ${
+                                  isCustom
+                                    ? 'border-red-400 bg-red-50 text-red-700'
+                                    : 'border-slate-200 bg-slate-50 text-slate-700 focus:bg-white'
+                                }`}
+                              />
+                              {isCustom && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateStagedRow(row.id, 'customShippingFee', null)}
+                                  className="text-slate-400 hover:text-red-600 font-bold text-xs px-1"
+                                  title="مسح وتفعيل الحساب الآلي للمحافظة"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
                           </td>
 
                           {/* Action */}

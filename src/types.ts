@@ -3,7 +3,8 @@
  */
 
 export type ShipmentStatus = 
-  | 'created'            // تم إنشاء الشحنة
+  | 'pending_approval'   // بانتظار موافقة الأدمن
+  | 'created'            // تم إنشاء وتأكيد الشحنة
   | 'pickup_requested'   // طلب الاستلام من التاجر
   | 'picked_up'          // تم الاستلام من التاجر
   | 'in_hub'             // في المستودع الرئيسي
@@ -159,7 +160,7 @@ export interface MerchantWallet {
   instaPayHandle?: string;
 }
 
-export type AppUserRole = 'merchant' | 'hub_manager' | 'courier' | 'public_tracker';
+export type AppUserRole = 'admin' | 'merchant' | 'hub_manager' | 'courier' | 'public_tracker';
 
 export interface UserSession {
   id: string;

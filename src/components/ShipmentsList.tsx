@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Shipment, ShipmentStatus, CourierInfo } from '../types';
+import { Shipment, ShipmentStatus, CourierInfo, AppUserRole } from '../types';
 import { EGYPT_GOVERNORATES, BOSTA_COURIERS } from '../data/mockData';
 import { 
   Package, 
@@ -18,7 +18,9 @@ import {
   RotateCcw,
   Plus,
   Trash2,
-  MessageSquare
+  MessageSquare,
+  Check,
+  Store
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
@@ -31,6 +33,9 @@ interface ShipmentsListProps {
   onAssignCourier?: (shipmentId: string, courier: CourierInfo) => void;
   onClearAllData?: () => void;
   onRestoreDemoData?: () => void;
+  onApproveShipment?: (shipmentId: string) => void;
+  onApproveAllPending?: () => void;
+  currentRole?: AppUserRole;
 }
 
 export const ShipmentsList: React.FC<ShipmentsListProps> = ({
@@ -42,12 +47,27 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   onAssignCourier,
   onClearAllData,
   onRestoreDemoData,
+  onApproveShipment,
+  onApproveAllPending,
+  currentRole,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [governorateFilter, setGovernorateFilter] = useState<string>('all');
+  const [merchantFilter, setMerchantFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [whatsappShipment, setWhatsappShipment] = useState<Shipment | null>(null);
+
+  // Extract list of available merchants from shipments
+  const availableMerchants = useMemo(() => {
+    const merchants = new Map<string, string>();
+    shipments.forEach((s) => {
+      if (s.sender?.storeName) {
+        merchants.set(s.sender.storeName, s.sender.storeName);
+      }
+    });
+    return Array.from(merchants.values()).sort();
+  }, [shipments]);
 
   // Filtered List
   const filteredShipments = useMemo(() => {
@@ -59,7 +79,8 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
         s.recipient.name.toLowerCase().includes(searchLower) ||
         s.recipient.phone.includes(searchLower) ||
         s.recipient.streetAddress.toLowerCase().includes(searchLower) ||
-        s.sender.storeName.toLowerCase().includes(searchLower);
+        (s.sender?.storeName && s.sender.storeName.toLowerCase().includes(searchLower)) ||
+        (s.sender?.contactName && s.sender.contactName.toLowerCase().includes(searchLower));
 
       // Status
       const matchesStatus =
@@ -83,12 +104,17 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
       const matchesGov =
         governorateFilter === 'all' ? true : s.recipient.governorate.includes(governorateFilter);
 
-      return matchesSearch && matchesStatus && matchesGov;
+      // Merchant
+      const matchesMerchant =
+        merchantFilter === 'all' ? true : s.sender?.storeName === merchantFilter;
+
+      return matchesSearch && matchesStatus && matchesGov && matchesMerchant;
     });
-  }, [shipments, searchTerm, statusFilter, governorateFilter]);
+  }, [shipments, searchTerm, statusFilter, governorateFilter, merchantFilter]);
 
   // Key KPI Metrics
   const totalCount = shipments.length;
+  const pendingCount = shipments.filter((s) => s.status === 'pending_approval').length;
   const deliveredCount = shipments.filter((s) => s.status === 'delivered').length;
   const partialCount = shipments.filter((s) => s.status === 'partial_delivery').length;
   const refusedCount = shipments.filter((s) => s.status === 'refused').length;
@@ -119,6 +145,13 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
 
   const getStatusBadge = (s: Shipment) => {
     switch (s.status) {
+      case 'pending_approval':
+        return (
+          <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-xs px-2.5 py-1 rounded-full flex items-center gap-1 w-fit animate-pulse">
+            <Clock className="w-3 h-3 text-amber-700" />
+            بانتظار موافقة الأدمن
+          </span>
+        );
       case 'delivered':
         return <span className="bg-emerald-100 text-emerald-800 font-bold text-xs px-2.5 py-1 rounded-full border border-emerald-200">تم التسليم</span>;
       case 'partial_delivery':
@@ -195,6 +228,35 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
         </div>
       </div>
 
+      {/* Pending Approval Banner */}
+      {pendingCount > 0 && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shrink-0">
+              ⏳
+            </div>
+            <div>
+              <h4 className="font-extrabold text-amber-950 text-sm">
+                تنبيه: يوجد {pendingCount} أوردرات جديدة أضافها التجار (يدوياً أو عبر ملفات إكسيل) بانتظار موافقة الأدمن!
+              </h4>
+              <p className="text-xs text-amber-800 mt-0.5">
+                تتطلب هذه الأوردرات مراجعة وتأكيد أدمن النظام للبدء في إجراءات الشحن والتسليم المباشر.
+              </p>
+            </div>
+          </div>
+
+          {onApproveAllPending && (
+            <button
+              onClick={onApproveAllPending}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              تأكيد وموافقة الجميع ({pendingCount})
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Control Toolbar */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-4">
         <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
@@ -210,6 +272,19 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             >
               جميع الشحنات ({totalCount})
             </button>
+
+            {pendingCount > 0 && (
+              <button
+                onClick={() => setStatusFilter('pending_approval')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all flex items-center gap-1 ${
+                  statusFilter === 'pending_approval'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-amber-900 bg-amber-100 border border-amber-300 hover:bg-amber-200'
+                }`}
+              >
+                ⏳ بانتظار موافقة الأدمن ({pendingCount})
+              </button>
+            )}
 
             <button
               onClick={() => setStatusFilter('active')}
@@ -298,17 +373,6 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                 <span className="hidden sm:inline">مسح البيانات</span>
               </button>
             )}
-
-            {onRestoreDemoData && shipments.length === 0 && (
-              <button
-                onClick={onRestoreDemoData}
-                
-                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 border border-slate-200"
-              >
-                <RotateCcw className="w-4 h-4 text-slate-600" />
-               
-              </button>
-            )}
           </div>
         </div>
 
@@ -336,6 +400,23 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
               {EGYPT_GOVERNORATES.map((g) => (
                 <option key={g.code} value={g.nameAr}>
                   {g.nameAr}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Merchant Filter */}
+          <div className="w-full sm:w-auto flex items-center gap-2">
+            <Store className="w-4 h-4 text-red-600 shrink-0" />
+            <select
+              value={merchantFilter}
+              onChange={(e) => setMerchantFilter(e.target.value)}
+              className="w-full sm:w-52 text-xs p-2 bg-red-50/60 border border-red-200 rounded-xl font-extrabold text-slate-800 focus:bg-white focus:ring-2 focus:ring-red-500/20"
+            >
+              <option value="all">جميع التجار والمتاجر ({availableMerchants.length})</option>
+              {availableMerchants.map((merchantName) => (
+                <option key={merchantName} value={merchantName}>
+                  التاجر: {merchantName}
                 </option>
               ))}
             </select>
@@ -374,6 +455,12 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                   />
                 </th>
                 <th className="p-3">رقم البوليصة (AWB)</th>
+                <th className="p-3 bg-red-50/50 text-red-900 border-x border-red-100">
+                  <span className="flex items-center gap-1 font-black">
+                    <Store className="w-3.5 h-3.5 text-red-600" />
+                    التاجر (المرسل)
+                  </span>
+                </th>
                 <th className="p-3">المستلم والعنوان</th>
                 <th className="p-3">المحافظة والمستودع</th>
                 <th className="p-3">المندوب المخصص</th>
@@ -386,18 +473,18 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredShipments.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center bg-slate-50/50">
+                  <td colSpan={10} className="p-12 text-center bg-slate-50/50">
                     <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-3">
                       <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center border border-red-100 shadow-xs">
                         <Package className="w-7 h-7" />
                       </div>
                       <h4 className="font-extrabold text-base text-slate-900">
-                        {shipments.length === 0 ? 'لا توجد شحنات مسجلة حالياً' : 'لم نجد شحنات تضاهي البحث'}
+                        {shipments.length === 0 ? 'لا توجد شحنات مسجلة حالياً' : 'لم نجد شحنات تضاهي البحث والتصفية'}
                       </h4>
                       <p className="text-xs text-slate-500 max-w-xs">
                         {shipments.length === 0
-                          ? 'تم مسح كافة البيانات. يمكنك الآن البدء بإضافة شحنات جديدة أو ة.'
-                          : 'جرّب تغيير عبارات البحث أو تصفية المحافظات لاستعراض الشحنات.'}
+                          ? 'تم مسح كافة البيانات. يمكنك الآن البدء بإضافة شحنات جديدة أو استعادة عينة تجريبية.'
+                          : 'جرّب تغيير عبارات البحث، أو تصفية المحافظات والتجار لاستعراض الشحنات.'}
                       </p>
                       <div className="flex items-center gap-2 pt-2">
                         <button
@@ -407,15 +494,6 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                           <Plus className="w-4 h-4" />
                           إنشاء شحنة جديدة
                         </button>
-                        {onRestoreDemoData && shipments.length === 0 && (
-                          <button
-                            onClick={onRestoreDemoData}
-                            className="bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl border border-slate-200 shadow-2xs transition-colors flex items-center gap-1.5"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                           
-                          </button>
-                        )}
                       </div>
                     </div>
                   </td>
@@ -434,13 +512,24 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                     <td className="p-3 font-mono font-black text-slate-900">
                       <span 
                         onClick={() => onOpenDetailModal(s)}
-                        className="cursor-pointer hover:text-red-600 transition-colors"
+                        className="cursor-pointer hover:text-red-600 transition-colors block text-sm"
                       >
                         {s.trackingNumber}
                       </span>
                       <span className="block text-[10px] text-slate-400 font-sans font-normal mt-0.5">
                         {new Date(s.createdAt).toLocaleDateString('ar-EG')}
                       </span>
+                    </td>
+                    <td className="p-3 bg-red-50/20 border-x border-red-100/60">
+                      <div className="inline-flex items-center gap-1.5 font-extrabold text-slate-900 text-xs bg-white border border-red-200 px-2.5 py-1 rounded-lg shadow-2xs">
+                        <Store className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                        <span>{s.sender?.storeName || 'تاجر عام'}</span>
+                      </div>
+                      {s.sender?.contactName && (
+                        <span className="block text-[10px] text-slate-500 mt-0.5 font-bold">
+                          المسؤول: {s.sender.contactName} ({s.sender.phone})
+                        </span>
+                      )}
                     </td>
                     <td className="p-3">
                       <p className="font-extrabold text-slate-900">{s.recipient.name}</p>
@@ -503,6 +592,17 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                     <td className="p-3">{getStatusBadge(s)}</td>
                     <td className="p-3 text-center">
                       <div className="flex items-center justify-center gap-1">
+                        {s.status === 'pending_approval' && onApproveShipment && (
+                          <button
+                            onClick={() => onApproveShipment(s.id)}
+                            title="تأكيد وموافقة الأوردر"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            قبول الأوردر
+                          </button>
+                        )}
+
                         <button
                           onClick={() => setWhatsappShipment(s)}
                           title="إرسال رسالة واتساب للعميل"
