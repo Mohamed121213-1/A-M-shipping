@@ -9,7 +9,7 @@ import { PublicTrackingView } from './components/PublicTrackingView';
 import { WalletView } from './components/WalletView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { RateCalculatorView } from './components/RateCalculatorView';
-import { LoginView, createSessionUser, DEMO_USERS } from './components/LoginView';
+import { LoginView, createSessionUser } from './components/LoginView';
 import { AdminPanelView } from './components/AdminPanelView';
 
 import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate } from './types';
@@ -41,11 +41,7 @@ export default function App() {
 
   // Dynamic system entities customizable by Admin
   const [users, setUsers] = useState<UserSession[]>(() =>
-    loadLocalState<UserSession[]>('bosta_users', [
-      DEMO_USERS.admin,
-      DEMO_USERS.merchant,
-      DEMO_USERS.courier
-    ])
+    loadLocalState<UserSession[]>('bosta_users', [])
   );
 
   const [couriers, setCouriers] = useState<CourierInfo[]>(() =>
@@ -488,7 +484,7 @@ export default function App() {
       totalPaidOut: 0,
     });
     setCourierNotifications([]);
-    setUsers([DEMO_USERS.admin]);
+    setUsers([]);
     showToast('🗑️ تم مسح كافة الشحنات والحسابات والمحفظة بنجاح');
   };
 
