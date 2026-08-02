@@ -8,8 +8,7 @@ const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || '';
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
   supabaseAnonKey && 
-  supabaseUrl.startsWith('https://') &&
-
+  supabaseUrl.startsWith('https://') 
 );
 
 // Create Supabase Client instance (fallback to placeholder if not configured to prevent runtime crash)
