@@ -9,7 +9,7 @@ export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
   supabaseAnonKey && 
   supabaseUrl.startsWith('https://') &&
-  !supabaseUrl.includes('YOUR_SUPABASE')
+
 );
 
 // Create Supabase Client instance (fallback to placeholder if not configured to prevent runtime crash)
