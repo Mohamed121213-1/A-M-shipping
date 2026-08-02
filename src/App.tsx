@@ -11,6 +11,7 @@ import { AnalyticsView } from './components/AnalyticsView';
 import { RateCalculatorView } from './components/RateCalculatorView';
 import { LoginView, createSessionUser } from './components/LoginView';
 import { AdminPanelView } from './components/AdminPanelView';
+import { supabase, isSupabaseConfigured, mapSupabaseUserToSession } from './lib/supabase';
 
 import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate } from './types';
 import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES } from './data/mockData';
@@ -105,6 +106,33 @@ export default function App() {
     localStorage.setItem('bosta_active_tab', JSON.stringify(activeTab));
   }, [activeTab]);
 
+  // Listen to Supabase Auth State changes if Supabase is configured
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user && !currentUser) {
+        const user = mapSupabaseUserToSession(session.user);
+        setCurrentUser(user);
+        setCurrentRole(user.role);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const user = mapSupabaseUserToSession(session.user);
+        setCurrentUser(user);
+        setCurrentRole(user.role);
+      } else {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   // Auth handlers
   const handleLoginSuccess = (user: UserSession) => {
     setCurrentUser(user);
@@ -119,7 +147,14 @@ export default function App() {
     showToast(`🔑 تم تسجيل الدخول بنجاح كـ ${user.name}`);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.error('Error signing out of Supabase:', err);
+      }
+    }
     setCurrentUser(null);
     setActiveTab('login');
     showToast('👋 تم تسجيل الخروج بنجاح');
