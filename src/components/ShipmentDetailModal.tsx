@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Shipment, ShipmentStatus, CourierInfo } from '../types';
-import { BOSTA_COURIERS } from '../data/mockData';
 import { X, CheckCircle2, Clock, MapPin, Truck, AlertTriangle, ShieldCheck, Sparkles, Printer, User, Phone, Package, DollarSign, ArrowRight, KeyRound, MessageSquare } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
@@ -10,6 +9,7 @@ interface ShipmentDetailModalProps {
   onUpdateStatus: (shipmentId: string, newStatus: ShipmentStatus, note?: string) => void;
   onAssignCourier: (shipmentId: string, courier: CourierInfo) => void;
   onOpenPrintModal: (shipment: Shipment) => void;
+  couriers?: CourierInfo[];
 }
 
 export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
@@ -18,6 +18,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   onUpdateStatus,
   onAssignCourier,
   onOpenPrintModal,
+  couriers = [],
 }) => {
   if (!shipment) return null;
 
@@ -39,7 +40,8 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   const handleCourierAssign = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const courierId = e.target.value;
     setSelectedCourierId(courierId);
-    const found = BOSTA_COURIERS.find((c) => c.id === courierId);
+    if (!courierId) return;
+    const found = couriers.find((c) => c.id === courierId || (c.phone && c.phone === courierId));
     if (found) {
       onAssignCourier(shipment.id, found);
     }
@@ -255,11 +257,14 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                   className="w-full text-xs p-2 bg-slate-100 border border-slate-200 rounded-lg font-bold text-slate-800 focus:bg-white"
                 >
                   <option value="">-- اختر المندوب --</option>
-                  {BOSTA_COURIERS.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.assignedHub})
-                    </option>
-                  ))}
+                  {couriers.map((c, idx) => {
+                    const optValue = c.id || c.phone || `cour-opt-${idx}`;
+                    return (
+                      <option key={optValue} value={optValue}>
+                        {c.name} ({c.assignedHub || 'المستودع الرئيسي'})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </div>

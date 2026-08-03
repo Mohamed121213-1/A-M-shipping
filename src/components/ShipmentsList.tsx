@@ -570,17 +570,22 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                         <select
                           value={s.assignedCourier?.id || ''}
                           onChange={(e) => {
-                            const found = couriers.find((c) => c.id === e.target.value);
+                            const val = e.target.value;
+                            if (!val) return;
+                            const found = couriers.find((c) => c.id === val || (c.phone && c.phone === val));
                             if (found) onAssignCourier(s.id, found);
                           }}
                           className="text-[10px] p-1 bg-slate-100 border border-slate-200 rounded text-slate-700 font-bold block w-full focus:bg-white cursor-pointer"
                         >
                           <option value="">-- تعيين مندوب --</option>
-                          {couriers.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
+                          {couriers.map((c, idx) => {
+                            const optVal = c.id || c.phone || `cour-opt-${idx}`;
+                            return (
+                              <option key={optVal} value={optVal}>
+                                {c.name} {c.phone ? `(${c.phone})` : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       )}
                     </td>

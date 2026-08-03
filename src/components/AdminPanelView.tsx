@@ -220,6 +220,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
     if (editingCourier) {
       onUpdateCourier({
         ...editingCourier,
+        id: editingCourier.id || `cour-${Date.now()}`,
         name: courierFormData.name,
         phone: courierFormData.phone,
         vehicle: courierFormData.vehicle,
@@ -227,7 +228,9 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
         rating: courierFormData.rating,
       });
     } else {
+      const newCourierId = `cour-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
       onAddCourier({
+        id: newCourierId,
         name: courierFormData.name,
         phone: courierFormData.phone,
         vehicle: courierFormData.vehicle,

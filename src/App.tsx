@@ -46,9 +46,13 @@ export default function App() {
     loadLocalState<UserSession[]>('bosta_users', [])
   );
 
-  const [couriers, setCouriers] = useState<CourierInfo[]>(() =>
-    loadLocalState<CourierInfo[]>('bosta_couriers', []).filter((c) => !c.id.startsWith('cour-10'))
-  );
+  const [couriers, setCouriers] = useState<CourierInfo[]>(() => {
+    const saved = loadLocalState<CourierInfo[]>('bosta_couriers', []);
+    return saved.map((c, idx) => ({
+      ...c,
+      id: c.id || `cour-${Date.now()}-${idx}`,
+    }));
+  });
 
   const [hubs, setHubs] = useState<HubInfo[]>(() =>
     loadLocalState<HubInfo[]>('bosta_hubs', BOSTA_HUBS)
@@ -503,56 +507,105 @@ export default function App() {
   // Admin CRUD Handlers
   const handleAddUser = (user: UserSession) => {
     setUsers((prev) => [...prev, user]);
+    if (user.role === 'courier') {
+      const courierObj: CourierInfo = {
+        id: user.id || `cour-${Date.now()}`,
+        name: user.name,
+        phone: user.phone,
+        vehicle: user.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
+        assignedHub: user.hubName || 'المستودع الرئيسي',
+        rating: 5.0,
+        activeShipmentsCount: 0,
+        codCollectedToday: 0,
+        photoUrl: user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=2563eb&color=ffffff`,
+      };
+      setCouriers((prev) => {
+        if (prev.some((c) => c.id === courierObj.id || c.phone === courierObj.phone)) {
+          return prev.map((c) => (c.id === courierObj.id || c.phone === courierObj.phone ? { ...c, ...courierObj } : c));
+        }
+        return [...prev, courierObj];
+      });
+    }
     showToast(`✅ تم إضافة الحساب ${user.name} بنجاح`);
   };
 
   const handleUpdateUser = (updatedUser: UserSession) => {
     setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+    if (updatedUser.role === 'courier') {
+      setCouriers((prev) =>
+        prev.map((c) =>
+          c.id === updatedUser.id || c.phone === updatedUser.phone
+            ? {
+                ...c,
+                name: updatedUser.name,
+                phone: updatedUser.phone,
+                vehicle: updatedUser.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
+                assignedHub: updatedUser.hubName || 'المستودع الرئيسي',
+              }
+            : c
+        )
+      );
+    }
     showToast(`✏️ تم تحديث بيانات الحساب ${updatedUser.name}`);
   };
 
   const handleDeleteUser = (userId: string) => {
     setUsers((prev) => prev.filter((u) => u.id !== userId));
+    setCouriers((prev) => prev.filter((c) => c.id !== userId));
     showToast('🗑️ تم حذف الحساب من النظام');
   };
 
   const handleAddCourier = (courier: CourierInfo) => {
-    setCouriers((prev) => [...prev, courier]);
+    const courierId = courier.id || `cour-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const fullCourier: CourierInfo = { ...courier, id: courierId };
+
+    setCouriers((prev) => {
+      const exists = prev.some((c) => c.id === courierId || c.phone === fullCourier.phone);
+      if (exists) {
+        return prev.map((c) => (c.id === courierId || c.phone === fullCourier.phone ? { ...c, ...fullCourier } : c));
+      }
+      return [...prev, fullCourier];
+    });
+
     const courierUser: UserSession = {
-      id: courier.id,
-      name: courier.name,
-      email: `${courier.id}@am-shipping.eg`,
-      phone: courier.phone,
+      id: courierId,
+      name: fullCourier.name,
+      email: `${courierId}@am-shipping.eg`,
+      phone: fullCourier.phone,
       role: 'courier',
-      avatarUrl: courier.photoUrl,
-      courierVehicle: courier.vehicle === 'motocycle' ? 'دراجة نارية' : 'سيارة فان',
-      hubName: courier.assignedHub,
+      avatarUrl: fullCourier.photoUrl,
+      courierVehicle: fullCourier.vehicle === 'motocycle' ? 'دراجة نارية' : 'سيارة فان',
+      hubName: fullCourier.assignedHub,
     };
+
     setUsers((prev) => {
-      if (prev.some((u) => u.id === courier.id || u.phone === courier.phone)) {
-        return prev.map((u) => (u.id === courier.id || u.phone === courier.phone ? { ...u, ...courierUser } : u));
+      if (prev.some((u) => u.id === courierId || u.phone === fullCourier.phone)) {
+        return prev.map((u) => (u.id === courierId || u.phone === fullCourier.phone ? { ...u, ...courierUser } : u));
       }
       return [...prev, courierUser];
     });
-    showToast(`🚚 تم إضافة الكابتن ${courier.name} بنجاح وربطه بحسابات لوحة التحكم`);
+
+    showToast(`🚚 تم إضافة الكابتن ${fullCourier.name} بنجاح وربطه بحسابات لوحة التحكم`);
   };
 
   const handleUpdateCourier = (updatedCourier: CourierInfo) => {
-    setCouriers((prev) => prev.map((c) => (c.id === updatedCourier.id ? updatedCourier : c)));
+    const courierId = updatedCourier.id || `cour-${Date.now()}`;
+    const fullCourier = { ...updatedCourier, id: courierId };
+    setCouriers((prev) => prev.map((c) => (c.id === courierId || c.phone === fullCourier.phone ? fullCourier : c)));
     setUsers((prev) =>
       prev.map((u) =>
-        u.id === updatedCourier.id || u.phone === updatedCourier.phone
+        u.id === courierId || u.phone === fullCourier.phone
           ? {
               ...u,
-              name: updatedCourier.name,
-              phone: updatedCourier.phone,
-              courierVehicle: updatedCourier.vehicle === 'motocycle' ? 'دراجة نارية' : 'سيارة فان',
-              hubName: updatedCourier.assignedHub,
+              name: fullCourier.name,
+              phone: fullCourier.phone,
+              courierVehicle: fullCourier.vehicle === 'motocycle' ? 'دراجة نارية' : 'سيارة فان',
+              hubName: fullCourier.assignedHub,
             }
           : u
       )
     );
-    showToast(`✏️ تم تحديث بيانات الكابتن ${updatedCourier.name}`);
+    showToast(`✏️ تم تحديث بيانات الكابتن ${fullCourier.name}`);
   };
 
   const handleDeleteCourier = (courierId: string) => {
