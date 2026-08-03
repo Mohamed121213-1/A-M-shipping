@@ -89,17 +89,24 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   // Sync active courier if user is logged in as courier or selected from parent / notification
   useEffect(() => {
     if (currentUser?.role === 'courier') {
-      setActiveCourier({
-        id: currentUser.id,
-        name: currentUser.name,
-        phone: currentUser.phone || '01000000000',
-        vehicle: (currentUser.courierVehicle?.includes('سيارة') ? 'van' : 'motocycle'),
-        assignedHub: currentUser.hubName || 'المستودع الرئيسي',
-        rating: 4.9,
-        activeShipmentsCount: shipments.length,
-        codCollectedToday: 0,
-        photoUrl: currentUser.avatarUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.name),
-      });
+      const matchedCourier = couriers.find(
+        (c) => c.id === currentUser.id || (currentUser.phone && c.phone === currentUser.phone) || c.name === currentUser.name
+      );
+      if (matchedCourier) {
+        setActiveCourier(matchedCourier);
+      } else {
+        setActiveCourier({
+          id: currentUser.id,
+          name: currentUser.name,
+          phone: currentUser.phone || '01000000000',
+          vehicle: currentUser.courierVehicle?.includes('سيارة') ? 'van' : 'motocycle',
+          assignedHub: currentUser.hubName || 'المستودع الرئيسي',
+          rating: 4.9,
+          activeShipmentsCount: shipments.length,
+          codCollectedToday: 0,
+          photoUrl: currentUser.avatarUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.name),
+        });
+      }
     } else if (selectedCourierId) {
       const found = couriers.find((c) => c.id === selectedCourierId);
       if (found) setActiveCourier(found);
@@ -115,13 +122,22 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   }, [targetShipmentId]);
 
   // Notifications for current active courier
-  const courierNotifs = notifications.filter((n) => n.courierId === activeCourier.id);
+  const courierNotifs = notifications.filter(
+    (n) =>
+      n.courierId === activeCourier.id ||
+      (activeCourier.phone && n.courierId === activeCourier.phone) ||
+      (currentUser?.id && n.courierId === currentUser.id)
+  );
   const unreadCount = courierNotifs.filter((n) => !n.read).length;
 
   // Deliveries assigned to selected courier or active
-  const courierShipments = shipments.filter(
-    (s) => s.assignedCourier?.id === activeCourier.id || s.status === 'out_for_delivery'
-  );
+  const courierShipments = shipments.filter((s) => {
+    if (!s.assignedCourier) return false;
+    const matchId = Boolean(s.assignedCourier.id && activeCourier.id && s.assignedCourier.id === activeCourier.id);
+    const matchPhone = Boolean(s.assignedCourier.phone && activeCourier.phone && s.assignedCourier.phone === activeCourier.phone);
+    const matchName = Boolean(s.assignedCourier.name && activeCourier.name && s.assignedCourier.name === activeCourier.name);
+    return matchId || matchPhone || matchName;
+  });
 
   const deliveredShipments = courierShipments.filter((s) => s.status === 'delivered');
 

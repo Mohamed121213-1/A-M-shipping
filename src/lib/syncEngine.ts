@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import { Shipment, MerchantWallet, UserSession, CourierInfo, HubInfo, GovernorateRate } from '../types';
+import { Shipment, MerchantWallet, UserSession, CourierInfo, HubInfo, GovernorateRate, CourierNotification } from '../types';
 
 export interface SyncedAppState {
   shipments?: Shipment[];
@@ -8,6 +8,7 @@ export interface SyncedAppState {
   couriers?: CourierInfo[];
   hubs?: HubInfo[];
   governorates?: GovernorateRate[];
+  notifications?: CourierNotification[];
   timestamp?: number;
   senderId?: string;
 }
@@ -20,6 +21,7 @@ class SyncEngine {
   private listeners: Set<SyncCallback> = new Set();
   private isProcessingIncoming = false;
   private instanceId = `CLIENT-${Math.random().toString(36).substring(2, 9)}`;
+  private latestStateCache: SyncedAppState | null = null;
 
   constructor() {
     // 1. Initialize local BroadcastChannel for same-device multi-window / multi-tab syncing
@@ -46,11 +48,21 @@ class SyncEngine {
               this.handleIncomingUpdate(payload.payload);
             }
           })
+          .on('broadcast', { event: 'request_state_sync' }, (payload: any) => {
+            if (payload?.payload?.senderId !== this.instanceId && this.latestStateCache) {
+              this.broadcastState(this.latestStateCache);
+            }
+          })
           .subscribe((status: string) => {
             if (status === 'SUBSCRIBED') {
               console.log('⚡ Connected to Global Cross-Device Sync Service');
+              // Request current state from other active sessions
+              this.requestStateSync();
             }
           });
+
+        // Try initial fetch from Supabase database table if available
+        this.fetchPersistedStateFromSupabase();
       } catch (err) {
         console.warn('Supabase Realtime Channel error:', err);
       }
@@ -76,6 +88,9 @@ class SyncEngine {
   private handleIncomingUpdate(data: SyncedAppState) {
     if (this.isProcessingIncoming) return;
     this.isProcessingIncoming = true;
+    if (data.shipments || data.users || data.couriers || data.wallet) {
+      this.latestStateCache = { ...this.latestStateCache, ...data };
+    }
     this.listeners.forEach((cb) => {
       try {
         cb(data);
@@ -88,6 +103,37 @@ class SyncEngine {
     }, 50);
   }
 
+  public requestStateSync() {
+    if (this.realtimeChannel && isSupabaseConfigured) {
+      try {
+        this.realtimeChannel.send({
+          type: 'broadcast',
+          event: 'request_state_sync',
+          payload: { senderId: this.instanceId },
+        });
+      } catch (e) {
+        console.warn('Request state sync failed:', e);
+      }
+    }
+  }
+
+  private async fetchPersistedStateFromSupabase() {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data, error } = await supabase
+        .from('bosta_app_state')
+        .select('state')
+        .eq('id', 'global_state')
+        .maybeSingle();
+
+      if (!error && data?.state) {
+        this.handleIncomingUpdate(data.state);
+      }
+    } catch (e) {
+      // Table may not exist yet in Supabase project, ignore
+    }
+  }
+
   public broadcastState(state: SyncedAppState) {
     if (this.isProcessingIncoming) return;
 
@@ -96,6 +142,8 @@ class SyncEngine {
       senderId: this.instanceId,
       timestamp: Date.now(),
     };
+
+    this.latestStateCache = payload;
 
     // 1. Broadcast to local tabs/windows
     if (this.localChannel) {
@@ -117,8 +165,20 @@ class SyncEngine {
       } catch (e) {
         console.warn('Supabase Realtime send failed:', e);
       }
+
+      // Also persist to Supabase DB table asynchronously if table exists
+      (async () => {
+        try {
+          await supabase
+            .from('bosta_app_state')
+            .upsert({ id: 'global_state', state: payload, updated_at: new Date().toISOString() });
+        } catch (e) {
+          // Ignore DB upsert errors
+        }
+      })();
     }
   }
 }
 
 export const syncEngine = new SyncEngine();
+

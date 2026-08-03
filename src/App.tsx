@@ -74,6 +74,11 @@ export default function App() {
     loadLocalState<string>('bosta_active_tab', 'login')
   );
 
+  // Courier Notification System State
+  const [courierNotifications, setCourierNotifications] = useState<CourierNotification[]>(() =>
+    loadLocalState<CourierNotification[]>('bosta_courier_notifications', [])
+  );
+
   // Auto-sync state updates to localStorage and broadcast to all connected devices/accounts
   useEffect(() => {
     localStorage.setItem('bosta_shipments', JSON.stringify(shipments));
@@ -111,6 +116,10 @@ export default function App() {
     localStorage.setItem('bosta_active_tab', JSON.stringify(activeTab));
   }, [activeTab]);
 
+  useEffect(() => {
+    localStorage.setItem('bosta_courier_notifications', JSON.stringify(courierNotifications));
+  }, [courierNotifications]);
+
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
     const unsubscribe = syncEngine.subscribe((incoming) => {
@@ -132,6 +141,9 @@ export default function App() {
       if (incoming.governorates && Array.isArray(incoming.governorates)) {
         setGovernorates(incoming.governorates);
       }
+      if (incoming.notifications && Array.isArray(incoming.notifications)) {
+        setCourierNotifications(incoming.notifications);
+      }
     });
 
     return () => {
@@ -147,6 +159,7 @@ export default function App() {
     couriers: CourierInfo[];
     hubs: HubInfo[];
     governorates: GovernorateRate[];
+    notifications: CourierNotification[];
   }>) => {
     syncEngine.broadcastState({
       shipments: overrideState?.shipments || shipments,
@@ -155,8 +168,14 @@ export default function App() {
       couriers: overrideState?.couriers || couriers,
       hubs: overrideState?.hubs || hubs,
       governorates: overrideState?.governorates || governorates,
+      notifications: overrideState?.notifications || courierNotifications,
     });
   };
+
+  // Automatically broadcast whenever core operational data updates
+  useEffect(() => {
+    broadcastDataChange();
+  }, [shipments, wallet, users, couriers, hubs, governorates, courierNotifications]);
 
   // Listen to Supabase Auth State changes if Supabase is configured
   useEffect(() => {
@@ -236,7 +255,6 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Courier Notification System
-  const [courierNotifications, setCourierNotifications] = useState<CourierNotification[]>([]);
   const [activeCourierToast, setActiveCourierToast] = useState<CourierNotification | null>(null);
   const [activeCourierIdInApp, setActiveCourierIdInApp] = useState<string | undefined>(undefined);
   const [activeTargetShipmentId, setActiveTargetShipmentId] = useState<string | undefined>(undefined);
