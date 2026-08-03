@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MerchantWallet, Shipment, CourierInfo } from '../types';
+import { MerchantWallet, Shipment, CourierInfo, UserSession } from '../types';
 import { BOSTA_COURIERS } from '../data/mockData';
 import { 
   Wallet, 
@@ -24,9 +24,16 @@ interface WalletViewProps {
   shipments: Shipment[];
   onRequestPayout: (amount: number, method: string) => void;
   couriers?: CourierInfo[];
+  systemUsers?: UserSession[];
 }
 
-export const WalletView: React.FC<WalletViewProps> = ({ wallet, shipments, onRequestPayout, couriers = BOSTA_COURIERS }) => {
+export const WalletView: React.FC<WalletViewProps> = ({
+  wallet,
+  shipments,
+  onRequestPayout,
+  couriers = BOSTA_COURIERS,
+  systemUsers = [],
+}) => {
   const [activeSubTab, setActiveSubTab] = useState<'merchant' | 'couriers'>('merchant');
   const [payoutAmount, setPayoutAmount] = useState<number>(wallet.availableBalance);
   const [payoutMethod, setPayoutMethod] = useState<'instapay' | 'vodafone' | 'bank'>('instapay');
@@ -40,17 +47,48 @@ export const WalletView: React.FC<WalletViewProps> = ({ wallet, shipments, onReq
     (s) => s.status === 'delivered' || s.status === 'partial_delivery' || (s.status === 'refused' && s.refusedDetails?.shippingFeePaid)
   );
 
-  // Combine passed couriers + any couriers assigned on shipments
+  // Combine passed couriers + system Users with role 'courier' + any couriers assigned on shipments
   const courierMap = new Map<string, CourierInfo>();
-  (couriers && couriers.length > 0 ? couriers : BOSTA_COURIERS).forEach((c) => courierMap.set(c.id || c.phone, c));
+  
+  (couriers && couriers.length > 0 ? couriers : BOSTA_COURIERS).forEach((c) => {
+    const key = c.id || c.phone || c.name;
+    if (key) courierMap.set(key, c);
+  });
+
+  (systemUsers || []).filter((u) => u.role === 'courier').forEach((u) => {
+    const exists = Array.from(courierMap.values()).some(
+      (c) => (u.id && c.id === u.id) || (u.phone && c.phone === u.phone) || (u.name && c.name === u.name)
+    );
+    if (!exists) {
+      const newC: CourierInfo = {
+        id: u.id || `cour-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        name: u.name,
+        phone: u.phone,
+        vehicle: u.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
+        assignedHub: u.hubName || 'المستودع الرئيسي',
+        rating: 5.0,
+        activeShipmentsCount: 0,
+        codCollectedToday: 0,
+        photoUrl: u.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=2563eb&color=ffffff`,
+      };
+      courierMap.set(newC.id, newC);
+    }
+  });
+
   shipments.forEach((s) => {
     if (s.assignedCourier) {
-      const key = s.assignedCourier.id || s.assignedCourier.phone;
-      if (key && !courierMap.has(key)) {
-        courierMap.set(key, s.assignedCourier);
+      const exists = Array.from(courierMap.values()).some(
+        (c) => (s.assignedCourier?.id && c.id === s.assignedCourier.id) ||
+               (s.assignedCourier?.phone && c.phone === s.assignedCourier.phone) ||
+               (s.assignedCourier?.name && c.name === s.assignedCourier.name)
+      );
+      if (!exists) {
+        const key = s.assignedCourier.id || s.assignedCourier.phone || s.assignedCourier.name;
+        if (key) courierMap.set(key, s.assignedCourier);
       }
     }
   });
+
   const effectiveCouriers = Array.from(courierMap.values());
 
   // Compute COD collected per courier dynamically

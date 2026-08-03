@@ -216,16 +216,44 @@ export default function App() {
 
   // Auth handlers
   const handleLoginSuccess = (user: UserSession) => {
-    setCurrentUser(user);
-    setCurrentRole(user.role);
-    if (user.role === 'courier') {
+    const userId = user.id || `USR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const fullUser: UserSession = { ...user, id: userId };
+
+    setCurrentUser(fullUser);
+    setCurrentRole(fullUser.role);
+
+    setUsers((prev) => {
+      const exists = prev.some((u) => u.id === fullUser.id || (u.phone && u.phone === fullUser.phone) || (u.email && u.email === fullUser.email));
+      if (!exists) return [...prev, fullUser];
+      return prev.map((u) => (u.id === fullUser.id || (u.phone && u.phone === fullUser.phone) ? { ...u, ...fullUser } : u));
+    });
+
+    if (fullUser.role === 'courier') {
+      const courierObj: CourierInfo = {
+        id: fullUser.id,
+        name: fullUser.name,
+        phone: fullUser.phone,
+        vehicle: fullUser.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
+        assignedHub: fullUser.hubName || 'المستودع الرئيسي',
+        rating: 5.0,
+        activeShipmentsCount: 0,
+        codCollectedToday: 0,
+        photoUrl: fullUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullUser.name)}&background=2563eb&color=ffffff`,
+      };
+
+      setCouriers((prev) => {
+        const exists = prev.some((c) => c.id === courierObj.id || (c.phone && c.phone === courierObj.phone));
+        if (!exists) return [...prev, courierObj];
+        return prev.map((c) => (c.id === courierObj.id || (c.phone && c.phone === courierObj.phone) ? { ...c, ...courierObj } : c));
+      });
+
       setActiveTab('courier_app');
-    } else if (user.role === 'public_tracker') {
+    } else if (fullUser.role === 'public_tracker') {
       setActiveTab('tracking');
     } else {
       setActiveTab('shipments');
     }
-    showToast(`🔑 تم تسجيل الدخول بنجاح كـ ${user.name}`);
+    showToast(`🔑 تم تسجيل الدخول بنجاح كـ ${fullUser.name}`);
   };
 
   const handleLogout = async () => {
@@ -528,27 +556,29 @@ export default function App() {
 
   // Admin CRUD Handlers
   const handleAddUser = (user: UserSession) => {
-    setUsers((prev) => [...prev, user]);
-    if (user.role === 'courier') {
+    const userId = user.id || `USR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const fullUser: UserSession = { ...user, id: userId };
+    setUsers((prev) => [...prev, fullUser]);
+    if (fullUser.role === 'courier') {
       const courierObj: CourierInfo = {
-        id: user.id || `cour-${Date.now()}`,
-        name: user.name,
-        phone: user.phone,
-        vehicle: user.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
-        assignedHub: user.hubName || 'المستودع الرئيسي',
+        id: fullUser.id,
+        name: fullUser.name,
+        phone: fullUser.phone,
+        vehicle: fullUser.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
+        assignedHub: fullUser.hubName || 'المستودع الرئيسي',
         rating: 5.0,
         activeShipmentsCount: 0,
         codCollectedToday: 0,
-        photoUrl: user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=2563eb&color=ffffff`,
+        photoUrl: fullUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullUser.name)}&background=2563eb&color=ffffff`,
       };
       setCouriers((prev) => {
-        if (prev.some((c) => c.id === courierObj.id || c.phone === courierObj.phone)) {
-          return prev.map((c) => (c.id === courierObj.id || c.phone === courierObj.phone ? { ...c, ...courierObj } : c));
+        if (prev.some((c) => c.id === courierObj.id || (c.phone && c.phone === courierObj.phone))) {
+          return prev.map((c) => (c.id === courierObj.id || (c.phone && c.phone === courierObj.phone) ? { ...c, ...courierObj } : c));
         }
         return [...prev, courierObj];
       });
     }
-    showToast(`✅ تم إضافة الحساب ${user.name} بنجاح`);
+    showToast(`✅ تم إضافة الحساب ${fullUser.name} بنجاح`);
   };
 
   const handleUpdateUser = (updatedUser: UserSession) => {
@@ -788,7 +818,7 @@ export default function App() {
             )}
 
             {activeTab === 'wallet' && (
-              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} couriers={couriers} />
+              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} couriers={couriers} systemUsers={users} />
             )}
 
             {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
@@ -871,7 +901,7 @@ export default function App() {
             )}
 
             {activeTab === 'wallet' && (
-              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} couriers={couriers} />
+              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} couriers={couriers} systemUsers={users} />
             )}
 
             {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
