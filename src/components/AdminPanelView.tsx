@@ -83,8 +83,10 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
   onApproveShipment,
   onApproveAllPending,
 }) => {
-  const [activeTab, setActiveTab] = useState<'approval' | 'users' | 'couriers' | 'hubs' | 'rates' | 'wallet' | 'danger'>('users');
   const pendingShipments = shipments.filter((s) => s.status === 'pending_approval');
+  const [activeTab, setActiveTab] = useState<'approval' | 'users' | 'couriers' | 'hubs' | 'rates' | 'wallet' | 'danger'>(
+    pendingShipments.length > 0 ? 'approval' : 'users'
+  );
 
   // Search filters
   const [userSearch, setUserSearch] = useState('');

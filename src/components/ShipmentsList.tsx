@@ -72,6 +72,11 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   // Filtered List
   const filteredShipments = useMemo(() => {
     return shipments.filter((s) => {
+      // Unconfirmed shipments (pending_approval) appear ONLY for Admin
+      if (currentRole !== 'admin' && s.status === 'pending_approval') {
+        return false;
+      }
+
       // Search
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch =
@@ -110,7 +115,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
 
       return matchesSearch && matchesStatus && matchesGov && matchesMerchant;
     });
-  }, [shipments, searchTerm, statusFilter, governorateFilter, merchantFilter]);
+  }, [shipments, searchTerm, statusFilter, governorateFilter, merchantFilter, currentRole]);
 
   // Key KPI Metrics
   const totalCount = shipments.length;
@@ -228,8 +233,8 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
         </div>
       </div>
 
-      {/* Pending Approval Banner */}
-      {pendingCount > 0 && (
+      {/* Pending Approval Banner - Admin Only */}
+      {currentRole === 'admin' && pendingCount > 0 && (
         <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shrink-0">
@@ -273,7 +278,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
               جميع الشحنات ({totalCount})
             </button>
 
-            {pendingCount > 0 && (
+            {currentRole === 'admin' && pendingCount > 0 && (
               <button
                 onClick={() => setStatusFilter('pending_approval')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all flex items-center gap-1 ${
