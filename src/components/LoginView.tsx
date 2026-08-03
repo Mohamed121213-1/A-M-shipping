@@ -259,15 +259,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
           {/* Supabase Config Warning Box if not configured */}
           {!isSupabaseConfigured && (
-            <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 text-xs font-bold text-amber-900 space-y-1">
+            <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 text-xs font-bold text-amber-900 space-y-2">
               <div className="flex items-center gap-2 font-black text-amber-950">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                 تنبيه ربط Supabase Authentication:
               </div>
               <p className="text-amber-800 leading-relaxed font-medium">
-                لربط تسجيل الدخول بقاعدة بيانات Supabase، أضف المفاتيح التالية في ملف <code className="bg-amber-100 text-amber-950 px-1.5 py-0.5 rounded font-mono">.env</code>:
+                يظهر هذا التنبيه لأن مفاتيح Supabase غير مضافة بعد في متغيرة البيئة. لربط حسابك الحقيقي، افتح قائمة <strong>الإعدادات (Settings)</strong> في المنصة وأضف المتغيرين التاليين:
               </p>
-              <div className="bg-white/80 border border-amber-200 p-2 rounded-xl font-mono text-[11px] text-slate-800 space-y-0.5 dir-ltr text-left">
+              <div className="bg-white/80 border border-amber-200 p-2.5 rounded-xl font-mono text-[11px] text-slate-800 space-y-1 dir-ltr text-left">
                 <div>VITE_SUPABASE_URL=https://your-project.supabase.co</div>
                 <div>VITE_SUPABASE_ANON_KEY=your-anon-key</div>
               </div>

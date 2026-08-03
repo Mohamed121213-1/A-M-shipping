@@ -79,105 +79,122 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden md:inline text-slate-400">تغطية شاملة لجميع المحافظات المصرية</span>
         </div>
 
-        {/* Role Selector */}
-        <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700 flex-wrap">
-          <span className="text-slate-400 text-[11px] px-2 font-medium">عرض بصفة:</span>
-          
-          <button
-            onClick={() => {
-              onRoleChange('admin');
-              if (!currentUser) {
-                onOpenLogin?.();
-              } else {
-                setActiveTab('shipments');
-              }
-            }}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              currentRole === 'admin'
-                ? 'bg-red-600 text-white shadow-xs'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            أدمن النظام (Admin)
-          </button>
+        {/* Role Selector or User Role Badge */}
+        {currentUser?.role === 'courier' ? (
+          <div className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-lg border border-slate-700 text-amber-400 text-xs font-bold">
+            <Truck className="w-4 h-4" />
+            <span>حساب كابتن توصيل ({currentUser.name})</span>
+          </div>
+        ) : currentUser?.role === 'merchant' ? (
+          <div className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-lg border border-slate-700 text-slate-200 text-xs font-bold">
+            <Building2 className="w-4 h-4 text-red-400" />
+            <span>حساب التاجر ({currentUser.storeName || currentUser.name})</span>
+          </div>
+        ) : currentUser?.role === 'hub_manager' ? (
+          <div className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-lg border border-slate-700 text-slate-200 text-xs font-bold">
+            <Package className="w-4 h-4 text-amber-400" />
+            <span>حساب مدير مستودع ({currentUser.hubName || currentUser.name})</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700 flex-wrap">
+            <span className="text-slate-400 text-[11px] px-2 font-medium">عرض بصفة:</span>
+            
+            <button
+              onClick={() => {
+                onRoleChange('admin');
+                if (!currentUser) {
+                  onOpenLogin?.();
+                } else {
+                  setActiveTab('shipments');
+                }
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                currentRole === 'admin'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              أدمن النظام (Admin)
+            </button>
 
-          <button
-            onClick={() => {
-              onRoleChange('merchant');
-              if (!currentUser) {
-                onOpenLogin?.();
-              } else {
-                setActiveTab('shipments');
-              }
-            }}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              currentRole === 'merchant'
-                ? 'bg-red-600 text-white shadow-xs'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
-            }`}
-          >
-            <Building2 className="w-3.5 h-3.5" />
-            بوابة التجار (Merchant)
-          </button>
+            <button
+              onClick={() => {
+                onRoleChange('merchant');
+                if (!currentUser) {
+                  onOpenLogin?.();
+                } else {
+                  setActiveTab('shipments');
+                }
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                currentRole === 'merchant'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              بوابة التجار (Merchant)
+            </button>
 
-          <button
-            onClick={() => {
-              onRoleChange('courier');
-              if (!currentUser) {
-                onOpenLogin?.();
-              } else {
-                setActiveTab('courier_app');
-              }
-            }}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              currentRole === 'courier'
-                ? 'bg-red-600 text-white shadow-xs'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
-            }`}
-          >
-            <Truck className="w-3.5 h-3.5" />
-            تطبيق المندوب (Courier)
-          </button>
+            <button
+              onClick={() => {
+                onRoleChange('courier');
+                if (!currentUser) {
+                  onOpenLogin?.();
+                } else {
+                  setActiveTab('courier_app');
+                }
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                currentRole === 'courier'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+            >
+              <Truck className="w-3.5 h-3.5" />
+              تطبيق المندوب (Courier)
+            </button>
 
-          <button
-            onClick={() => {
-              onRoleChange('hub_manager');
-              if (!currentUser) {
-                onOpenLogin?.();
-              } else {
-                setActiveTab('shipments');
-              }
-            }}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              currentRole === 'hub_manager'
-                ? 'bg-red-600 text-white shadow-xs'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
-            }`}
-          >
-            <Package className="w-3.5 h-3.5" />
-            إدارة المستودعات (Hub)
-          </button>
+            <button
+              onClick={() => {
+                onRoleChange('hub_manager');
+                if (!currentUser) {
+                  onOpenLogin?.();
+                } else {
+                  setActiveTab('shipments');
+                }
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                currentRole === 'hub_manager'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" />
+              إدارة المستودعات (Hub)
+            </button>
 
-          <button
-            onClick={() => {
-              onRoleChange('public_tracker');
-              if (!currentUser) {
-                onOpenLogin?.();
-              } else {
-                setActiveTab('tracking');
-              }
-            }}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              currentRole === 'public_tracker'
-                ? 'bg-red-600 text-white shadow-xs'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
-            }`}
-          >
-            <SearchCode className="w-3.5 h-3.5" />
-            تتبع الشحنة
-          </button>
-        </div>
+            <button
+              onClick={() => {
+                onRoleChange('public_tracker');
+                if (!currentUser) {
+                  onOpenLogin?.();
+                } else {
+                  setActiveTab('tracking');
+                }
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                currentRole === 'public_tracker'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+            >
+              <SearchCode className="w-3.5 h-3.5" />
+              تتبع الشحنة
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Header Bar */}
@@ -185,7 +202,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Brand & Logo */}
         <div className="flex items-center gap-4">
           <div 
-            onClick={() => setActiveTab('login')}
+            onClick={() => setActiveTab(currentUser ? (currentUser.role === 'courier' ? 'courier_app' : 'shipments') : 'login')}
             className="flex items-center gap-2.5 cursor-pointer group"
           >
             <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 overflow-hidden shadow-sm shadow-slate-200 group-hover:scale-105 transition-transform flex items-center justify-center p-0.5">
@@ -226,17 +243,19 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Main Navigation Tabs */}
           {currentRole !== 'public_tracker' && currentRole !== 'courier' && (
             <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/80">
-              <button
-                onClick={() => handleNavClick('login')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  activeTab === 'login'
-                    ? 'bg-red-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <LogIn className="w-4 h-4" />
-                الرئيسية
-              </button>
+              {!currentUser && (
+                <button
+                  onClick={() => handleNavClick('login')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    activeTab === 'login'
+                      ? 'bg-red-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <LogIn className="w-4 h-4" />
+                  الرئيسية
+                </button>
+              )}
 
               <button
                 onClick={() => handleNavClick('shipments')}
@@ -247,7 +266,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }`}
               >
                 <Package className="w-4 h-4 text-slate-500" />
-                الشحنات
+                {currentUser?.role === 'merchant' ? 'شحنات متجري' : 'الشحنات'}
               </button>
 
               {currentRole === 'merchant' && (
@@ -300,6 +319,18 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Calculator className="w-4 h-4 text-slate-500" />
                 حاسبة الأسعار
+              </button>
+
+              <button
+                onClick={() => handleNavClick('tracking')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'tracking'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <SearchCode className="w-4 h-4 text-slate-500" />
+                تتبع شحنة
               </button>
             </nav>
           )}

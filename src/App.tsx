@@ -115,6 +115,9 @@ export default function App() {
         const user = mapSupabaseUserToSession(session.user);
         setCurrentUser(user);
         setCurrentRole(user.role);
+        if (user.role === 'courier') {
+          setActiveTab('courier_app');
+        }
       }
     });
 
@@ -123,6 +126,9 @@ export default function App() {
         const user = mapSupabaseUserToSession(session.user);
         setCurrentUser(user);
         setCurrentRole(user.role);
+        if (user.role === 'courier') {
+          setActiveTab('courier_app');
+        }
       } else {
         setCurrentUser(null);
       }
@@ -599,6 +605,45 @@ export default function App() {
             currentRole={currentRole}
             systemUsers={users}
           />
+        ) : currentUser.role === 'courier' ? (
+          <CourierAppView
+            shipments={shipments}
+            onUpdateStatus={handleUpdateStatus}
+            notifications={courierNotifications}
+            selectedCourierId={activeCourierIdInApp}
+            targetShipmentId={activeTargetShipmentId}
+            onMarkNotificationRead={handleMarkNotificationRead}
+            currentUser={currentUser}
+          />
+        ) : currentUser.role === 'merchant' ? (
+          <>
+            {(activeTab === 'shipments' || activeTab === 'login' || activeTab === 'admin_panel' || activeTab === 'courier_app') && (
+              <ShipmentsList
+                shipments={shipments}
+                onOpenDetailModal={(s) => setSelectedDetailShipment(s)}
+                onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
+                onOpenCreateModal={() => setIsCreateModalOpen(true)}
+                onUpdateStatus={handleUpdateStatus}
+                onAssignCourier={handleAssignCourier}
+                onClearAllData={handleClearAllData}
+                onApproveShipment={handleApproveShipment}
+                onApproveAllPending={handleApproveAllPending}
+                currentRole="merchant"
+              />
+            )}
+
+            {activeTab === 'wallet' && (
+              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} />
+            )}
+
+            {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
+
+            {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
+
+            {activeTab === 'tracking' && (
+              <PublicTrackingView shipments={shipments} initialTrackingNumber={publicSearchTrackNum} />
+            )}
+          </>
         ) : (
           <>
             {activeTab === 'login' && (
@@ -659,6 +704,7 @@ export default function App() {
                 selectedCourierId={activeCourierIdInApp}
                 targetShipmentId={activeTargetShipmentId}
                 onMarkNotificationRead={handleMarkNotificationRead}
+                currentUser={currentUser}
               />
             )}
 

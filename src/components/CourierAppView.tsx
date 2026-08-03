@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shipment, CourierInfo, ShipmentStatus, CourierNotification } from '../types';
+import { Shipment, CourierInfo, ShipmentStatus, CourierNotification, UserSession } from '../types';
 import { BOSTA_COURIERS } from '../data/mockData';
 import { 
   Truck, 
@@ -38,6 +38,7 @@ interface CourierAppViewProps {
   selectedCourierId?: string;
   targetShipmentId?: string;
   onMarkNotificationRead?: (notificationId: string) => void;
+  currentUser?: UserSession | null;
 }
 
 export const CourierAppView: React.FC<CourierAppViewProps> = ({
@@ -47,6 +48,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   selectedCourierId,
   targetShipmentId,
   onMarkNotificationRead,
+  currentUser,
 }) => {
   const [activeCourier, setActiveCourier] = useState<CourierInfo>(BOSTA_COURIERS[1]);
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
@@ -70,13 +72,25 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   const [isHandoverSuccess, setIsHandoverSuccess] = useState(false);
   const [settledAmountState, setSettledAmountState] = useState<number>(0);
 
-  // Sync active courier if selected from parent / notification
+  // Sync active courier if user is logged in as courier or selected from parent / notification
   useEffect(() => {
-    if (selectedCourierId) {
+    if (currentUser?.role === 'courier') {
+      setActiveCourier({
+        id: currentUser.id,
+        name: currentUser.name,
+        phone: currentUser.phone || '01000000000',
+        vehicle: (currentUser.courierVehicle?.includes('سيارة') ? 'van' : 'motocycle'),
+        assignedHub: currentUser.hubName || 'المستودع الرئيسي',
+        rating: 4.9,
+        activeShipmentsCount: shipments.length,
+        codCollectedToday: 0,
+        photoUrl: currentUser.avatarUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.name),
+      });
+    } else if (selectedCourierId) {
       const found = BOSTA_COURIERS.find((c) => c.id === selectedCourierId);
       if (found) setActiveCourier(found);
     }
-  }, [selectedCourierId]);
+  }, [currentUser, selectedCourierId, shipments.length]);
 
   useEffect(() => {
     if (targetShipmentId) {
@@ -217,21 +231,23 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
             )}
           </button>
 
-          {/* Courier Selector */}
-          <select
-            value={activeCourier.id}
-            onChange={(e) => {
-              const found = BOSTA_COURIERS.find((c) => c.id === e.target.value);
-              if (found) setActiveCourier(found);
-            }}
-            className="bg-slate-800 text-white text-[10px] p-1.5 rounded-lg border border-slate-700 font-bold"
-          >
-            {BOSTA_COURIERS.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          {/* Courier Selector - only for admins or demo */}
+          {(!currentUser || currentUser.role === 'admin') && (
+            <select
+              value={activeCourier.id}
+              onChange={(e) => {
+                const found = BOSTA_COURIERS.find((c) => c.id === e.target.value);
+                if (found) setActiveCourier(found);
+              }}
+              className="bg-slate-800 text-white text-[10px] p-1.5 rounded-lg border border-slate-700 font-bold"
+            >
+              {BOSTA_COURIERS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
