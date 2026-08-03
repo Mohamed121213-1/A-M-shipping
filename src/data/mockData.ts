@@ -235,45 +235,11 @@ export const BOSTA_HUBS: HubInfo[] = [
   { id: 'hub-delta', name: 'مستودع الدلتا - طنطا', governorate: 'الغربية', address: 'طريق مصر إسكندرية الزراعي، طنطا', managerName: 'أستاذ / خالد النجار', phone: '01009988776' },
 ];
 
-export const BOSTA_COURIERS: CourierInfo[] = [
-  {
-    id: 'cour-101',
-    name: 'محمود عبد الفتاح (كابتن محمود)',
-    phone: '01015544332',
-    vehicle: 'motocycle',
-    assignedHub: 'مستودع القاهرة الرئيسي - رمسيس',
-    rating: 4.9,
-    activeShipmentsCount: 8,
-    codCollectedToday: 3450,
-    photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
-  },
-  {
-    id: 'cour-102',
-    name: 'أحمد سامي المتولي',
-    phone: '01124455667',
-    vehicle: 'motocycle',
-    assignedHub: 'مستودع الجيزة والغرب - الدقي',
-    rating: 4.8,
-    activeShipmentsCount: 12,
-    codCollectedToday: 5200,
-    photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
-  },
-  {
-    id: 'cour-103',
-    name: 'حسام حسن عثمان',
-    phone: '01201122334',
-    vehicle: 'van',
-    assignedHub: 'مستودع الإسكندرية - سموحة',
-    rating: 4.95,
-    activeShipmentsCount: 5,
-    codCollectedToday: 8900,
-    photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200',
-  },
-];
+export const BOSTA_COURIERS: CourierInfo[] = [];
 
 export const INITIAL_MERCHANT_WALLET: MerchantWallet = {
-  merchantId: 'merch-8841',
-  merchantName: 'متجر الأناقة للموضة (Elegance Store)',
+  merchantId: 'merch-admin-default',
+  merchantName: 'متجر التاجر المسجل (إعدادات الأدمن)',
   availableBalance: 14250,
   pendingCod: 6800,
   totalPaidOut: 98500,
@@ -283,7 +249,7 @@ export const INITIAL_MERCHANT_WALLET: MerchantWallet = {
     iban: 'EG940003019203847561029380123',
   },
   vodafoneCashNumber: '01012345678',
-  instaPayHandle: 'elegance@instapay',
+  instaPayHandle: 'merchant@instapay',
 };
 
 export const INITIAL_SHIPMENTS: Shipment[] = [
@@ -331,7 +297,7 @@ export const INITIAL_SHIPMENTS: Shipment[] = [
       paidStatus: 'pending',
     },
     assignedHub: 'مستودع الجيزة والغرب - الدقي',
-    assignedCourier: BOSTA_COURIERS[1],
+    assignedCourier: undefined,
     estimatedDeliveryDate: '2026-07-30',
     timeline: [
       {
@@ -411,7 +377,7 @@ export const INITIAL_SHIPMENTS: Shipment[] = [
       paidStatus: 'collected',
     },
     assignedHub: 'مستودع الإسكندرية - سموحة',
-    assignedCourier: BOSTA_COURIERS[2],
+    assignedCourier: undefined,
     estimatedDeliveryDate: '2026-07-29',
     proofOfDelivery: {
       verifiedPin: '8492',

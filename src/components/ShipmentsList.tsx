@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Shipment, ShipmentStatus, CourierInfo, AppUserRole } from '../types';
-import { EGYPT_GOVERNORATES, BOSTA_COURIERS } from '../data/mockData';
+import { Shipment, ShipmentStatus, CourierInfo, AppUserRole, UserSession } from '../types';
+import { EGYPT_GOVERNORATES } from '../data/mockData';
 import { 
   Package, 
   Search, 
@@ -36,6 +36,8 @@ interface ShipmentsListProps {
   onApproveShipment?: (shipmentId: string) => void;
   onApproveAllPending?: () => void;
   currentRole?: AppUserRole;
+  couriers?: CourierInfo[];
+  systemUsers?: UserSession[];
 }
 
 export const ShipmentsList: React.FC<ShipmentsListProps> = ({
@@ -50,6 +52,8 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   onApproveShipment,
   onApproveAllPending,
   currentRole,
+  couriers = [],
+  systemUsers = [],
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -58,16 +62,22 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [whatsappShipment, setWhatsappShipment] = useState<Shipment | null>(null);
 
-  // Extract list of available merchants from shipments
+  // Extract list of available merchants from shipments and system users in Admin Panel
   const availableMerchants = useMemo(() => {
     const merchants = new Map<string, string>();
+    systemUsers.forEach((u) => {
+      if (u.role === 'merchant' && (u.storeName || u.name)) {
+        const name = u.storeName || `متجر ${u.name}`;
+        merchants.set(name, name);
+      }
+    });
     shipments.forEach((s) => {
       if (s.sender?.storeName) {
         merchants.set(s.sender.storeName, s.sender.storeName);
       }
     });
     return Array.from(merchants.values()).sort();
-  }, [shipments]);
+  }, [shipments, systemUsers]);
 
   // Filtered List
   const filteredShipments = useMemo(() => {
@@ -560,13 +570,13 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                         <select
                           value={s.assignedCourier?.id || ''}
                           onChange={(e) => {
-                            const found = BOSTA_COURIERS.find((c) => c.id === e.target.value);
+                            const found = couriers.find((c) => c.id === e.target.value);
                             if (found) onAssignCourier(s.id, found);
                           }}
                           className="text-[10px] p-1 bg-slate-100 border border-slate-200 rounded text-slate-700 font-bold block w-full focus:bg-white cursor-pointer"
                         >
                           <option value="">-- تعيين مندوب --</option>
-                          {BOSTA_COURIERS.map((c) => (
+                          {couriers.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.name}
                             </option>

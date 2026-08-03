@@ -1,11 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { Shipment, GovernorateRate, AddressInfo, PackageDetails, DeliveryType, HubInfo, AppUserRole } from '../types';
+import { Shipment, GovernorateRate, AddressInfo, PackageDetails, DeliveryType, HubInfo, AppUserRole, UserSession } from '../types';
 import { EGYPT_GOVERNORATES, BOSTA_HUBS } from '../data/mockData';
 import { 
   X, Sparkles, MapPin, Package, DollarSign, User, Phone, AlertCircle, CheckCircle, 
   Calculator, Building, ShieldCheck, FileSpreadsheet, Upload, Download, Trash2, Plus, 
-  Check, RefreshCw, FileText
+  Check, RefreshCw, FileText, Store
 } from 'lucide-react';
 
 interface CreateShipmentModalProps {
@@ -15,6 +15,8 @@ interface CreateShipmentModalProps {
   governorates?: GovernorateRate[];
   hubs?: HubInfo[];
   currentRole?: AppUserRole;
+  systemUsers?: UserSession[];
+  currentUser?: UserSession | null;
 }
 
 export interface StagedShipmentRow {
@@ -46,11 +48,52 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   governorates = EGYPT_GOVERNORATES,
   hubs = BOSTA_HUBS,
   currentRole = 'merchant',
+  systemUsers = [],
+  currentUser = null,
 }) => {
   if (!isOpen) return null;
 
   // Active Tab: 'single' | 'excel'
   const [activeTab, setActiveTab] = useState<'single' | 'excel'>('single');
+
+  // Registered Merchants from Admin Panel
+  const registeredMerchants = systemUsers.filter((u) => u.role === 'merchant');
+
+  // Merchant / Sender Selection State
+  const [selectedMerchantId, setSelectedMerchantId] = useState<string>('');
+  const [merchantStoreName, setMerchantStoreName] = useState<string>('');
+  const [merchantContactName, setMerchantContactName] = useState<string>('');
+  const [merchantPhone, setMerchantPhone] = useState<string>('');
+
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'merchant') {
+      setSelectedMerchantId(currentUser.id);
+      setMerchantStoreName(currentUser.storeName || `متجر ${currentUser.name}`);
+      setMerchantContactName(currentUser.name);
+      setMerchantPhone(currentUser.phone);
+    } else if (registeredMerchants.length > 0) {
+      const first = registeredMerchants[0];
+      setSelectedMerchantId(first.id);
+      setMerchantStoreName(first.storeName || `متجر ${first.name}`);
+      setMerchantContactName(first.name);
+      setMerchantPhone(first.phone);
+    } else {
+      setSelectedMerchantId(`merch-${Date.now()}`);
+      setMerchantStoreName('متجر أحدث');
+      setMerchantContactName('التاجر العام');
+      setMerchantPhone('01000000000');
+    }
+  }, [currentUser, systemUsers.length]);
+
+  const handleSelectMerchant = (merchantId: string) => {
+    setSelectedMerchantId(merchantId);
+    const found = registeredMerchants.find((m) => m.id === merchantId);
+    if (found) {
+      setMerchantStoreName(found.storeName || `متجر ${found.name}`);
+      setMerchantContactName(found.name);
+      setMerchantPhone(found.phone);
+    }
+  };
 
   // AI Paste Text state
   const [aiRawText, setAiRawText] = useState('');
@@ -155,10 +198,10 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       status: currentRole === 'admin' ? 'created' : 'pending_approval',
       deliveryType,
       sender: {
-        id: 'merch-8841',
-        storeName: 'متجر الأناقة للموضة (Elegance Store)',
-        contactName: 'سارة إبراهيم',
-        phone: '01012345678',
+        id: selectedMerchantId || `merch-${Date.now()}`,
+        storeName: merchantStoreName || 'متجر غير محدد',
+        contactName: merchantContactName || 'مسؤول المتجر',
+        phone: merchantPhone || '01000000000',
         governorate: 'القاهرة',
         city: 'مدينة نصر',
         pickupAddress: 'مكرم عبيد، بجوار سيتي ستارز',
@@ -430,10 +473,10 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         status: currentRole === 'admin' ? 'created' : 'pending_approval',
         deliveryType: row.deliveryType,
         sender: {
-          id: 'merch-8841',
-          storeName: 'متجر الأناقة للموضة (Elegance Store)',
-          contactName: 'سارة إبراهيم',
-          phone: '01012345678',
+          id: selectedMerchantId || `merch-${Date.now()}`,
+          storeName: merchantStoreName || 'متجر غير محدد',
+          contactName: merchantContactName || 'مسؤول المتجر',
+          phone: merchantPhone || '01000000000',
           governorate: 'القاهرة',
           city: 'مدينة نصر',
           pickupAddress: 'مكرم عبيد، بجوار سيتي ستارز',
@@ -594,6 +637,62 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                   {aiSuccessMessage}
                 </p>
               )}
+            </div>
+
+            {/* Merchant / Sender Selection Section */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                <span className="flex items-center gap-1.5 font-extrabold text-slate-900 text-xs sm:text-sm">
+                  <Store className="w-4 h-4 text-red-600" />
+                  بيانات التاجر / المتجر (مربوط بإعدادات لوحة التحكم)
+                </span>
+                <span className="text-[11px] text-slate-500 font-bold">
+                  {registeredMerchants.length > 0 ? `مسجل ${registeredMerchants.length} تاجر` : 'لا يوجد تجار مسجلين'}
+                </span>
+              </div>
+
+              {registeredMerchants.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">اختر التاجر المسجل من لوحة التحكم</label>
+                  <select
+                    value={selectedMerchantId}
+                    onChange={(e) => handleSelectMerchant(e.target.value)}
+                    className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-900 focus:ring-2 focus:ring-red-500/20 outline-none"
+                  >
+                    {registeredMerchants.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.storeName || `متجر ${m.name}`} - ({m.name} | {m.phone})
+                      </option>
+                    ))}
+                    <option value="custom">-- إدخال اسم متجر يدوي جديد --</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">اسم العلامة التجارية / المتجر</label>
+                  <input
+                    type="text"
+                    required
+                    value={merchantStoreName}
+                    onChange={(e) => setMerchantStoreName(e.target.value)}
+                    placeholder="مثال: متجر الأناقة"
+                    className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500/20 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم هاتف التاجر</label>
+                  <input
+                    type="tel"
+                    required
+                    value={merchantPhone}
+                    onChange={(e) => setMerchantPhone(e.target.value)}
+                    placeholder="01012345678"
+                    className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500/20 font-mono"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Recipient Information */}

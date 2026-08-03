@@ -47,7 +47,7 @@ export default function App() {
   );
 
   const [couriers, setCouriers] = useState<CourierInfo[]>(() =>
-    loadLocalState<CourierInfo[]>('bosta_couriers', BOSTA_COURIERS)
+    loadLocalState<CourierInfo[]>('bosta_couriers', []).filter((c) => !c.id.startsWith('cour-10'))
   );
 
   const [hubs, setHubs] = useState<HubInfo[]>(() =>
@@ -518,17 +518,47 @@ export default function App() {
 
   const handleAddCourier = (courier: CourierInfo) => {
     setCouriers((prev) => [...prev, courier]);
-    showToast(`🚚 تم إضافة الكابتن ${courier.name} بنجاح`);
+    const courierUser: UserSession = {
+      id: courier.id,
+      name: courier.name,
+      email: `${courier.id}@am-shipping.eg`,
+      phone: courier.phone,
+      role: 'courier',
+      avatarUrl: courier.photoUrl,
+      courierVehicle: courier.vehicle === 'motocycle' ? 'دراجة نارية' : 'سيارة فان',
+      hubName: courier.assignedHub,
+    };
+    setUsers((prev) => {
+      if (prev.some((u) => u.id === courier.id || u.phone === courier.phone)) {
+        return prev.map((u) => (u.id === courier.id || u.phone === courier.phone ? { ...u, ...courierUser } : u));
+      }
+      return [...prev, courierUser];
+    });
+    showToast(`🚚 تم إضافة الكابتن ${courier.name} بنجاح وربطه بحسابات لوحة التحكم`);
   };
 
   const handleUpdateCourier = (updatedCourier: CourierInfo) => {
     setCouriers((prev) => prev.map((c) => (c.id === updatedCourier.id ? updatedCourier : c)));
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === updatedCourier.id || u.phone === updatedCourier.phone
+          ? {
+              ...u,
+              name: updatedCourier.name,
+              phone: updatedCourier.phone,
+              courierVehicle: updatedCourier.vehicle === 'motocycle' ? 'دراجة نارية' : 'سيارة فان',
+              hubName: updatedCourier.assignedHub,
+            }
+          : u
+      )
+    );
     showToast(`✏️ تم تحديث بيانات الكابتن ${updatedCourier.name}`);
   };
 
   const handleDeleteCourier = (courierId: string) => {
     setCouriers((prev) => prev.filter((c) => c.id !== courierId));
-    showToast('🗑️ تم حذف المندوب من النظام');
+    setUsers((prev) => prev.filter((u) => u.id !== courierId));
+    showToast('🗑️ تم حذف المندوب من النظام لوحة التحكم');
   };
 
   const handleAddHub = (hub: HubInfo) => {
@@ -677,6 +707,8 @@ export default function App() {
                 onApproveShipment={handleApproveShipment}
                 onApproveAllPending={handleApproveAllPending}
                 currentRole="merchant"
+                couriers={couriers}
+                systemUsers={users}
               />
             )}
 
@@ -715,6 +747,8 @@ export default function App() {
                 onApproveShipment={handleApproveShipment}
                 onApproveAllPending={handleApproveAllPending}
                 currentRole={currentRole}
+                couriers={couriers}
+                systemUsers={users}
               />
             )}
 
@@ -753,6 +787,7 @@ export default function App() {
                 targetShipmentId={activeTargetShipmentId}
                 onMarkNotificationRead={handleMarkNotificationRead}
                 currentUser={currentUser}
+                couriers={couriers}
               />
             )}
 
@@ -779,6 +814,8 @@ export default function App() {
         governorates={governorates}
         hubs={hubs}
         currentRole={currentRole}
+        systemUsers={users}
+        currentUser={currentUser}
       />
 
       <ShipmentDetailModal

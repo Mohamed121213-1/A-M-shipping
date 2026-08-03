@@ -88,8 +88,9 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
     pendingShipments.length > 0 ? 'approval' : 'users'
   );
 
-  // Search filters
+  // Search & Role filters
   const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'merchant' | 'courier' | 'hub_manager' | 'admin'>('all');
   const [courierSearch, setCourierSearch] = useState('');
   const [rateSearch, setRateSearch] = useState('');
 
@@ -324,11 +325,15 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
     setEditingWallet(false);
   };
 
-  const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.phone.includes(userSearch)
-  );
+  const filteredUsers = users.filter(u => {
+    const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+    const matchesSearch = 
+      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+      u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+      u.phone.includes(userSearch) ||
+      (u.storeName && u.storeName.toLowerCase().includes(userSearch.toLowerCase()));
+    return matchesRole && matchesSearch;
+  });
 
   const filteredCouriers = couriers.filter(c =>
     c.name.toLowerCase().includes(courierSearch.toLowerCase()) ||
@@ -594,16 +599,64 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
             </button>
           </div>
 
-          {/* Search Box */}
-          <div className="relative max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
-            <input
-              type="text"
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              placeholder="ابحث بالاسم، البريد أو رقم الهاتف..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-10 pl-4 py-2 text-xs font-bold outline-none focus:border-red-600 focus:bg-white transition-all"
-            />
+          {/* Search Box and Role Filters */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="relative max-w-md flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="ابحث بالاسم، اسم المتجر، البريد أو الهاتف..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-10 pl-4 py-2 text-xs font-bold outline-none focus:border-red-600 focus:bg-white transition-all"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              <button
+                onClick={() => setUserRoleFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
+                  userRoleFilter === 'all'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                كافة الحسابات ({users.length})
+              </button>
+              <button
+                onClick={() => setUserRoleFilter('merchant')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap flex items-center gap-1 ${
+                  userRoleFilter === 'merchant'
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+                }`}
+              >
+                <Store className="w-3.5 h-3.5" />
+                التجار ({users.filter((u) => u.role === 'merchant').length})
+              </button>
+              <button
+                onClick={() => setUserRoleFilter('courier')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap flex items-center gap-1 ${
+                  userRoleFilter === 'courier'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                }`}
+              >
+                <Truck className="w-3.5 h-3.5" />
+                الكباتن ({users.filter((u) => u.role === 'courier').length})
+              </button>
+              <button
+                onClick={() => setUserRoleFilter('hub_manager')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap flex items-center gap-1 ${
+                  userRoleFilter === 'hub_manager'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                المستودعات ({users.filter((u) => u.role === 'hub_manager').length})
+              </button>
+            </div>
           </div>
 
           {/* Users Table */}
