@@ -77,6 +77,11 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
           <span className="hidden md:inline text-slate-500">|</span>
           <span className="hidden md:inline text-slate-400">تغطية شاملة لجميع المحافظات المصرية</span>
+          <span className="hidden lg:inline text-slate-500">|</span>
+          <span className="hidden lg:inline-flex items-center gap-1.5 text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800/80 px-2.5 py-0.5 rounded-full text-[11px]">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+            مزامنة البيانات بين جميع الأجهزة متصلة ⚡
+          </span>
         </div>
 
         {/* Role Selector or User Role Badge */}

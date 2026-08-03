@@ -12,6 +12,7 @@ import { RateCalculatorView } from './components/RateCalculatorView';
 import { LoginView, createSessionUser } from './components/LoginView';
 import { AdminPanelView } from './components/AdminPanelView';
 import { supabase, isSupabaseConfigured, mapSupabaseUserToSession } from './lib/supabase';
+import { syncEngine } from './lib/syncEngine';
 
 import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate } from './types';
 import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES } from './data/mockData';
@@ -69,7 +70,7 @@ export default function App() {
     loadLocalState<string>('bosta_active_tab', 'login')
   );
 
-  // Auto-sync state updates to localStorage
+  // Auto-sync state updates to localStorage and broadcast to all connected devices/accounts
   useEffect(() => {
     localStorage.setItem('bosta_shipments', JSON.stringify(shipments));
   }, [shipments]);
@@ -105,6 +106,53 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bosta_active_tab', JSON.stringify(activeTab));
   }, [activeTab]);
+
+  // Real-time synchronization across all devices, browser windows, and registered accounts
+  useEffect(() => {
+    const unsubscribe = syncEngine.subscribe((incoming) => {
+      if (incoming.shipments && Array.isArray(incoming.shipments)) {
+        setShipments(incoming.shipments);
+      }
+      if (incoming.wallet) {
+        setWallet(incoming.wallet);
+      }
+      if (incoming.users && Array.isArray(incoming.users)) {
+        setUsers(incoming.users);
+      }
+      if (incoming.couriers && Array.isArray(incoming.couriers)) {
+        setCouriers(incoming.couriers);
+      }
+      if (incoming.hubs && Array.isArray(incoming.hubs)) {
+        setHubs(incoming.hubs);
+      }
+      if (incoming.governorates && Array.isArray(incoming.governorates)) {
+        setGovernorates(incoming.governorates);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Broadcast state changes whenever core data is modified
+  const broadcastDataChange = (overrideState?: Partial<{
+    shipments: Shipment[];
+    wallet: MerchantWallet;
+    users: UserSession[];
+    couriers: CourierInfo[];
+    hubs: HubInfo[];
+    governorates: GovernorateRate[];
+  }>) => {
+    syncEngine.broadcastState({
+      shipments: overrideState?.shipments || shipments,
+      wallet: overrideState?.wallet || wallet,
+      users: overrideState?.users || users,
+      couriers: overrideState?.couriers || couriers,
+      hubs: overrideState?.hubs || hubs,
+      governorates: overrideState?.governorates || governorates,
+    });
+  };
 
   // Listen to Supabase Auth State changes if Supabase is configured
   useEffect(() => {
