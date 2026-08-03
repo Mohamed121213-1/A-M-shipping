@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MerchantWallet, Shipment } from '../types';
+import { MerchantWallet, Shipment, CourierInfo } from '../types';
 import { BOSTA_COURIERS } from '../data/mockData';
 import { 
   Wallet, 
@@ -23,9 +23,10 @@ interface WalletViewProps {
   wallet: MerchantWallet;
   shipments: Shipment[];
   onRequestPayout: (amount: number, method: string) => void;
+  couriers?: CourierInfo[];
 }
 
-export const WalletView: React.FC<WalletViewProps> = ({ wallet, shipments, onRequestPayout }) => {
+export const WalletView: React.FC<WalletViewProps> = ({ wallet, shipments, onRequestPayout, couriers = BOSTA_COURIERS }) => {
   const [activeSubTab, setActiveSubTab] = useState<'merchant' | 'couriers'>('merchant');
   const [payoutAmount, setPayoutAmount] = useState<number>(wallet.availableBalance);
   const [payoutMethod, setPayoutMethod] = useState<'instapay' | 'vodafone' | 'bank'>('instapay');
@@ -39,11 +40,29 @@ export const WalletView: React.FC<WalletViewProps> = ({ wallet, shipments, onReq
     (s) => s.status === 'delivered' || s.status === 'partial_delivery' || (s.status === 'refused' && s.refusedDetails?.shippingFeePaid)
   );
 
+  // Combine passed couriers + any couriers assigned on shipments
+  const courierMap = new Map<string, CourierInfo>();
+  (couriers && couriers.length > 0 ? couriers : BOSTA_COURIERS).forEach((c) => courierMap.set(c.id || c.phone, c));
+  shipments.forEach((s) => {
+    if (s.assignedCourier) {
+      const key = s.assignedCourier.id || s.assignedCourier.phone;
+      if (key && !courierMap.has(key)) {
+        courierMap.set(key, s.assignedCourier);
+      }
+    }
+  });
+  const effectiveCouriers = Array.from(courierMap.values());
+
   // Compute COD collected per courier dynamically
-  const courierFinancials = BOSTA_COURIERS.map((courier) => {
-    const courierCollected = collectedShipments.filter(
-      (s) => s.assignedCourier?.id === courier.id || (!s.assignedCourier && courier.id === 'c1')
-    );
+  const courierFinancials = effectiveCouriers.map((courier) => {
+    const courierCollected = collectedShipments.filter((s) => {
+      if (!s.assignedCourier) return false;
+      const matchId = Boolean(s.assignedCourier.id && courier.id && s.assignedCourier.id === courier.id);
+      const matchPhone = Boolean(s.assignedCourier.phone && courier.phone && s.assignedCourier.phone === courier.phone);
+      const matchName = Boolean(s.assignedCourier.name && courier.name && s.assignedCourier.name === courier.name);
+      return matchId || matchPhone || matchName;
+    });
+
     const totalCollected = courierCollected.reduce((sum, s) => {
       if (s.status === 'refused' && s.refusedDetails?.shippingFeePaid) {
         return sum + (s.refusedDetails.amountCollected || s.financials.shippingFee);
@@ -274,8 +293,8 @@ export const WalletView: React.FC<WalletViewProps> = ({ wallet, shipments, onReq
 
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs">
               <span className="text-xs font-bold text-slate-500 block">عدد المناديب النشطين بالفرع:</span>
-              <p className="text-3xl font-black text-slate-900 mt-2">{BOSTA_COURIERS.length} <span className="text-base font-bold">مناديب</span></p>
-              <p className="text-xs text-slate-500 mt-2">مغطيين القاهرة الكبرى والجيزة</p>
+              <p className="text-3xl font-black text-slate-900 mt-2">{effectiveCouriers.length} <span className="text-base font-bold">مناديب</span></p>
+              <p className="text-xs text-slate-500 mt-2">مغطيين كافة المحافظات والمناطق</p>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs">

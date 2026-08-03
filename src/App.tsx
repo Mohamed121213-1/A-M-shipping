@@ -15,7 +15,7 @@ import { supabase, isSupabaseConfigured, mapSupabaseUserToSession } from './lib/
 import { syncEngine } from './lib/syncEngine';
 
 import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate } from './types';
-import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES } from './data/mockData';
+import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES, INITIAL_USERS } from './data/mockData';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
 
@@ -42,16 +42,20 @@ export default function App() {
   );
 
   // Dynamic system entities customizable by Admin
-  const [users, setUsers] = useState<UserSession[]>(() =>
-    loadLocalState<UserSession[]>('bosta_users', [])
-  );
+  const [users, setUsers] = useState<UserSession[]>(() => {
+    const saved = loadLocalState<UserSession[]>('bosta_users', []);
+    return saved && saved.length > 0 ? saved : INITIAL_USERS;
+  });
 
   const [couriers, setCouriers] = useState<CourierInfo[]>(() => {
     const saved = loadLocalState<CourierInfo[]>('bosta_couriers', []);
-    return saved.map((c, idx) => ({
-      ...c,
-      id: c.id || `cour-${Date.now()}-${idx}`,
-    }));
+    if (saved && saved.length > 0) {
+      return saved.map((c, idx) => ({
+        ...c,
+        id: c.id || `cour-${Date.now()}-${idx}`,
+      }));
+    }
+    return BOSTA_COURIERS;
   });
 
   const [hubs, setHubs] = useState<HubInfo[]>(() =>
@@ -123,22 +127,22 @@ export default function App() {
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
     const unsubscribe = syncEngine.subscribe((incoming) => {
-      if (incoming.shipments && Array.isArray(incoming.shipments)) {
+      if (incoming.shipments && Array.isArray(incoming.shipments) && incoming.shipments.length > 0) {
         setShipments(incoming.shipments);
       }
       if (incoming.wallet) {
         setWallet(incoming.wallet);
       }
-      if (incoming.users && Array.isArray(incoming.users)) {
+      if (incoming.users && Array.isArray(incoming.users) && incoming.users.length > 0) {
         setUsers(incoming.users);
       }
-      if (incoming.couriers && Array.isArray(incoming.couriers)) {
+      if (incoming.couriers && Array.isArray(incoming.couriers) && incoming.couriers.length > 0) {
         setCouriers(incoming.couriers);
       }
-      if (incoming.hubs && Array.isArray(incoming.hubs)) {
+      if (incoming.hubs && Array.isArray(incoming.hubs) && incoming.hubs.length > 0) {
         setHubs(incoming.hubs);
       }
-      if (incoming.governorates && Array.isArray(incoming.governorates)) {
+      if (incoming.governorates && Array.isArray(incoming.governorates) && incoming.governorates.length > 0) {
         setGovernorates(incoming.governorates);
       }
       if (incoming.notifications && Array.isArray(incoming.notifications)) {
@@ -784,7 +788,7 @@ export default function App() {
             )}
 
             {activeTab === 'wallet' && (
-              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} />
+              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} couriers={couriers} />
             )}
 
             {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
@@ -867,7 +871,7 @@ export default function App() {
             )}
 
             {activeTab === 'wallet' && (
-              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} />
+              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} couriers={couriers} />
             )}
 
             {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}

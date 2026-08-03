@@ -1,4 +1,4 @@
-import { GovernorateRate, HubInfo, CourierInfo, Shipment, MerchantWallet } from '../types';
+import { GovernorateRate, HubInfo, CourierInfo, Shipment, MerchantWallet, UserSession } from '../types';
 
 export const EGYPT_GOVERNORATES: GovernorateRate[] = [
   {
@@ -235,7 +235,80 @@ export const BOSTA_HUBS: HubInfo[] = [
   { id: 'hub-delta', name: 'مستودع الدلتا - طنطا', governorate: 'الغربية', address: 'طريق مصر إسكندرية الزراعي، طنطا', managerName: 'أستاذ / خالد النجار', phone: '01009988776' },
 ];
 
-export const BOSTA_COURIERS: CourierInfo[] = [];
+export const BOSTA_COURIERS: CourierInfo[] = [
+  {
+    id: 'c1',
+    name: 'كابتن / أحمد محمود',
+    phone: '01001234567',
+    vehicle: 'motocycle',
+    assignedHub: 'مستودع القاهرة الرئيسي - رمسيس',
+    rating: 4.9,
+    activeShipmentsCount: 3,
+    codCollectedToday: 1250,
+    photoUrl: 'https://ui-avatars.com/api/?name=%D8%A3%D8%AD%D9%85%D8%AF+%D9%85%D8%AD%D9%85%D9%88%D8%AF&background=0D8ABC&color=fff',
+  },
+  {
+    id: 'c2',
+    name: 'كابتن / محمود السيد',
+    phone: '01112223334',
+    vehicle: 'van',
+    assignedHub: 'مستودع الجيزة والغرب - الدقي',
+    rating: 4.8,
+    activeShipmentsCount: 2,
+    codCollectedToday: 850,
+    photoUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D9%88%D8%AF+%D8%A7%D9%84%D8%B3%D9%8A%D8%AF&background=10B981&color=fff',
+  },
+  {
+    id: 'c3',
+    name: 'كابتن / إبراهيم حسن',
+    phone: '01223334455',
+    vehicle: 'van',
+    assignedHub: 'مستودع الإسكندرية - سموحة',
+    rating: 4.95,
+    activeShipmentsCount: 1,
+    codCollectedToday: 2100,
+    photoUrl: 'https://ui-avatars.com/api/?name=%D8%A5%D8%A8%D8%B1%D8%A7%D9%87%D9%8A%D9%85+%D8%AD%D8%B3%D9%86&background=F59E0B&color=fff',
+  },
+];
+
+export const INITIAL_USERS: UserSession[] = [
+  {
+    id: 'USR-ADMIN-1',
+    name: 'المدير العام',
+    email: 'admin@am-shipping.eg',
+    phone: '01000000000',
+    role: 'admin',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D9%84%D9%85%D8%AF%D9%8A%D8%B1+%D8%A7%D9%84%D8%B9%D8%A7%D9%85&background=dc2626&color=ffffff',
+  },
+  {
+    id: 'USR-MERCH-1',
+    name: 'متجر التاجر المسجل',
+    email: 'merchant@am-shipping.eg',
+    phone: '01012345678',
+    role: 'merchant',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AA%D8%AC%D8%B1+%D8%A7%D9%84%D8%AA%D8%A7%D8%AC%D8%B1&background=16a34a&color=ffffff',
+    storeName: 'متجر التاجر المسجل',
+  },
+  {
+    id: 'c1',
+    name: 'كابتن / أحمد محمود',
+    email: 'ahmed@am-shipping.eg',
+    phone: '01001234567',
+    role: 'courier',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A3%D8%AD%D9%85%D8%AF+%D9%85%D8%AD%D9%85%D9%88%D8%AF&background=0D8ABC&color=fff',
+    courierVehicle: 'دراجة نارية (موتوسيكل)',
+    hubName: 'مستودع القاهرة الرئيسي - رمسيس',
+  },
+  {
+    id: 'USR-HUB-1',
+    name: 'مدير مستودع القاهرة',
+    email: 'hub.cairo@am-shipping.eg',
+    phone: '01001234567',
+    role: 'hub_manager',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AF%D9%8A%D8%B1+%D9%85%D8%B3%D8%AA%D9%88%D8%AF%D8%B9&background=2563eb&color=ffffff',
+    hubName: 'مستودع القاهرة الرئيسي - رمسيس',
+  },
+];
 
 export const INITIAL_MERCHANT_WALLET: MerchantWallet = {
   merchantId: 'merch-admin-default',
