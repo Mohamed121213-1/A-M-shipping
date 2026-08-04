@@ -129,8 +129,10 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const governoratesList = governorates && governorates.length > 0 ? governorates : EGYPT_GOVERNORATES;
+
   // Selected Governorate Object
-  const selectedGov = EGYPT_GOVERNORATES.find((g) => g.code === governorateCode) || EGYPT_GOVERNORATES[0];
+  const selectedGov = governoratesList.find((g) => g.code === governorateCode) || governoratesList[0];
 
   // Calculated / Custom Shipping Fee
   const autoShippingFee = Math.round(
@@ -170,7 +172,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 
       // Match governorate
       if (data.governorate) {
-        const matchedGov = EGYPT_GOVERNORATES.find((g) =>
+        const matchedGov = governoratesList.find((g) =>
           g.nameAr.includes(data.governorate) || data.governorate.includes(g.nameAr)
         );
         if (matchedGov) setGovernorateCode(matchedGov.code);
@@ -520,7 +522,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   // Calculations for Staging Summary Bar
   const totalStagedCod = stagedRows.reduce((sum, r) => sum + (r.codAmount || 0), 0);
   const totalStagedShippingFees = stagedRows.reduce((sum, r) => {
-    const govObj = EGYPT_GOVERNORATES.find((g) => g.code === r.governorateCode) || EGYPT_GOVERNORATES[0];
+    const govObj = governoratesList.find((g) => g.code === r.governorateCode) || governoratesList[0];
     const autoFee = Math.round(govObj.baseRate + Math.max(0, r.weightKg - 3) * govObj.additionalKgRate);
     const rowFee = r.customShippingFee !== undefined && r.customShippingFee !== null ? r.customShippingFee : autoFee;
     return sum + rowFee;
@@ -746,36 +748,72 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                     value={governorateCode}
                     onChange={(e) => {
                       setGovernorateCode(e.target.value);
-                      const newGov = EGYPT_GOVERNORATES.find((g) => g.code === e.target.value);
+                      const newGov = governoratesList.find((g) => g.code === e.target.value);
                       if (newGov && newGov.cities && newGov.cities.length > 0) {
                         setCity(newGov.cities[0]);
                       }
                     }}
                     className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-red-500/20"
                   >
-                    {EGYPT_GOVERNORATES.map((g) => (
+                    {governoratesList.map((g) => (
                       <option key={g.code} value={g.code}>
-                        {g.nameAr}
+                        {g.nameAr} ({g.baseRate} ج.م)
                       </option>
                     ))}
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">المدينة / المركز *</label>
-                  <input
-                    type="text"
-                    list="city-suggestions"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder={selectedGov.cities && selectedGov.cities.length > 0 ? `اختر من مدن ${selectedGov.nameAr} أو اكتب...` : "اسم المدينة / المركز"}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-red-500/20 font-medium text-slate-800"
-                  />
-                  <datalist id="city-suggestions">
-                    {selectedGov.cities?.map((c) => (
-                      <option key={c} value={c} />
-                    ))}
-                  </datalist>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>المدينة / المركز *</span>
+                    <span className="text-[11px] text-red-600 font-extrabold flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-red-500" />
+                      عرض تلقائي للمراكز والمدن (التجمع، أكتوبر...)
+                    </span>
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      list="city-suggestions"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder={selectedGov.cities && selectedGov.cities.length > 0 ? `اختر من مدن ${selectedGov.nameAr} أو اكتب...` : "اسم المدينة / المركز"}
+                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-red-500/20 font-bold text-slate-900"
+                    />
+                    <datalist id="city-suggestions">
+                      {selectedGov.cities?.map((c) => (
+                        <option key={c} value={c} />
+                      ))}
+                    </datalist>
+
+                    {/* Auto-suggested Centers & Cities Chips */}
+                    {selectedGov.cities && selectedGov.cities.length > 0 && (
+                      <div className="bg-red-50/60 border border-red-200/80 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
+                        <div className="flex items-center justify-between text-[11px] font-extrabold text-red-950">
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-red-600" />
+                            المراكز والمدن المقترحة داخل {selectedGov.nameAr} (اضغط للاختيار):
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {selectedGov.cities.map((cityName) => (
+                            <button
+                              key={cityName}
+                              type="button"
+                              onClick={() => setCity(cityName)}
+                              className={`text-[11px] px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                                city === cityName
+                                  ? 'bg-red-600 text-white shadow-xs scale-105'
+                                  : 'bg-white text-slate-800 border border-red-200 hover:bg-red-100 hover:border-red-300'
+                              }`}
+                            >
+                              {cityName}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>

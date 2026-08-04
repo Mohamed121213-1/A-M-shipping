@@ -8,7 +8,7 @@ export const EGYPT_GOVERNORATES: GovernorateRate[] = [
     baseRate: 45,
     additionalKgRate: 7,
     estDays: '24 ساعة',
-    cities: ['العاصمة الإدارية الجديدة', 'القاهرة الجديدة (التجمع)', 'مدينة نصر', 'المعادي', 'مصر الجديدة', 'الشروق', 'بدر', 'الزمالك', 'شبرا', 'المقطم', 'حلوان', 'عين شمس', 'المرج']
+    cities: ['مدينتي', 'بدر', 'الشروق', 'مؤسسة الزكاة (مؤسسة)', 'العاصمة الإدارية الجديدة', 'القاهرة الجديدة (التجمع)', 'مدينة نصر', 'المعادي', 'مصر الجديدة', 'الزمالك', 'شبرا', 'المقطم', 'حلوان', 'عين شمس', 'المرج']
   },
   {
     code: 'GZA',
@@ -26,7 +26,7 @@ export const EGYPT_GOVERNORATES: GovernorateRate[] = [
     baseRate: 50,
     additionalKgRate: 8,
     estDays: '24-48 ساعة',
-    cities: ['العبور', 'بنها', 'شبرا الخيمة', 'قاليوب', 'الخانكة', 'طوخ', 'شبين القناطر']
+    cities: ['العبور', 'القلج', 'بنها', 'شبرا الخيمة', 'قاليوب', 'الخانكة', 'طوخ', 'شبين القناطر']
   },
   {
     code: 'ALX',
@@ -245,6 +245,9 @@ export const BOSTA_COURIERS: CourierInfo[] = [
     rating: 4.9,
     activeShipmentsCount: 3,
     codCollectedToday: 1250,
+    commissionType: 'fixed',
+    commissionValue: 20,
+    totalCommissionEarned: 260,
     photoUrl: 'https://ui-avatars.com/api/?name=%D8%A3%D8%AD%D9%85%D8%AF+%D9%85%D8%AD%D9%85%D9%88%D8%AF&background=0D8ABC&color=fff',
   },
   {
@@ -256,6 +259,9 @@ export const BOSTA_COURIERS: CourierInfo[] = [
     rating: 4.8,
     activeShipmentsCount: 2,
     codCollectedToday: 850,
+    commissionType: 'fixed',
+    commissionValue: 25,
+    totalCommissionEarned: 175,
     photoUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D9%88%D8%AF+%D8%A7%D9%84%D8%B3%D9%8A%D8%AF&background=10B981&color=fff',
   },
   {
@@ -267,6 +273,9 @@ export const BOSTA_COURIERS: CourierInfo[] = [
     rating: 4.95,
     activeShipmentsCount: 1,
     codCollectedToday: 2100,
+    commissionType: 'percentage',
+    commissionValue: 15,
+    totalCommissionEarned: 315,
     photoUrl: 'https://ui-avatars.com/api/?name=%D8%A5%D8%A8%D8%B1%D8%A7%D9%87%D9%8A%D9%85+%D8%AD%D8%B3%D9%86&background=F59E0B&color=fff',
   },
 ];

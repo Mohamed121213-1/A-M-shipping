@@ -7,6 +7,7 @@ import { WaybillPrintModal } from './components/WaybillPrintModal';
 import { CourierAppView } from './components/CourierAppView';
 import { PublicTrackingView } from './components/PublicTrackingView';
 import { WalletView } from './components/WalletView';
+import { ReturnsAccountingView } from './components/ReturnsAccountingView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { RateCalculatorView } from './components/RateCalculatorView';
 import { LoginView, createSessionUser } from './components/LoginView';
@@ -531,6 +532,122 @@ export default function App() {
     showToast(`🚚 تم إسناد الشحنة ${shipmentId} للكابتن ${courier.name} وإرسال إشعار فوري له!`);
   };
 
+  // Courier Reports "No Response" (مبيردش)
+  const handleReportNoResponse = (shipmentId: string, courierNote?: string) => {
+    const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    let trackingNum = '';
+
+    setShipments((prev) =>
+      prev.map((s) => {
+        if (s.id !== shipmentId) return s;
+        trackingNum = s.trackingNumber;
+
+        const updatedTimeline = [
+          ...s.timeline,
+          {
+            id: `tl-${Date.now()}`,
+            status: s.status,
+            title: '📞 تنبيه من المندوب: العميل لا يرد على الهاتف',
+            description: courierNote || 'قام المندوب بمحاولة الاتصال بالعميل ولم يقم بالرد. تم إرسال تنبيه للتاجر للتواصل معه.',
+            timestamp: timeStr,
+            actorRole: 'courier' as const,
+          },
+        ];
+
+        return {
+          ...s,
+          updatedAt: new Date().toISOString(),
+          timeline: updatedTimeline,
+          noResponseDetails: {
+            isNoResponse: true,
+            reportedAt: timeStr,
+            courierNote: courierNote || 'العميل لا يرد على اتصال المندوب',
+            merchantResponse: undefined,
+          },
+        };
+      })
+    );
+
+    showToast(`📞 تم إرسال تنبيه للتاجر أن العميل لا يرد على البوليصة ${trackingNum || shipmentId}!`);
+  };
+
+  // Merchant Responds to "No Response" (رد / كلمه)
+  const handleMerchantRespondNoResponse = (shipmentId: string, merchantNote: string) => {
+    const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    let targetTracking = '';
+    let courierToNotifyId = '';
+    let courierToNotifyName = '';
+    let recipientName = '';
+    let gov = '';
+    let city = '';
+    let cod = 0;
+
+    setShipments((prev) =>
+      prev.map((s) => {
+        if (s.id !== shipmentId) return s;
+
+        targetTracking = s.trackingNumber;
+        courierToNotifyId = s.assignedCourier?.id || 'all';
+        courierToNotifyName = s.assignedCourier?.name || 'الكابتن';
+        recipientName = s.recipient.name;
+        gov = s.recipient.governorate;
+        city = s.recipient.city;
+        cod = s.financials.codAmount;
+
+        const updatedTimeline = [
+          ...s.timeline,
+          {
+            id: `tl-${Date.now()}`,
+            status: s.status,
+            title: '💬 رد التاجر للمندوب',
+            description: `التاجر تواصل مع العميل وأفاد: "${merchantNote}"`,
+            timestamp: timeStr,
+            actorRole: 'merchant' as const,
+          },
+        ];
+
+        return {
+          ...s,
+          updatedAt: new Date().toISOString(),
+          timeline: updatedTimeline,
+          noResponseDetails: {
+            isNoResponse: true,
+            reportedAt: s.noResponseDetails?.reportedAt || timeStr,
+            courierNote: s.noResponseDetails?.courierNote,
+            merchantResponse: {
+              contacted: true,
+              responseNote: merchantNote,
+              respondedAt: timeStr,
+            },
+          },
+        };
+      })
+    );
+
+    // Send notification to Courier
+    if (courierToNotifyId) {
+      const newNotification: CourierNotification = {
+        id: `notif-${Date.now()}`,
+        courierId: courierToNotifyId,
+        courierName: courierToNotifyName,
+        shipmentId: shipmentId,
+        trackingNumber: targetTracking,
+        recipientName: recipientName,
+        governorate: gov,
+        city: city,
+        codAmount: cod,
+        createdAt: new Date().toISOString(),
+        timestamp: timeStr,
+        read: false,
+      };
+
+      setCourierNotifications((prev) => [newNotification, ...prev]);
+      setActiveCourierToast(newNotification);
+    }
+
+    showToast(`💬 تم إرسال رد التاجر إلى المندوب بنجاح للشحنة ${targetTracking}!`);
+  };
+
   const handleOpenCourierAppFromToast = (courierId: string, shipmentId: string) => {
     setCurrentRole('courier');
     setActiveTab('courier_app');
@@ -681,11 +798,29 @@ export default function App() {
     showToast('🗑️ تم حذف المستودع من النظام');
   };
 
-  const handleUpdateGovernorateRate = (code: string, baseRate: number, additionalKgRate: number) => {
-    setGovernorates((prev) =>
-      prev.map((g) => (g.code === code ? { ...g, baseRate, additionalKgRate } : g))
-    );
-    showToast(`💰 تم تحديث تسعيرة الشحن للمحافظة`);
+  const handleUpdateGovernorateRate = (
+    updatedGov: GovernorateRate | GovernorateRate[] | string,
+    baseRate?: number,
+    additionalKgRate?: number
+  ) => {
+    if (Array.isArray(updatedGov)) {
+      setGovernorates(updatedGov);
+      showToast('💰 تم تحديث أسعار الشحن لجميع المحافظات بنجاح');
+    } else if (typeof updatedGov === 'object') {
+      setGovernorates((prev) => {
+        const exists = prev.some((g) => g.code === updatedGov.code);
+        if (exists) {
+          return prev.map((g) => (g.code === updatedGov.code ? updatedGov : g));
+        }
+        return [...prev, updatedGov];
+      });
+      showToast(`💰 تم تحديث سعر الشحن لمحافظة ${updatedGov.nameAr}`);
+    } else {
+      setGovernorates((prev) =>
+        prev.map((g) => (g.code === updatedGov ? { ...g, baseRate: baseRate!, additionalKgRate: additionalKgRate! } : g))
+      );
+      showToast(`💰 تم تحديث تسعيرة الشحن للمحافظة`);
+    }
   };
 
   const handleUpdateWallet = (updatedWallet: MerchantWallet) => {
@@ -792,6 +927,7 @@ export default function App() {
           <CourierAppView
             shipments={shipments}
             onUpdateStatus={handleUpdateStatus}
+            onReportNoResponse={handleReportNoResponse}
             notifications={courierNotifications}
             selectedCourierId={activeCourierIdInApp}
             targetShipmentId={activeTargetShipmentId}
@@ -807,6 +943,7 @@ export default function App() {
                 onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
                 onOpenCreateModal={() => setIsCreateModalOpen(true)}
                 onUpdateStatus={handleUpdateStatus}
+                onMerchantRespondNoResponse={handleMerchantRespondNoResponse}
                 onAssignCourier={handleAssignCourier}
                 onClearAllData={handleClearAllData}
                 onApproveShipment={handleApproveShipment}
@@ -819,6 +956,10 @@ export default function App() {
 
             {activeTab === 'wallet' && (
               <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} couriers={couriers} systemUsers={users} />
+            )}
+
+            {activeTab === 'returns' && (
+              <ReturnsAccountingView shipments={shipments} systemUsers={users} currentUser={currentUser} />
             )}
 
             {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
@@ -847,6 +988,7 @@ export default function App() {
                 onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
                 onOpenCreateModal={() => setIsCreateModalOpen(true)}
                 onUpdateStatus={handleUpdateStatus}
+                onMerchantRespondNoResponse={handleMerchantRespondNoResponse}
                 onAssignCourier={handleAssignCourier}
                 onClearAllData={handleClearAllData}
                 onApproveShipment={handleApproveShipment}
@@ -887,6 +1029,7 @@ export default function App() {
               <CourierAppView
                 shipments={shipments}
                 onUpdateStatus={handleUpdateStatus}
+                onReportNoResponse={handleReportNoResponse}
                 notifications={courierNotifications}
                 selectedCourierId={activeCourierIdInApp}
                 targetShipmentId={activeTargetShipmentId}
@@ -902,6 +1045,10 @@ export default function App() {
 
             {activeTab === 'wallet' && (
               <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} couriers={couriers} systemUsers={users} />
+            )}
+
+            {activeTab === 'returns' && (
+              <ReturnsAccountingView shipments={shipments} systemUsers={users} currentUser={currentUser} />
             )}
 
             {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}

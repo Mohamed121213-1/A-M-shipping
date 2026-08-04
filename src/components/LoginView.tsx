@@ -108,16 +108,40 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const email = emailInput.trim();
     const password = passwordInput.trim();
-
-    if (!email) {
-      setErrorMessage('يرجى إدخال البريد الإلكتروني');
-      return;
-    }
     if (!password) {
       setErrorMessage('يرجى إدخال كلمة المرور');
       return;
+    }
+
+    let finalEmail = emailInput.trim();
+
+    if (isSignUpMode) {
+      const phone = phoneInput.trim();
+      if (!phone) {
+        setErrorMessage('يرجى إدخال رقم الهاتف (إجباري لإنشاء الحساب)');
+        return;
+      }
+      if (!fullNameInput.trim()) {
+        setErrorMessage('يرجى إدخال الاسم الكامل');
+        return;
+      }
+
+      // If email is not provided, generate fallback system email based on phone number
+      if (!finalEmail) {
+        const cleanPhone = phone.replace(/\D/g, '') || phone;
+        finalEmail = `${cleanPhone}@am-shipping.eg`;
+      }
+    } else {
+      // Login mode: allow entering phone or email
+      if (!finalEmail) {
+        setErrorMessage('يرجى إدخال رقم الهاتف أو البريد الإلكتروني');
+        return;
+      }
+      if (!finalEmail.includes('@')) {
+        const cleanPhone = finalEmail.replace(/\D/g, '') || finalEmail;
+        finalEmail = `${cleanPhone}@am-shipping.eg`;
+      }
     }
 
     if (!isSupabaseConfigured) {
@@ -131,14 +155,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
       if (isSignUpMode) {
         // --- SUPABASE SIGN UP ---
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: finalEmail,
           password,
           options: {
             data: {
-              name: fullNameInput.trim() || email.split('@')[0],
+              name: fullNameInput.trim() || phoneInput.trim(),
               role: selectedRoleTab,
-              phone: phoneInput.trim() || '01000000000',
-              storeName: selectedRoleTab === 'merchant' ? (storeNameInput.trim() || `متجر ${fullNameInput || email.split('@')[0]}`) : undefined,
+              phone: phoneInput.trim(),
+              storeName: selectedRoleTab === 'merchant' ? (storeNameInput.trim() || `متجر ${fullNameInput || phoneInput}`) : undefined,
+              isConfirmed: false,
             }
           }
         });
@@ -148,20 +173,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
         }
 
         if (data.user) {
-          if (data.session) {
-            // Immediate sign up & auto login
-            const sessionUser = mapSupabaseUserToSession(data.user, selectedRoleTab);
-            onLoginSuccess(sessionUser);
-          } else {
-            // Email confirmation required or pending
-            setSuccessMessage('تم إنشاء الحساب بنجاح في Supabase! يرجى مراجعة بريدك الإلكتروني للتأكيد ثم تسجيل الدخول.');
-            setIsSignUpMode(false);
-          }
+          const sessionUser = {
+            ...mapSupabaseUserToSession(data.user, selectedRoleTab),
+            isConfirmed: false,
+          };
+          setSuccessMessage('تم إنشاء الحساب بنجاح في Supabase! الحساب بانتظار التأكيد المباشر والتفعيل من قبل الأدمن في لوحة التحكم.');
+          onLoginSuccess(sessionUser);
         }
       } else {
         // --- SUPABASE SIGN IN ---
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: finalEmail,
           password,
         });
 
@@ -179,9 +201,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
       let localizedError = err.message || 'حدث خطأ أثناء الاتصال بـ Supabase';
       
       if (err.message?.includes('Invalid login credentials')) {
-        localizedError = 'بيانات الدخول غير صحيحة. يرجى التأكد من البريد الإلكتروني وكلمة المرور.';
+        localizedError = 'بيانات الدخول غير صحيحة. يرجى التأكد من رقم الهاتف/البريد وكلمة المرور.';
       } else if (err.message?.includes('User already registered')) {
-        localizedError = 'هذا البريد الإلكتروني مسجل بالفعل في Supabase. حاول تسجيل الدخول بدلاً من إنشاء حساب.';
+        localizedError = 'هذا الرقم أو البريد مسجل بالفعل في النظام. حاول تسجيل الدخول بدلاً من إنشاء حساب.';
       } else if (err.message?.includes('Password should be at least')) {
         localizedError = 'كلمة المرور يجب أن لا تقل عن 6 أحرف.';
       }
@@ -439,36 +461,47 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </div>
               )}
 
-              {/* Additional Sign-up Fields */}
-              {isSignUpMode && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700">الاسم الكامل</label>
-                    <input
-                      type="text"
-                      required
-                      value={fullNameInput}
-                      onChange={(e) => setFullNameInput(e.target.value)}
-                      placeholder="مثال: أحمد محمود"
-                      className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white rounded-2xl px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none"
-                    />
-                  </div>
+              {/* Form Fields according to Sign-Up or Login mode */}
+              {isSignUpMode ? (
+                <div className="space-y-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <User className="w-3.5 h-3.5 text-slate-500" />
+                        الاسم الكامل *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={fullNameInput}
+                        onChange={(e) => setFullNameInput(e.target.value)}
+                        placeholder="مثال: أحمد محمود"
+                        className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white rounded-2xl px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none"
+                      />
+                    </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700">رقم الهاتف</label>
-                    <input
-                      type="tel"
-                      required
-                      value={phoneInput}
-                      onChange={(e) => setPhoneInput(e.target.value)}
-                      placeholder="01012345678"
-                      className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white rounded-2xl px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none dir-ltr text-right"
-                    />
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <Phone className="w-3.5 h-3.5 text-red-600" />
+                        رقم الهاتف (أساسي) *
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={phoneInput}
+                        onChange={(e) => setPhoneInput(e.target.value)}
+                        placeholder="01012345678"
+                        className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white rounded-2xl px-3.5 py-2.5 text-xs font-black text-slate-900 outline-none dir-ltr text-right"
+                      />
+                    </div>
                   </div>
 
                   {selectedRoleTab === 'merchant' && (
-                    <div className="space-y-1 col-span-1 sm:col-span-2">
-                      <label className="text-xs font-bold text-slate-700">اسم المتجر / العلامة التجارية</label>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <Store className="w-3.5 h-3.5 text-slate-500" />
+                        اسم المتجر / العلامة التجارية *
+                      </label>
                       <input
                         type="text"
                         required
@@ -479,27 +512,51 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       />
                     </div>
                   )}
+
+                  {/* Optional Email Field for Signup */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-slate-500" />
+                        البريد الإلكتروني <span className="text-amber-600 font-extrabold">(اختياري)</span>
+                      </label>
+                      <span className="text-[10px] font-bold text-slate-400">غير إجباري</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="email"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="اختياري - name@domain.com"
+                        className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-2.5 text-xs font-bold text-slate-900 outline-none transition-all pr-10 dir-ltr text-right"
+                      />
+                      <Mail className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      إذا تركته فارغاً، سيتم إنشاء بريد توثيق تلقائي مرتبط برقم الهاتف لسهولة الدخول.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* Login Mode Identifier Field (Phone or Email) */
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-red-600" />
+                    رقم الهاتف أو البريد الإلكتروني
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      placeholder="01012345678 أو name@domain.com"
+                      className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-3 text-xs sm:text-sm font-bold text-slate-900 outline-none transition-all pr-10 dir-ltr text-right"
+                    />
+                    <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+                  </div>
                 </div>
               )}
-
-              {/* Email Field */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-slate-500" />
-                  البريد الإلكتروني (Supabase Auth Email)
-                </label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    required
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="name@domain.com"
-                    className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-3 text-xs sm:text-sm font-bold text-slate-900 outline-none transition-all pr-10 dir-ltr text-right"
-                  />
-                  <Mail className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
-                </div>
-              </div>
 
               {/* Password Field */}
               <div className="space-y-1.5">

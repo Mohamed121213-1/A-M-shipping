@@ -96,6 +96,9 @@ export interface CourierInfo {
   activeShipmentsCount: number;
   codCollectedToday: number;
   photoUrl?: string;
+  commissionType?: 'fixed' | 'percentage'; // نوع العمولة (مبلغ ثابت لكل شحنة أو نسبة من سعر الشحن)
+  commissionValue?: number;                // قيمة العمولة (مثلا 20 ج.م أو 15%)
+  totalCommissionEarned?: number;          // إجمالي العمولات المستحقة للمندوب
 }
 
 export interface HubInfo {
@@ -131,6 +134,16 @@ export interface Shipment {
     shippingFeePaid: boolean;
     amountCollected: number;
     reason: string;
+  };
+  noResponseDetails?: {
+    isNoResponse: boolean;
+    reportedAt: string;
+    courierNote?: string;
+    merchantResponse?: {
+      contacted: boolean;
+      responseNote: string;
+      respondedAt: string;
+    };
   };
   estimatedDeliveryDate: string;
 }
@@ -172,6 +185,7 @@ export interface UserSession {
   storeName?: string;
   hubName?: string;
   courierVehicle?: string;
+  isConfirmed?: boolean; // حالة تأكيد وتفعيل الحساب من خلال الأدمن في Supabase
 }
 
 export interface CourierNotification {

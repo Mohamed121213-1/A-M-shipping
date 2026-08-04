@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MerchantWallet, Shipment, CourierInfo, UserSession } from '../types';
 import { BOSTA_COURIERS } from '../data/mockData';
+import { ReturnsAccountingView } from './ReturnsAccountingView';
 import { 
   Wallet, 
   ArrowDownLeft, 
@@ -16,7 +17,8 @@ import {
   UserCheck, 
   CheckCircle2, 
   Building2,
-  HandCoins
+  HandCoins,
+  RotateCcw
 } from 'lucide-react';
 
 interface WalletViewProps {
@@ -34,7 +36,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
   couriers = BOSTA_COURIERS,
   systemUsers = [],
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'merchant' | 'couriers'>('merchant');
+  const [activeSubTab, setActiveSubTab] = useState<'merchant' | 'returns' | 'couriers'>('merchant');
   const [payoutAmount, setPayoutAmount] = useState<number>(wallet.availableBalance);
   const [payoutMethod, setPayoutMethod] = useState<'instapay' | 'vodafone' | 'bank'>('instapay');
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState('');
@@ -144,10 +146,10 @@ export const WalletView: React.FC<WalletViewProps> = ({
     <div className="space-y-6">
       {/* Top View Selector Sub-Tabs */}
       <div className="flex items-center justify-between bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
           <button
             onClick={() => setActiveSubTab('merchant')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeSubTab === 'merchant'
                 ? 'bg-slate-900 text-white shadow-md'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
@@ -158,15 +160,27 @@ export const WalletView: React.FC<WalletViewProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveSubTab('returns')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeSubTab === 'returns'
+                ? 'bg-red-600 text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <RotateCcw className="w-4 h-4 text-red-300" />
+            <span>حساب المرتجعات (بدون شحن)</span>
+          </button>
+
+          <button
             onClick={() => setActiveSubTab('couriers')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeSubTab === 'couriers'
                 ? 'bg-slate-900 text-white shadow-md'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
             <Truck className="w-4 h-4 text-amber-400" />
-            <span>حسابات وعُهد المناديب والتحصيلات</span>
+            <span>حسابات وعُهد المناديب</span>
             {totalCouriersCashHeld > 0 && (
               <span className="bg-amber-500 text-slate-950 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
                 {totalCouriersCashHeld.toLocaleString()} ج.م
@@ -311,6 +325,8 @@ export const WalletView: React.FC<WalletViewProps> = ({
             </div>
           </div>
         </>
+      ) : activeSubTab === 'returns' ? (
+        <ReturnsAccountingView shipments={shipments} systemUsers={systemUsers} />
       ) : (
         /* COURIERS COD ACCOUNTS & CASH HANDOVER SECTION */
         <div className="space-y-6">

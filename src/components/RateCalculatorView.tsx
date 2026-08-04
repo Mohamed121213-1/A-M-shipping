@@ -37,7 +37,7 @@ export const RateCalculatorView: React.FC<RateCalculatorViewProps> = ({ governor
 
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-xs font-bold text-slate-700 mb-1">المحافظة المستهدفة:</label>
             <select
               value={selectedGovCode}
@@ -50,6 +50,23 @@ export const RateCalculatorView: React.FC<RateCalculatorViewProps> = ({ governor
                 </option>
               ))}
             </select>
+
+            {/* Display automatic centers & cities inside selected governorate */}
+            {selectedGov.cities && selectedGov.cities.length > 0 && (
+              <div className="mt-2 p-3 bg-red-50/50 border border-red-100 rounded-xl space-y-1">
+                <span className="text-[11px] font-extrabold text-red-950 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-red-600" />
+                  المراكز والمدن المغطاة تلقائياً في {selectedGov.nameAr} (التجمع، أكتوبر...):
+                </span>
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {selectedGov.cities.map((c) => (
+                    <span key={c} className="text-[10px] bg-white text-slate-800 border border-red-200 px-2 py-0.5 rounded-md font-bold">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div>

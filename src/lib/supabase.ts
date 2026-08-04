@@ -37,5 +37,6 @@ export function mapSupabaseUserToSession(user: any, fallbackRole: AppUserRole = 
     storeName: metadata.storeName || (role === 'merchant' ? `متجر ${name}` : undefined),
     courierVehicle: metadata.courierVehicle || (role === 'courier' ? 'سيارة نقل' : undefined),
     hubName: metadata.hubName || (role === 'hub_manager' ? 'المستودع الرئيسي' : undefined),
+    isConfirmed: metadata.isConfirmed !== undefined ? Boolean(metadata.isConfirmed) : true,
   };
 }

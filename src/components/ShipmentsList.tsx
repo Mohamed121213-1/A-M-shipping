@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Shipment, ShipmentStatus, CourierInfo, AppUserRole, UserSession } from '../types';
 import { EGYPT_GOVERNORATES } from '../data/mockData';
+import { exportShipmentsToExcel } from '../utils/excelExport';
 import { 
   Package, 
   Search, 
@@ -20,7 +21,9 @@ import {
   Trash2,
   MessageSquare,
   Check,
-  Store
+  Store,
+  PhoneCall,
+  PhoneOff
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
@@ -30,6 +33,7 @@ interface ShipmentsListProps {
   onOpenPrintModal: (shipment: Shipment) => void;
   onOpenCreateModal: () => void;
   onUpdateStatus: (shipmentId: string, newStatus: ShipmentStatus) => void;
+  onMerchantRespondNoResponse?: (shipmentId: string, merchantNote: string) => void;
   onAssignCourier?: (shipmentId: string, courier: CourierInfo) => void;
   onClearAllData?: () => void;
   onRestoreDemoData?: () => void;
@@ -46,6 +50,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   onOpenPrintModal,
   onOpenCreateModal,
   onUpdateStatus,
+  onMerchantRespondNoResponse,
   onAssignCourier,
   onClearAllData,
   onRestoreDemoData,
@@ -61,6 +66,11 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   const [merchantFilter, setMerchantFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [whatsappShipment, setWhatsappShipment] = useState<Shipment | null>(null);
+
+  // Merchant respond to "No Response" state
+  const [isMerchantRespondModalOpen, setIsMerchantRespondModalOpen] = useState(false);
+  const [selectedShipmentForRespond, setSelectedShipmentForRespond] = useState<Shipment | null>(null);
+  const [merchantResponseNote, setMerchantResponseNote] = useState('تواصلت مع العميل، أكد لي جاهزيته للاستلام اليوم');
 
   // Extract list of available merchants from shipments and system users in Admin Panel
   const availableMerchants = useMemo(() => {
@@ -368,21 +378,30 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             </button>
           </div>
 
-          {/* Create CTA Button & Data Management */}
-          <div className="w-full lg:w-auto flex items-center gap-2">
+          {/* Create CTA Button & Data Management & Excel Export */}
+          <div className="w-full lg:w-auto flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => exportShipmentsToExcel(filteredShipments, 'اوردرات_الشحن')}
+              title="تصدير الأوردرات المفلترة إلى ملف إكسيل XLSX"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-3.5 py-2 rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>تصدير إكسيل ({filteredShipments.length})</span>
+            </button>
+
             <button
               onClick={onOpenCreateModal}
-              className="flex-1 lg:flex-none bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2"
+              className="flex-1 lg:flex-none bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               إنشاء شحنة جديدة
             </button>
 
-            {onClearAllData && shipments.length > 0 && (
+            {onClearAllData && shipments.length > 0 && currentRole === 'admin' && (
               <button
                 onClick={onClearAllData}
                 title="مسح كافة البيانات الشحنات"
-                className="bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-600 font-bold text-xs px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 border border-slate-200 hover:border-red-200"
+                className="bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-600 font-bold text-xs px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 border border-slate-200 hover:border-red-200 cursor-pointer"
               >
                 <Trash2 className="w-4 h-4 text-slate-500 hover:text-red-600" />
                 <span className="hidden sm:inline">مسح البيانات</span>
@@ -439,17 +458,29 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
 
           {/* Bulk Selection Actions */}
           {selectedIds.length > 0 && (
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-800 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-800 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl w-full sm:w-auto justify-between sm:justify-start">
               <span>تم تحديد {selectedIds.length} شحنات</span>
-              <button
-                onClick={() => {
-                  const firstSelected = shipments.find((s) => s.id === selectedIds[0]);
-                  if (firstSelected) onOpenPrintModal(firstSelected);
-                }}
-                className="text-red-700 hover:underline flex items-center gap-1"
-              >
-                <Printer className="w-3.5 h-3.5" /> طباعة البوالص
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const selectedShipments = shipments.filter((s) => selectedIds.includes(s.id));
+                    exportShipmentsToExcel(selectedShipments, 'اوردرات_محددة');
+                  }}
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  تصدير المحدد ({selectedIds.length})
+                </button>
+                <button
+                  onClick={() => {
+                    const firstSelected = shipments.find((s) => s.id === selectedIds[0]);
+                    if (firstSelected) onOpenPrintModal(firstSelected);
+                  }}
+                  className="text-red-700 hover:underline flex items-center gap-1"
+                >
+                  <Printer className="w-3.5 h-3.5" /> طباعة البوالص
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -609,9 +640,49 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                         {s.packageDetails.weightKg} كجم ({s.packageDetails.itemsCount} قطعة)
                       </span>
                     </td>
-                    <td className="p-3">{getStatusBadge(s)}</td>
+                    <td className="p-3">
+                      {getStatusBadge(s)}
+                      {s.noResponseDetails?.isNoResponse && (
+                        <div className="mt-1.5">
+                          {s.noResponseDetails.merchantResponse ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-md">
+                              <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                              <span>تم رد التاجر للمندوب: "{s.noResponseDetails.merchantResponse.responseNote}"</span>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setSelectedShipmentForRespond(s);
+                                setMerchantResponseNote('تواصلت مع العميل، وأكد لي جاهزيته للاستلام اليوم');
+                                setIsMerchantRespondModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-black text-amber-950 bg-amber-400 hover:bg-amber-300 border border-amber-500 px-2.5 py-1 rounded-lg shadow-xs transition-all animate-pulse cursor-pointer"
+                              title="المندوب أبلغ أن العميل لا يرد، انقر لإبلاغ المندوب بأنك تواصلت مع العميل"
+                            >
+                              <PhoneCall className="w-3.5 h-3.5" />
+                              <span>تنبيه: العميل مبيردش (اضغط للرد)</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td className="p-3 text-center">
                       <div className="flex items-center justify-center gap-1">
+                        {s.noResponseDetails?.isNoResponse && !s.noResponseDetails.merchantResponse && (
+                          <button
+                            onClick={() => {
+                              setSelectedShipmentForRespond(s);
+                              setMerchantResponseNote('تواصلت مع العميل، وأكد لي جاهزيته للاستلام اليوم');
+                              setIsMerchantRespondModalOpen(true);
+                            }}
+                            title="رد على المندوب"
+                            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[11px] px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <PhoneCall className="w-3.5 h-3.5" />
+                            <span>كلمته (رد)</span>
+                          </button>
+                        )}
+
                         {s.status === 'pending_approval' && onApproveShipment && (
                           <button
                             onClick={() => onApproveShipment(s.id)}
@@ -662,6 +733,96 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
           shipment={whatsappShipment}
           onClose={() => setWhatsappShipment(null)}
         />
+      )}
+
+      {/* Merchant Respond to Courier Modal */}
+      {isMerchantRespondModalOpen && selectedShipmentForRespond && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-slate-800 space-y-4 border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-black flex items-center gap-2 text-red-600">
+                <PhoneCall className="w-5 h-5 text-red-600" />
+                رد التاجر للمندوب (إرسال إشعار للكابتن)
+              </h3>
+              <button
+                onClick={() => setIsMerchantRespondModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs space-y-1">
+              <p className="font-black text-slate-900">
+                بوليصة رقم: <span className="font-mono text-red-600">{selectedShipmentForRespond.trackingNumber}</span>
+              </p>
+              <p className="text-slate-700">
+                المندوب المسند: <span className="font-bold text-slate-900">{selectedShipmentForRespond.assignedCourier?.name || 'كابتن الشحن'}</span>
+              </p>
+              <p className="text-amber-800 font-bold">
+                تنبيه المندوب: {selectedShipmentForRespond.noResponseDetails?.courierNote || 'العميل لا يرد على الاتصال'}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">اختر رد التاجر أو اكتب رسالة مخصصة للمندوب:</label>
+              
+              <div className="grid grid-cols-1 gap-1.5 text-xs">
+                {[
+                  'تواصلت مع العميل، وأكد لي جاهزيته للاستلام اليوم',
+                  'العميل طلب التأجيل إلى الغد ويرجى محاولة الاتصال به مساءً',
+                  'العميل بانتظارك، يرجى إعادة الاتصال به الآن',
+                  'تم تغيير رقم الهاتف / العميل متواجد بالعنوان',
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setMerchantResponseNote(preset)}
+                    className={`p-2 rounded-lg text-right font-bold transition-all cursor-pointer ${
+                      merchantResponseNote === preset
+                        ? 'bg-red-600 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                rows={3}
+                value={merchantResponseNote}
+                onChange={(e) => setMerchantResponseNote(e.target.value)}
+                placeholder="اكتب ردك وملاحظتك للمندوب..."
+                className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:bg-white focus:border-red-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsMerchantRespondModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onMerchantRespondNoResponse) {
+                    onMerchantRespondNoResponse(selectedShipmentForRespond.id, merchantResponseNote);
+                  }
+                  setIsMerchantRespondModalOpen(false);
+                  setSelectedShipmentForRespond(null);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-5 py-2.5 rounded-xl shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <PhoneCall className="w-4 h-4" />
+                إرسال الرد للمندوب فوراً
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

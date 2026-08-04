@@ -16,7 +16,8 @@ import {
   LogIn,
   LogOut,
   User,
-  ShieldCheck
+  ShieldCheck,
+  RotateCcw
 } from 'lucide-react';
 import { AppUserRole, MerchantWallet, UserSession } from '../types';
 
@@ -289,6 +290,18 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               <button
+                onClick={() => handleNavClick('returns')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'returns'
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <RotateCcw className="w-4 h-4 text-red-500" />
+                حساب المرتجعات
+              </button>
+
+              <button
                 onClick={() => handleNavClick('analytics')}
                 className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
                   activeTab === 'analytics'
@@ -413,8 +426,8 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Clear Data Button */}
-          {onClearData && (
+          {/* Clear Data Button (Admin Only) */}
+          {onClearData && (currentUser?.role === 'admin' || currentRole === 'admin') && (
             <div className="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1">
               <button
                 onClick={onClearData}

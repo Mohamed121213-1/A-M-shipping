@@ -27,13 +27,15 @@ import {
   Award,
   Layers,
   ArrowDownRight,
-  MessageSquare
+  MessageSquare,
+  PhoneOff
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
 interface CourierAppViewProps {
   shipments: Shipment[];
   onUpdateStatus: (shipmentId: string, newStatus: ShipmentStatus, note?: string) => void;
+  onReportNoResponse?: (shipmentId: string, courierNote?: string) => void;
   notifications?: CourierNotification[];
   selectedCourierId?: string;
   targetShipmentId?: string;
@@ -45,6 +47,7 @@ interface CourierAppViewProps {
 export const CourierAppView: React.FC<CourierAppViewProps> = ({
   shipments,
   onUpdateStatus,
+  onReportNoResponse,
   notifications = [],
   selectedCourierId,
   targetShipmentId,
@@ -75,6 +78,11 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   const [refuseShippingFeePaid, setRefuseShippingFeePaid] = useState<boolean>(true);
   const [isPartialModalOpen, setIsPartialModalOpen] = useState(false);
   const [whatsappShipment, setWhatsappShipment] = useState<Shipment | null>(null);
+
+  // No Response Modal state
+  const [isNoResponseModalOpen, setIsNoResponseModalOpen] = useState(false);
+  const [selectedShipmentForNoResponse, setSelectedShipmentForNoResponse] = useState<Shipment | null>(null);
+  const [noResponseNote, setNoResponseNote] = useState('العميل لا يرد على الاتصال');
   const [partialItemsAccepted, setPartialItemsAccepted] = useState(1);
   const [partialCodCollected, setPartialCodCollected] = useState(0);
   const [partialNotes, setPartialNotes] = useState('تم استلام جزء من المحتويات وإرجاع المتبقي');
@@ -150,8 +158,19 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     return sum;
   }, 0);
 
-  // Delivery Commission earned (25 EGP per delivered order)
-  const courierCommissionEarned = deliveredShipments.length * 25;
+  // Delivery Commission earned (controlled by Admin per courier)
+  const commType = activeCourier.commissionType || 'fixed';
+  const commVal = activeCourier.commissionValue ?? 20;
+
+  const courierCommissionEarned = courierShipments.reduce((sum, s) => {
+    if (s.status === 'delivered') {
+      if (commType === 'percentage') {
+        return sum + (s.financials.shippingFee * commVal) / 100;
+      }
+      return sum + commVal;
+    }
+    return sum;
+  }, 0);
 
   // Net Cash to Handover to Hub
   const cashToHandover = Math.max(0, totalCodCollectedToday - settledAmountState);
@@ -368,18 +387,23 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
       {courierTab === 'shipments' && (
         <>
           {/* Daily Cash Collection Header Pill */}
-          <div className="bg-gradient-to-r from-red-600 to-red-700 p-4 text-white flex items-center justify-between shadow-md">
+          <div className="bg-gradient-to-r from-red-600 to-red-700 p-4 text-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-md">
             <div>
-              <span className="text-[10px] text-red-100 block">إجمالي التحصيل اليومي المباشر:</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-red-100 block font-bold">إجمالي التحصيل اليومي المباشر:</span>
+                <span className="bg-white/20 text-amber-200 text-[10px] font-black px-2 py-0.5 rounded-full border border-white/20">
+                  عمولتك: {commType === 'fixed' ? `${commVal} ج.م / أوردر` : `${commVal}% من الشحن`}
+                </span>
+              </div>
               <span className="text-2xl font-black">{totalCodCollectedToday.toLocaleString()} <span className="text-xs">ج.م</span></span>
             </div>
             <button 
               onClick={() => setCourierTab('wallet')}
-              className="text-left bg-black/20 hover:bg-black/30 p-2 rounded-xl border border-white/20 transition-all text-right"
+              className="text-left bg-black/20 hover:bg-black/30 p-2 rounded-xl border border-white/20 transition-all text-right shrink-0"
             >
-              <span className="text-[10px] text-amber-300 block font-bold">العهدة بالتفصيل ←</span>
+              <span className="text-[10px] text-amber-300 block font-bold">العهدة والعمولات ←</span>
               <span className="text-xs font-extrabold text-white block">
-                {deliveredShipments.length} شحنات محصلة
+                {deliveredShipments.length} شحنات محصلة (+{courierCommissionEarned.toLocaleString()} ج.م عمولة)
               </span>
             </button>
           </div>
@@ -445,11 +469,11 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                       )}
                     </div>
 
-                    {/* Call & WhatsApp Customer Buttons */}
-                    <div className="flex items-center gap-2">
+                    {/* Call & WhatsApp & No-Response Customer Buttons */}
+                    <div className="flex flex-wrap items-center gap-2">
                       <a
                         href={`tel:${shipment.recipient.phone}`}
-                        className="flex-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2 rounded-xl text-center flex items-center justify-center gap-1.5 transition-colors"
+                        className="flex-1 min-w-[120px] bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2 px-3 rounded-xl text-center flex items-center justify-center gap-1.5 transition-colors"
                       >
                         <Phone className="w-3.5 h-3.5 text-emerald-400" />
                         اتصال ({shipment.recipient.phone})
@@ -457,13 +481,65 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
 
                       <button
                         onClick={() => setWhatsappShipment(shipment)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors shrink-0"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors shrink-0 cursor-pointer"
                         title="تراسل مع العميل عبر الواتساب"
                       >
                         <MessageSquare className="w-3.5 h-3.5 text-white" />
                         <span>واتساب</span>
                       </button>
+
+                      <button
+                        onClick={() => {
+                          setSelectedShipmentForNoResponse(shipment);
+                          setNoResponseNote('العميل لا يرد على الاتصال');
+                          setIsNoResponseModalOpen(true);
+                        }}
+                        className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 text-xs font-black py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
+                        title="إرسال تنبيه للتاجر أن العميل لا يرد على الاتصال"
+                      >
+                        <PhoneOff className="w-3.5 h-3.5 text-amber-400" />
+                        <span>مبيردش</span>
+                      </button>
                     </div>
+
+                    {/* No Response Status Banner / Merchant Reply Box */}
+                    {shipment.noResponseDetails?.isNoResponse && (
+                      <div className="mt-2">
+                        {shipment.noResponseDetails.merchantResponse ? (
+                          <div className="bg-emerald-950/90 border-2 border-emerald-500 rounded-xl p-3 text-xs space-y-2 shadow-lg">
+                            <div className="flex items-center justify-between font-black text-emerald-300">
+                              <span className="flex items-center gap-1.5">
+                                <MessageSquare className="w-4 h-4 text-emerald-400 animate-bounce" />
+                                💬 وصلك رَد من التاجر ({shipment.sender?.storeName || 'التاجر'}):
+                              </span>
+                              <span className="text-[10px] bg-emerald-900 px-2 py-0.5 rounded text-emerald-200">
+                                {shipment.noResponseDetails.merchantResponse.respondedAt}
+                              </span>
+                            </div>
+                            <p className="text-white font-extrabold bg-emerald-900/80 p-2.5 rounded-lg border border-emerald-700">
+                              "{shipment.noResponseDetails.merchantResponse.responseNote}"
+                            </p>
+                            <a
+                              href={`tel:${shipment.recipient.phone}`}
+                              className="inline-flex items-center justify-center gap-1.5 w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-2 rounded-xl text-xs transition-colors shadow-sm"
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                              اتصل بالعميل الآن ({shipment.recipient.phone})
+                            </a>
+                          </div>
+                        ) : (
+                          <div className="bg-amber-950/70 border border-amber-500/50 rounded-xl p-2.5 text-xs flex items-center justify-between text-amber-200">
+                            <span className="flex items-center gap-1.5 font-bold">
+                              <PhoneOff className="w-4 h-4 text-amber-400 animate-pulse" />
+                              تم إرسال إشعار للتاجر بأن العميل لا يرد ({shipment.noResponseDetails.reportedAt})
+                            </span>
+                            <span className="text-[10px] bg-amber-900/80 text-amber-300 px-2 py-0.5 rounded font-bold">
+                              بانتظار رد التاجر...
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Actions for active items */}
                     {shipment.status === 'out_for_delivery' && (
@@ -585,7 +661,12 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
 
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-amber-500/40">
               <div className="bg-black/25 p-2.5 rounded-xl">
-                <span className="text-[10px] text-amber-200 block">عمولة التوصيل المستحقة:</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-amber-200 block">عمولة التوصيل المستحقة:</span>
+                  <span className="text-[9px] bg-amber-500/20 text-amber-200 px-1.5 py-0.2 rounded font-mono">
+                    {commType === 'fixed' ? `${commVal} ج.م/شحنة` : `${commVal}% من الشحن`}
+                  </span>
+                </div>
                 <span className="text-base font-black text-emerald-300">+{courierCommissionEarned.toLocaleString()} ج.م</span>
               </div>
 
@@ -915,6 +996,92 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
           shipment={whatsappShipment}
           onClose={() => setWhatsappShipment(null)}
         />
+      )}
+
+      {/* Courier Report No-Response Modal */}
+      {isNoResponseModalOpen && selectedShipmentForNoResponse && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 text-white space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-black flex items-center gap-2 text-amber-400">
+                <PhoneOff className="w-5 h-5 text-amber-400" />
+                إرسال تنبيه للتاجر (العميل مبيردش)
+              </h3>
+              <button
+                onClick={() => setIsNoResponseModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 text-xs space-y-1">
+              <p className="font-extrabold text-white">
+                بوليصة رقم: <span className="font-mono text-red-400">{selectedShipmentForNoResponse.trackingNumber}</span>
+              </p>
+              <p className="text-slate-300">العميل: {selectedShipmentForNoResponse.recipient.name} ({selectedShipmentForNoResponse.recipient.phone})</p>
+              <p className="text-amber-300 font-bold">المتجر/التاجر: {selectedShipmentForNoResponse.sender?.storeName || 'التاجر'}</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-300">اختر تفاصيل النتيجة / اكتب ملاحظة للتاجر:</label>
+              
+              <div className="grid grid-cols-1 gap-1.5 text-xs">
+                {[
+                  'العميل لا يرد على الاتصال',
+                  'الهاتف مغلق أو غير متاح',
+                  'الرقم يعطي مشغول',
+                  'تم الاتصال أكثر من مرة ولا يوجد رد',
+                ].map((presetNote) => (
+                  <button
+                    key={presetNote}
+                    type="button"
+                    onClick={() => setNoResponseNote(presetNote)}
+                    className={`p-2 rounded-lg text-right font-bold transition-all cursor-pointer ${
+                      noResponseNote === presetNote
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {presetNote}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                rows={2}
+                value={noResponseNote}
+                onChange={(e) => setNoResponseNote(e.target.value)}
+                placeholder="اكتب ملاحظة مخصصة للتاجر..."
+                className="w-full text-xs p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-medium focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsNoResponseModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onReportNoResponse) {
+                    onReportNoResponse(selectedShipmentForNoResponse.id, noResponseNote);
+                  }
+                  setIsNoResponseModalOpen(false);
+                  setSelectedShipmentForNoResponse(null);
+                }}
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-5 py-2.5 rounded-xl shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <PhoneOff className="w-4 h-4" />
+                إرسال التنبيه للتاجر فوراً
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
