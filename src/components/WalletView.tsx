@@ -27,6 +27,7 @@ interface WalletViewProps {
   onRequestPayout: (amount: number, method: string) => void;
   couriers?: CourierInfo[];
   systemUsers?: UserSession[];
+  currentUser?: UserSession | null;
 }
 
 export const WalletView: React.FC<WalletViewProps> = ({
@@ -35,7 +36,9 @@ export const WalletView: React.FC<WalletViewProps> = ({
   onRequestPayout,
   couriers = BOSTA_COURIERS,
   systemUsers = [],
+  currentUser = null,
 }) => {
+  const isAdmin = !currentUser || currentUser.role === 'admin';
   const [activeSubTab, setActiveSubTab] = useState<'merchant' | 'returns' | 'couriers'>('merchant');
   const [payoutAmount, setPayoutAmount] = useState<number>(wallet.availableBalance);
   const [payoutMethod, setPayoutMethod] = useState<'instapay' | 'vodafone' | 'bank'>('instapay');
@@ -146,7 +149,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
     <div className="space-y-6">
       {/* Top View Selector Sub-Tabs */}
       <div className="flex items-center justify-between bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+        <div className={`grid grid-cols-1 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-2 w-full`}>
           <button
             onClick={() => setActiveSubTab('merchant')}
             className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
@@ -171,22 +174,24 @@ export const WalletView: React.FC<WalletViewProps> = ({
             <span>حساب المرتجعات (بدون شحن)</span>
           </button>
 
-          <button
-            onClick={() => setActiveSubTab('couriers')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              activeSubTab === 'couriers'
-                ? 'bg-slate-900 text-white shadow-md'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-            }`}
-          >
-            <Truck className="w-4 h-4 text-amber-400" />
-            <span>حسابات وعُهد المناديب</span>
-            {totalCouriersCashHeld > 0 && (
-              <span className="bg-amber-500 text-slate-950 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
-                {totalCouriersCashHeld.toLocaleString()} ج.م
-              </span>
-            )}
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveSubTab('couriers')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                activeSubTab === 'couriers'
+                  ? 'bg-slate-900 text-white shadow-md'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <Truck className="w-4 h-4 text-amber-400" />
+              <span>حسابات وعُهد المناديب</span>
+              {totalCouriersCashHeld > 0 && (
+                <span className="bg-amber-500 text-slate-950 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
+                  {totalCouriersCashHeld.toLocaleString()} ج.م
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

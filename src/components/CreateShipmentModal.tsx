@@ -653,7 +653,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                 </span>
               </div>
 
-              {registeredMerchants.length > 0 && (
+              {currentRole === 'admin' && registeredMerchants.length > 0 ? (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">اختر التاجر المسجل من لوحة التحكم</label>
                   <select
@@ -669,7 +669,12 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                     <option value="custom">-- إدخال اسم متجر يدوي جديد --</option>
                   </select>
                 </div>
-              )}
+              ) : currentUser?.role === 'merchant' ? (
+                <div className="text-xs font-bold text-slate-800 bg-red-50 border border-red-200 p-2.5 rounded-lg flex items-center gap-2">
+                  <Store className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>الشحنة سيتم تسجيلها باسم متجرك: <strong className="text-red-700">{merchantStoreName}</strong> ({merchantPhone})</span>
+                </div>
+              ) : null}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>

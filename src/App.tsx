@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
 import { ShipmentsList } from './components/ShipmentsList';
 import { CreateShipmentModal } from './components/CreateShipmentModal';
@@ -214,6 +214,96 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Data Isolation: Filter shipments based on logged in user's role and identity
+  const userShipments = useMemo(() => {
+    if (!currentUser || currentUser.role === 'admin') {
+      return shipments;
+    }
+
+    if (currentUser.role === 'merchant') {
+      const storeName = currentUser.storeName?.trim().toLowerCase();
+      const userName = currentUser.name?.trim().toLowerCase();
+      const userPhone = currentUser.phone?.trim();
+
+      return shipments.filter((s) => {
+        const sStore = s.sender?.storeName?.trim().toLowerCase();
+        const sContact = s.sender?.contactName?.trim().toLowerCase();
+        const sPhone = s.sender?.phone?.trim();
+
+        if (storeName && sStore && (sStore === storeName || sStore.includes(storeName) || storeName.includes(sStore))) {
+          return true;
+        }
+        if (userName && (sContact === userName || sContact?.includes(userName) || (sStore && sStore === userName))) {
+          return true;
+        }
+        if (userPhone && sPhone && sPhone === userPhone) {
+          return true;
+        }
+        if (s.sender?.contactName === currentUser.name) return true;
+
+        return false;
+      });
+    }
+
+    if (currentUser.role === 'courier') {
+      const courierName = currentUser.name?.trim().toLowerCase();
+      const courierPhone = currentUser.phone?.trim();
+
+      return shipments.filter((s) => {
+        if (!s.assignedCourier) return false;
+        const cId = s.assignedCourier.id;
+        const cName = s.assignedCourier.name?.trim().toLowerCase();
+        const cPhone = s.assignedCourier.phone?.trim();
+
+        if (currentUser.id && cId === currentUser.id) return true;
+        if (courierName && cName && (cName === courierName || cName.includes(courierName) || courierName.includes(cName))) return true;
+        if (courierPhone && cPhone && cPhone === courierPhone) return true;
+
+        return false;
+      });
+    }
+
+    if (currentUser.role === 'hub_manager') {
+      const hubName = currentUser.hubName?.trim().toLowerCase() || 'المستودع الرئيسي';
+      return shipments.filter((s) => {
+        const sHub = s.assignedHub?.trim().toLowerCase() || 'المستودع الرئيسي';
+        return sHub === hubName;
+      });
+    }
+
+    return shipments;
+  }, [shipments, currentUser]);
+
+  // Merchant Wallet scoped calculation
+  const userWallet = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'merchant') {
+      return wallet;
+    }
+    let totalCOD = 0;
+    let pendingCOD = 0;
+    let collectedCOD = 0;
+
+    userShipments.forEach((s) => {
+      const amount = s.codAmount || 0;
+      totalCOD += amount;
+      if (s.status === 'delivered' || s.status === 'partial_delivery') {
+        collectedCOD += amount;
+      } else if (['created', 'pickup_requested', 'picked_up', 'in_hub', 'out_for_delivery'].includes(s.status)) {
+        pendingCOD += amount;
+      }
+    });
+
+    return {
+      totalCod: totalCOD,
+      availableBalance: collectedCOD,
+      pendingCod: pendingCOD,
+      lastPayoutDate: wallet.lastPayoutDate,
+      bankAccount: wallet.bankAccount,
+      instapayAddress: wallet.instapayAddress,
+      vodafoneCash: wallet.vodafoneCash,
+    };
+  }, [wallet, userShipments, currentUser]);
 
   // Auth handlers
   const handleLoginSuccess = (user: UserSession) => {
@@ -925,7 +1015,7 @@ export default function App() {
           />
         ) : currentUser.role === 'courier' ? (
           <CourierAppView
-            shipments={shipments}
+            shipments={userShipments}
             onUpdateStatus={handleUpdateStatus}
             onReportNoResponse={handleReportNoResponse}
             notifications={courierNotifications}
@@ -933,12 +1023,13 @@ export default function App() {
             targetShipmentId={activeTargetShipmentId}
             onMarkNotificationRead={handleMarkNotificationRead}
             currentUser={currentUser}
+            couriers={couriers}
           />
         ) : currentUser.role === 'merchant' ? (
           <>
             {(activeTab === 'shipments' || activeTab === 'login' || activeTab === 'admin_panel' || activeTab === 'courier_app') && (
               <ShipmentsList
-                shipments={shipments}
+                shipments={userShipments}
                 onOpenDetailModal={(s) => setSelectedDetailShipment(s)}
                 onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
                 onOpenCreateModal={() => setIsCreateModalOpen(true)}
@@ -955,19 +1046,19 @@ export default function App() {
             )}
 
             {activeTab === 'wallet' && (
-              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} couriers={couriers} systemUsers={users} />
+              <WalletView wallet={userWallet} shipments={userShipments} onRequestPayout={handleRequestPayout} couriers={couriers} systemUsers={users} currentUser={currentUser} />
             )}
 
             {activeTab === 'returns' && (
-              <ReturnsAccountingView shipments={shipments} systemUsers={users} currentUser={currentUser} />
+              <ReturnsAccountingView shipments={userShipments} systemUsers={users} currentUser={currentUser} />
             )}
 
-            {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
+            {activeTab === 'analytics' && <AnalyticsView shipments={userShipments} />}
 
             {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
 
             {activeTab === 'tracking' && (
-              <PublicTrackingView shipments={shipments} initialTrackingNumber={publicSearchTrackNum} />
+              <PublicTrackingView shipments={userShipments} initialTrackingNumber={publicSearchTrackNum} />
             )}
           </>
         ) : (

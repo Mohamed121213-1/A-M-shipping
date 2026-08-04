@@ -31,8 +31,11 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
   systemUsers = [],
   currentUser
 }) => {
-  // Merchant filter state ('all' or specific merchant store name)
-  const [selectedMerchant, setSelectedMerchant] = useState<string>('all');
+  const isAdmin = !currentUser || currentUser.role === 'admin';
+  const initialMerchant = !isAdmin && currentUser?.role === 'merchant'
+    ? (currentUser.storeName || currentUser.name || 'all')
+    : 'all';
+  const [selectedMerchant, setSelectedMerchant] = useState<string>(initialMerchant);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'returned' | 'refused' | 'failed_attempt'>('all');
 
@@ -174,46 +177,48 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
             </button>
           </div>
 
-          {/* Merchant Switcher Cards / Pills */}
-          <div className="space-y-2 pt-2 border-t border-slate-800">
-            <label className="text-xs font-bold text-slate-300 flex items-center gap-2">
-              <Store className="w-4 h-4 text-red-400" />
-              التبديل بين التجار والبحث عن متجر:
-            </label>
+          {/* Merchant Switcher Cards / Pills (Admin Only) */}
+          {isAdmin && (
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                <Store className="w-4 h-4 text-red-400" />
+                التبديل بين التجار والبحث عن متجر:
+              </label>
 
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-              <button
-                onClick={() => setSelectedMerchant('all')}
-                className={`px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-                  selectedMerchant === 'all'
-                    ? 'bg-red-600 text-white shadow-md border border-red-500'
-                    : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
-                }`}
-              >
-                <span>جميع التجار ({allReturnShipments.length})</span>
-              </button>
-
-              {merchantList.map((m) => (
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
                 <button
-                  key={m.id}
-                  onClick={() => setSelectedMerchant(m.name)}
+                  onClick={() => setSelectedMerchant('all')}
                   className={`px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
-                    selectedMerchant === m.name
+                    selectedMerchant === 'all'
                       ? 'bg-red-600 text-white shadow-md border border-red-500'
                       : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
                   }`}
                 >
-                  <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{m.name}</span>
-                  {m.returnsCount > 0 && (
-                    <span className="bg-red-950 text-red-300 border border-red-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                      {m.returnsCount} مرتجع
-                    </span>
-                  )}
+                  <span>جميع التجار ({allReturnShipments.length})</span>
                 </button>
-              ))}
+
+                {merchantList.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setSelectedMerchant(m.name)}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+                      selectedMerchant === m.name
+                        ? 'bg-red-600 text-white shadow-md border border-red-500'
+                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
+                    }`}
+                  >
+                    <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{m.name}</span>
+                    {m.returnsCount > 0 && (
+                      <span className="bg-red-950 text-red-300 border border-red-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                        {m.returnsCount} مرتجع
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

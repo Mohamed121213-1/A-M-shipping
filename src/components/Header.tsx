@@ -101,6 +101,11 @@ export const Header: React.FC<HeaderProps> = ({
             <Package className="w-4 h-4 text-amber-400" />
             <span>حساب مدير مستودع ({currentUser.hubName || currentUser.name})</span>
           </div>
+        ) : currentUser?.role === 'admin' ? (
+          <div className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-lg border border-slate-700 text-amber-400 text-xs font-bold">
+            <ShieldCheck className="w-4 h-4 text-amber-400" />
+            <span>أدمن النظام والتحكم الكامل ({currentUser.name})</span>
+          </div>
         ) : (
           <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700 flex-wrap">
             <span className="text-slate-400 text-[11px] px-2 font-medium">عرض بصفة:</span>
@@ -247,7 +252,32 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Action Controls & Navigation Tabs */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* Main Navigation Tabs */}
-          {currentRole !== 'public_tracker' && currentRole !== 'courier' && (
+          {currentUser?.role === 'courier' ? (
+            <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/80">
+              <button
+                onClick={() => handleNavClick('courier_app')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'courier_app'
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Truck className="w-4 h-4 text-amber-400" />
+                تطبيق المندوب
+              </button>
+              <button
+                onClick={() => handleNavClick('tracking')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'tracking'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <SearchCode className="w-4 h-4 text-slate-500" />
+                تتبع شحنة
+              </button>
+            </nav>
+          ) : currentRole !== 'public_tracker' && (
             <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/80">
               {!currentUser && (
                 <button
@@ -275,7 +305,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {currentUser?.role === 'merchant' ? 'شحنات متجري' : 'الشحنات'}
               </button>
 
-              {currentRole === 'merchant' && (
+              {(currentRole === 'merchant' || currentRole === 'admin') && (
                 <button
                   onClick={() => handleNavClick('wallet')}
                   className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -289,29 +319,33 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              <button
-                onClick={() => handleNavClick('returns')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  activeTab === 'returns'
-                    ? 'bg-red-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <RotateCcw className="w-4 h-4 text-red-500" />
-                حساب المرتجعات
-              </button>
+              {(currentRole === 'merchant' || currentRole === 'admin') && (
+                <button
+                  onClick={() => handleNavClick('returns')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    activeTab === 'returns'
+                      ? 'bg-red-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <RotateCcw className="w-4 h-4 text-red-500" />
+                  حساب المرتجعات
+                </button>
+              )}
 
-              <button
-                onClick={() => handleNavClick('analytics')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  activeTab === 'analytics'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <BarChart3 className="w-4 h-4 text-slate-500" />
-                التقارير
-              </button>
+              {(currentRole === 'merchant' || currentRole === 'admin') && (
+                <button
+                  onClick={() => handleNavClick('analytics')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    activeTab === 'analytics'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4 text-slate-500" />
+                  التقارير
+                </button>
+              )}
 
               {currentRole === 'admin' && (
                 <button
@@ -324,6 +358,20 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <ShieldCheck className="w-4 h-4 text-amber-600" />
                   لوحة تحكم الأدمن
+                </button>
+              )}
+
+              {currentRole === 'admin' && (
+                <button
+                  onClick={() => handleNavClick('courier_app')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    activeTab === 'courier_app'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Truck className="w-4 h-4 text-amber-500" />
+                  تطبيق المندوب
                 </button>
               )}
 

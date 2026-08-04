@@ -23,7 +23,8 @@ import {
   Check,
   Store,
   PhoneCall,
-  PhoneOff
+  PhoneOff,
+  X
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
@@ -92,8 +93,8 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   // Filtered List
   const filteredShipments = useMemo(() => {
     return shipments.filter((s) => {
-      // Unconfirmed shipments (pending_approval) appear ONLY for Admin
-      if (currentRole !== 'admin' && s.status === 'pending_approval') {
+      // Unconfirmed shipments (pending_approval) appear for Admin and Merchant
+      if (currentRole !== 'admin' && currentRole !== 'merchant' && s.status === 'pending_approval') {
         return false;
       }
 
@@ -439,22 +440,24 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             </select>
           </div>
 
-          {/* Merchant Filter */}
-          <div className="w-full sm:w-auto flex items-center gap-2">
-            <Store className="w-4 h-4 text-red-600 shrink-0" />
-            <select
-              value={merchantFilter}
-              onChange={(e) => setMerchantFilter(e.target.value)}
-              className="w-full sm:w-52 text-xs p-2 bg-red-50/60 border border-red-200 rounded-xl font-extrabold text-slate-800 focus:bg-white focus:ring-2 focus:ring-red-500/20"
-            >
-              <option value="all">جميع التجار والمتاجر ({availableMerchants.length})</option>
-              {availableMerchants.map((merchantName) => (
-                <option key={merchantName} value={merchantName}>
-                  التاجر: {merchantName}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Merchant Filter (Admin Only) */}
+          {currentRole === 'admin' && (
+            <div className="w-full sm:w-auto flex items-center gap-2">
+              <Store className="w-4 h-4 text-red-600 shrink-0" />
+              <select
+                value={merchantFilter}
+                onChange={(e) => setMerchantFilter(e.target.value)}
+                className="w-full sm:w-52 text-xs p-2 bg-red-50/60 border border-red-200 rounded-xl font-extrabold text-slate-800 focus:bg-white focus:ring-2 focus:ring-red-500/20"
+              >
+                <option value="all">جميع التجار والمتاجر ({availableMerchants.length})</option>
+                {availableMerchants.map((merchantName) => (
+                  <option key={merchantName} value={merchantName}>
+                    التاجر: {merchantName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Bulk Selection Actions */}
           {selectedIds.length > 0 && (
