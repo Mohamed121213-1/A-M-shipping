@@ -28,6 +28,7 @@ interface WalletViewProps {
   couriers?: CourierInfo[];
   systemUsers?: UserSession[];
   currentUser?: UserSession | null;
+  onSettleCourierCustody?: (courierId: string) => void;
 }
 
 export const WalletView: React.FC<WalletViewProps> = ({
@@ -37,6 +38,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
   couriers = BOSTA_COURIERS,
   systemUsers = [],
   currentUser = null,
+  onSettleCourierCustody,
 }) => {
   const isAdmin = !currentUser || currentUser.role === 'admin';
   const [activeSubTab, setActiveSubTab] = useState<'merchant' | 'returns' | 'couriers'>('merchant');
@@ -44,12 +46,16 @@ export const WalletView: React.FC<WalletViewProps> = ({
   const [payoutMethod, setPayoutMethod] = useState<'instapay' | 'vodafone' | 'bank'>('instapay');
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState('');
 
-  // Track courier cash settlement state locally
-  const [settledCourierIds, setSettledCourierIds] = useState<string[]>([]);
   const [settlementSuccessMsg, setSettlementSuccessMsg] = useState<string | null>(null);
 
+  // All collected shipments (for merchant ledger)
   const collectedShipments = shipments.filter(
     (s) => s.status === 'delivered' || s.status === 'partial_delivery' || (s.status === 'refused' && s.refusedDetails?.shippingFeePaid)
+  );
+
+  // Unsettled collected shipments for courier custody
+  const unsettledCollectedShipments = shipments.filter(
+    (s) => !s.isCourierSettled && (s.status === 'delivered' || s.status === 'partial_delivery' || (s.status === 'refused' && s.refusedDetails?.shippingFeePaid))
   );
 
   // Combine passed couriers + system Users with role 'courier' + any couriers assigned on shipments
@@ -96,9 +102,9 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
   const effectiveCouriers = Array.from(courierMap.values());
 
-  // Compute COD collected per courier dynamically
+  // Compute COD collected per courier dynamically (from unsettled shipments)
   const courierFinancials = effectiveCouriers.map((courier) => {
-    const courierCollected = collectedShipments.filter((s) => {
+    const courierCollected = unsettledCollectedShipments.filter((s) => {
       if (!s.assignedCourier) return false;
       const matchId = Boolean(s.assignedCourier.id && courier.id && s.assignedCourier.id === courier.id);
       const matchPhone = Boolean(s.assignedCourier.phone && courier.phone && s.assignedCourier.phone === courier.phone);
@@ -110,9 +116,13 @@ export const WalletView: React.FC<WalletViewProps> = ({
       if (s.status === 'refused' && s.refusedDetails?.shippingFeePaid) {
         return sum + (s.refusedDetails.amountCollected || s.financials.shippingFee);
       }
+      if (s.status === 'partial_delivery') {
+        return sum + (s.partialDetails?.partialCodAmount ?? s.financials.codAmount);
+      }
       return sum + s.financials.codAmount;
     }, 0);
-    const isSettled = settledCourierIds.includes(courier.id);
+
+    const isSettled = totalCollected === 0;
 
     return {
       courier,
@@ -124,7 +134,6 @@ export const WalletView: React.FC<WalletViewProps> = ({
   });
 
   const totalCouriersCashHeld = courierFinancials
-    .filter((cf) => !cf.isSettled)
     .reduce((sum, cf) => sum + cf.totalCollected, 0);
 
   const handlePayoutSubmit = (e: React.FormEvent) => {
@@ -140,9 +149,11 @@ export const WalletView: React.FC<WalletViewProps> = ({
   };
 
   const handleConfirmCourierSettlement = (courierId: string, courierName: string, amount: number) => {
-    setSettledCourierIds((prev) => [...prev, courierId]);
-    setSettlementSuccessMsg(`تم استلام وتوريد العهدة النقدية بمبلغ ${amount.toLocaleString()} ج.م من ${courierName} بنجاح!`);
-    setTimeout(() => setSettlementSuccessMsg(null), 4500);
+    if (onSettleCourierCustody) {
+      onSettleCourierCustody(courierId);
+    }
+    setSettlementSuccessMsg(`تم استلام وتوريد العهدة النقدية بمبلغ ${amount.toLocaleString()} ج.م من ${courierName} بنجاح، وتصفير حسابه وحذف الشحنات المسواة من عهدته!`);
+    setTimeout(() => setSettlementSuccessMsg(null), 5000);
   };
 
   return (

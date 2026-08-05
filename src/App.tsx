@@ -923,6 +923,76 @@ export default function App() {
     );
   };
 
+  // Courier Custody Settlement Handler
+  const handleSettleCourierCustody = (courierId: string) => {
+    const targetCourier = couriers.find((c) => c.id === courierId);
+    const courierName = targetCourier ? targetCourier.name : 'المندوب';
+
+    let totalCollected = 0;
+
+    const nextShipments = shipments.map((s) => {
+      if (!s.assignedCourier) return s;
+
+      const matchId = Boolean(s.assignedCourier.id && courierId && s.assignedCourier.id === courierId);
+      const matchPhone = Boolean(s.assignedCourier.phone && targetCourier?.phone && s.assignedCourier.phone === targetCourier.phone);
+      const matchName = Boolean(s.assignedCourier.name && targetCourier?.name && s.assignedCourier.name === targetCourier.name);
+
+      if ((matchId || matchPhone || matchName) && !s.isCourierSettled) {
+        let collectedForThisShipment = 0;
+        if (s.status === 'delivered') {
+          collectedForThisShipment = s.financials.codAmount;
+        } else if (s.status === 'partial_delivery') {
+          collectedForThisShipment = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
+        } else if (s.status === 'refused' && s.refusedDetails?.shippingFeePaid) {
+          collectedForThisShipment = s.refusedDetails.amountCollected || s.financials.shippingFee;
+        }
+
+        totalCollected += collectedForThisShipment;
+
+        const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+        const updatedTimeline = [
+          ...s.timeline,
+          {
+            id: `tl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            status: s.status,
+            title: '💰 تم تسوية وتوريد العهدة كاش للشركة',
+            description: `تم استلام العهدة النقدية (${collectedForThisShipment} ج.م) وتوريدها للخزينة وتصفير حساب المندوب.`,
+            timestamp: timeStr,
+            actorRole: 'system' as const,
+          },
+        ];
+
+        return {
+          ...s,
+          isCourierSettled: true,
+          courierSettledAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          timeline: updatedTimeline,
+        };
+      }
+
+      return s;
+    });
+
+    setShipments(nextShipments);
+
+    // Reset courier's codCollectedToday counter in couriers state
+    setCouriers((prev) =>
+      prev.map((c) => {
+        const matchId = Boolean(c.id === courierId);
+        const matchPhone = Boolean(targetCourier?.phone && c.phone === targetCourier.phone);
+        const matchName = Boolean(targetCourier?.name && c.name === targetCourier.name);
+        if (matchId || matchPhone || matchName) {
+          return { ...c, codCollectedToday: 0 };
+        }
+        return c;
+      })
+    );
+
+    broadcastDataChange({ shipments: nextShipments });
+    showToast(`💰 تم استلام العهدة النقدية بمبلغ ${totalCollected.toLocaleString()} ج.م من ${courierName} وتصفير حسابه وحذف الشحنات المسواة!`);
+  };
+
   // Payout Request Handler
   const handleRequestPayout = (amount: number, method: string) => {
     setWallet((prev) => ({
@@ -1315,6 +1385,7 @@ export default function App() {
                 onMarkNotificationRead={handleMarkNotificationRead}
                 currentUser={currentUser}
                 couriers={couriers}
+                onSettleCourierCustody={handleSettleCourierCustody}
               />
             )}
 
@@ -1323,7 +1394,14 @@ export default function App() {
             )}
 
             {activeTab === 'wallet' && (
-              <WalletView wallet={wallet} shipments={shipments} onRequestPayout={handleRequestPayout} couriers={couriers} systemUsers={users} />
+              <WalletView
+                wallet={wallet}
+                shipments={shipments}
+                onRequestPayout={handleRequestPayout}
+                couriers={couriers}
+                systemUsers={users}
+                onSettleCourierCustody={handleSettleCourierCustody}
+              />
             )}
 
             {activeTab === 'returns' && (

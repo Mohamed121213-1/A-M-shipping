@@ -145,6 +145,8 @@ export interface Shipment {
       respondedAt: string;
     };
   };
+  isCourierSettled?: boolean;
+  courierSettledAt?: string;
   estimatedDeliveryDate: string;
 }
 

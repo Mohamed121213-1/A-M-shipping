@@ -42,6 +42,7 @@ interface CourierAppViewProps {
   onMarkNotificationRead?: (notificationId: string) => void;
   currentUser?: UserSession | null;
   couriers?: CourierInfo[];
+  onSettleCourierCustody?: (courierId: string) => void;
 }
 
 export const CourierAppView: React.FC<CourierAppViewProps> = ({
@@ -54,6 +55,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   onMarkNotificationRead,
   currentUser,
   couriers = [],
+  onSettleCourierCustody,
 }) => {
   const fallbackCourier: CourierInfo = couriers[0] || {
     id: 'cour-placeholder',
@@ -138,8 +140,9 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   );
   const unreadCount = courierNotifs.filter((n) => !n.read).length;
 
-  // Deliveries assigned to selected courier or active
+  // Deliveries assigned to selected courier (excluding settled orders)
   const courierShipments = shipments.filter((s) => {
+    if (s.isCourierSettled) return false; // Handled & settled orders are cleared from active courier view
     if (!s.assignedCourier) return false;
     const matchId = Boolean(s.assignedCourier.id && activeCourier.id && s.assignedCourier.id === activeCourier.id);
     const matchPhone = Boolean(s.assignedCourier.phone && activeCourier.phone && s.assignedCourier.phone === activeCourier.phone);
@@ -173,7 +176,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   }, 0);
 
   // Net Cash to Handover to Hub
-  const cashToHandover = Math.max(0, totalCodCollectedToday - settledAmountState);
+  const cashToHandover = totalCodCollectedToday;
 
   const handleConfirmDelivery = (e: React.FormEvent) => {
     e.preventDefault();
@@ -275,7 +278,9 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
 
   const handleHandoverCashToHub = () => {
     if (cashToHandover <= 0) return;
-    setSettledAmountState((prev) => prev + cashToHandover);
+    if (onSettleCourierCustody) {
+      onSettleCourierCustody(activeCourier.id);
+    }
     setIsHandoverSuccess(true);
     setTimeout(() => setIsHandoverSuccess(false), 4000);
   };
