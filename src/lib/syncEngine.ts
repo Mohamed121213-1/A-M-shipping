@@ -76,6 +76,11 @@ class SyncEngine {
 
         // Try initial fetch from Supabase database table if available
         this.fetchPersistedStateFromSupabase();
+
+        // Periodically poll Supabase DB every 3 seconds to guarantee updates reach Admin
+        setInterval(() => {
+          this.fetchPersistedStateFromSupabase();
+        }, 3000);
       } catch (err) {
         console.warn('Supabase Realtime Channel error:', err);
       }
@@ -112,9 +117,10 @@ class SyncEngine {
     }
 
     const incomingTime = data.timestamp || 0;
-    // CRITICAL FIX: If incoming data timestamp is older than or equal to our latest local timestamp, IGNORE it.
-    // This prevents old data from remote fetches/broadcasts from overwriting fresh local modifications on refresh.
-    if (incomingTime > 0 && incomingTime <= this.latestTimestamp) {
+    const isFromOtherSender = Boolean(data.senderId && data.senderId !== this.instanceId);
+
+    // If it's from our own instance and not strictly newer, ignore
+    if (!isFromOtherSender && incomingTime > 0 && incomingTime <= this.latestTimestamp) {
       return;
     }
 
@@ -171,8 +177,8 @@ class SyncEngine {
 
       if (!error && data?.state) {
         const remoteTime = data.state.timestamp || 0;
-        // Only apply state from Supabase if it's strictly NEWER than our current local timestamp
-        if (remoteTime > this.latestTimestamp) {
+        // Apply state if remote is newer or from another session
+        if (remoteTime > this.latestTimestamp || (data.state.senderId && data.state.senderId !== this.instanceId)) {
           this.handleIncomingUpdate(data.state);
         } else if (this.latestTimestamp > remoteTime && this.latestStateCache) {
           // Local state is NEWER than Supabase DB! Push local state to Supabase.
@@ -192,8 +198,6 @@ class SyncEngine {
   }
 
   public broadcastState(state: SyncedAppState) {
-    if (this.isProcessingIncoming) return;
-
     const now = Date.now();
     this.latestTimestamp = now;
     if (typeof window !== 'undefined') {
@@ -230,8 +234,10 @@ class SyncEngine {
       } catch (e) {
         console.warn('Supabase Realtime send failed:', e);
       }
+    }
 
-      // Also persist to Supabase DB table asynchronously if table exists
+    // 3. Always persist to Supabase DB table asynchronously if Supabase is configured
+    if (isSupabaseConfigured) {
       (async () => {
         try {
           await supabase

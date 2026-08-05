@@ -34,7 +34,7 @@ import { WhatsAppModal } from './WhatsAppModal';
 
 interface CourierAppViewProps {
   shipments: Shipment[];
-  onUpdateStatus: (shipmentId: string, newStatus: ShipmentStatus, note?: string) => void;
+  onUpdateStatus: (shipmentId: string, newStatus: ShipmentStatus, note?: string, extraUpdates?: Partial<Shipment>) => void;
   onReportNoResponse?: (shipmentId: string, courierNote?: string) => void;
   notifications?: CourierNotification[];
   selectedCourierId?: string;
@@ -179,10 +179,20 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     e.preventDefault();
     if (!selectedShipment) return;
 
+    const extra: Partial<Shipment> = {
+      proofOfDelivery: {
+        verifiedPin: pinInput || '8492',
+        recipientName: selectedShipment.recipient.name,
+        signatureDate: new Date().toLocaleString('ar-EG'),
+        note: `تم التسليم بنجاح بترميز التأكيد (${pinInput || '8492'}) وتحصيل المبلغ ${selectedShipment.financials.codAmount} ج.م`,
+      },
+    };
+
     onUpdateStatus(
       selectedShipment.id,
       'delivered',
-      `تم التسليم بنجاح بترميز التأكيد (${pinInput || '8492'}) وتحصيل المبلغ ${selectedShipment.financials.codAmount} ج.م`
+      `تم التسليم بنجاح بترميز التأكيد (${pinInput || '8492'}) وتحصيل المبلغ ${selectedShipment.financials.codAmount} ج.م`,
+      extra
     );
 
     setIsDeliverModalOpen(false);
@@ -205,7 +215,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     if (!selectedShipment) return;
 
     const amountCollected = refuseShippingFeePaid ? selectedShipment.financials.shippingFee : 0;
-    selectedShipment.refusedDetails = {
+    const refusedDetails = {
       shippingFeePaid: refuseShippingFeePaid,
       amountCollected,
       reason: refuseReason,
@@ -215,7 +225,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
       ? `رفض الاستلام (دفع الشحن ورجع - تم تحصيل ${amountCollected} ج.م مصاريف شحن): ${refuseReason}`
       : `رفض الاستلام (لم يدفع شحن - تحصيل 0 ج.م): ${refuseReason}`;
 
-    onUpdateStatus(selectedShipment.id, 'refused', statusNote);
+    onUpdateStatus(selectedShipment.id, 'refused', statusNote, { refusedDetails });
 
     setIsRefuseModalOpen(false);
     setSelectedShipment(null);
@@ -225,18 +235,24 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     e.preventDefault();
     if (!selectedShipment) return;
 
-    // Mutate the shipment's financial codAmount or update details if possible
-    selectedShipment.financials.codAmount = partialCodCollected;
-    selectedShipment.partialDetails = {
-      acceptedItemsCount: partialItemsAccepted,
-      partialCodAmount: partialCodCollected,
-      notes: partialNotes,
+    const extra: Partial<Shipment> = {
+      financials: {
+        ...selectedShipment.financials,
+        codAmount: partialCodCollected,
+        netPayout: Math.max(0, partialCodCollected - selectedShipment.financials.shippingFee),
+      },
+      partialDetails: {
+        acceptedItemsCount: partialItemsAccepted,
+        partialCodAmount: partialCodCollected,
+        notes: partialNotes,
+      },
     };
 
     onUpdateStatus(
       selectedShipment.id,
       'partial_delivery',
-      `استلام جزئي: تم استلام ${partialItemsAccepted} قطعة بقيمة ${partialCodCollected} ج.م. (${partialNotes})`
+      `استلام جزئي: تم استلام ${partialItemsAccepted} قطعة بقيمة ${partialCodCollected} ج.م. (${partialNotes})`,
+      extra
     );
 
     setIsPartialModalOpen(false);

@@ -500,9 +500,16 @@ export default function App() {
   };
 
   // Update Status Handler
-  const handleUpdateStatus = (shipmentId: string, newStatus: ShipmentStatus, note?: string) => {
-    setShipments((prev) =>
-      prev.map((s) => {
+  const handleUpdateStatus = (
+    shipmentId: string,
+    newStatus: ShipmentStatus,
+    note?: string,
+    extraUpdates?: Partial<Shipment>
+  ) => {
+    let nextShipments: Shipment[] = [];
+
+    setShipments((prev) => {
+      nextShipments = prev.map((s) => {
         if (s.id !== shipmentId) return s;
 
         const updatedTimeline = [
@@ -538,23 +545,31 @@ export default function App() {
         if ((newStatus === 'delivered' || newStatus === 'partial_delivery') && (s.status !== 'delivered' && s.status !== 'partial_delivery')) {
           setWallet((w) => ({
             ...w,
-            availableBalance: w.availableBalance + s.financials.netPayout,
+            availableBalance: w.availableBalance + (extraUpdates?.financials?.netPayout || s.financials.netPayout),
             pendingCod: Math.max(0, w.pendingCod - s.financials.codAmount),
           }));
         }
 
         return {
           ...s,
+          ...extraUpdates,
           status: newStatus,
           updatedAt: new Date().toISOString(),
           timeline: updatedTimeline,
         };
-      })
-    );
+      });
+
+      return nextShipments;
+    });
+
+    // Broadcast immediately so Admin and other devices get this status update right away
+    setTimeout(() => {
+      broadcastDataChange({ shipments: nextShipments });
+    }, 20);
 
     // Also update current active detail modal if open
     if (selectedDetailShipment && selectedDetailShipment.id === shipmentId) {
-      setSelectedDetailShipment((prev) => (prev ? { ...prev, status: newStatus } : null));
+      setSelectedDetailShipment((prev) => (prev ? { ...prev, ...extraUpdates, status: newStatus } : null));
     }
 
     showToast(`تم تحديث حالة الشحنة ${shipmentId} إلى ${newStatus}`);
