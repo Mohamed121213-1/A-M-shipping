@@ -119,20 +119,18 @@ class SyncEngine {
     const incomingTime = data.timestamp || 0;
     const isFromOtherSender = Boolean(data.senderId && data.senderId !== this.instanceId);
 
-    // If it's from our own instance and not strictly newer, ignore
-    if (!isFromOtherSender && incomingTime > 0 && incomingTime <= this.latestTimestamp) {
+    // CRITICAL FIX: Only process incoming updates if from another sender AND strictly newer than our latest timestamp
+    if (!isFromOtherSender || (incomingTime > 0 && incomingTime <= this.latestTimestamp)) {
       return;
     }
 
     this.isProcessingIncoming = true;
+    this.latestTimestamp = incomingTime;
 
-    if (incomingTime > this.latestTimestamp) {
-      this.latestTimestamp = incomingTime;
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('bosta_last_updated', String(incomingTime));
-        } catch (e) {}
-      }
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('bosta_last_updated', String(incomingTime));
+      } catch (e) {}
     }
 
     if (data.shipments || data.users || data.couriers || data.wallet || data.hubs || data.governorates || data.notifications) {
@@ -177,8 +175,8 @@ class SyncEngine {
 
       if (!error && data?.state) {
         const remoteTime = data.state.timestamp || 0;
-        // Apply state if remote is newer or from another session
-        if (remoteTime > this.latestTimestamp || (data.state.senderId && data.state.senderId !== this.instanceId)) {
+        // CRITICAL FIX: Apply state ONLY if remote timestamp is strictly newer than our local timestamp!
+        if (remoteTime > this.latestTimestamp && data.state.senderId !== this.instanceId) {
           this.handleIncomingUpdate(data.state);
         } else if (this.latestTimestamp > remoteTime && this.latestStateCache) {
           // Local state is NEWER than Supabase DB! Push local state to Supabase.

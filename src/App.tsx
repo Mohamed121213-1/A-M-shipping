@@ -210,10 +210,7 @@ export default function App() {
     });
   };
 
-  // Automatically broadcast whenever core operational data updates
-  useEffect(() => {
-    broadcastDataChange();
-  }, [shipments, wallet, users, couriers, hubs, governorates, courierNotifications]);
+  // Handlers perform explicit broadcasts on local mutations; no automatic re-broadcast loop on incoming state
 
   // Listen to Supabase Auth State changes if Supabase is configured
   useEffect(() => {
@@ -493,13 +490,15 @@ export default function App() {
       ],
     };
 
-    setShipments((prev) => [createdShipment, ...prev]);
+    const nextShipments = [createdShipment, ...shipments];
+    const nextWallet = {
+      ...wallet,
+      pendingCod: wallet.pendingCod + createdShipment.financials.codAmount,
+    };
 
-    // Update Wallet pending amount
-    setWallet((prev) => ({
-      ...prev,
-      pendingCod: prev.pendingCod + createdShipment.financials.codAmount,
-    }));
+    setShipments(nextShipments);
+    setWallet(nextWallet);
+    broadcastDataChange({ shipments: nextShipments, wallet: nextWallet });
 
     if (isPending) {
       showToast(`⏳ تم تسجيل الطلب ${trackingNo} وبانتظار موافقة وتأكيد الأدمن!`);
@@ -510,60 +509,61 @@ export default function App() {
 
   // Approve single pending shipment
   const handleApproveShipment = (shipmentId: string) => {
-    setShipments((prev) =>
-      prev.map((s) => {
-        if (s.id !== shipmentId) return s;
+    const nextShipments = shipments.map((s) => {
+      if (s.id !== shipmentId) return s;
 
-        const updatedTimeline = [
-          ...s.timeline,
-          {
-            id: `tl-${Date.now()}`,
-            status: 'created' as ShipmentStatus,
-            title: '✅ تم تأكيد وموافقة الأوردر بواسطة الأدمن',
-            description: 'قام أدمن النظام بمراجعة بيانات الشحنة وتأكيدها لبدء التنفيذ والاستلام',
-            timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-            actorRole: 'system' as const,
-          },
-        ];
-
-        return {
-          ...s,
+      const updatedTimeline = [
+        ...s.timeline,
+        {
+          id: `tl-${Date.now()}`,
           status: 'created' as ShipmentStatus,
-          updatedAt: new Date().toISOString(),
-          timeline: updatedTimeline,
-        };
-      })
-    );
+          title: '✅ تم تأكيد وموافقة الأوردر بواسطة الأدمن',
+          description: 'قام أدمن النظام بمراجعة بيانات الشحنة وتأكيدها لبدء التنفيذ والاستلام',
+          timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+          actorRole: 'system' as const,
+        },
+      ];
 
+      return {
+        ...s,
+        status: 'created' as ShipmentStatus,
+        updatedAt: new Date().toISOString(),
+        timeline: updatedTimeline,
+      };
+    });
+
+    setShipments(nextShipments);
+    broadcastDataChange({ shipments: nextShipments });
     showToast(`✅ تم تأكيد وموافقة الأوردر بنجاح!`);
   };
 
   // Approve all pending shipments
   const handleApproveAllPending = () => {
     let count = 0;
-    setShipments((prev) =>
-      prev.map((s) => {
-        if (s.status !== 'pending_approval') return s;
-        count++;
-        const updatedTimeline = [
-          ...s.timeline,
-          {
-            id: `tl-${Date.now()}`,
-            status: 'created' as ShipmentStatus,
-            title: '✅ تم موافقة وتأكيد الأوردر بواسطة الأدمن',
-            description: 'تمت الموافقة وتأكيد الأوردر ضمن الموافقة الجماعية بواسطة أدمن النظام',
-            timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-            actorRole: 'system' as const,
-          },
-        ];
-        return {
-          ...s,
+    const nextShipments = shipments.map((s) => {
+      if (s.status !== 'pending_approval') return s;
+      count++;
+      const updatedTimeline = [
+        ...s.timeline,
+        {
+          id: `tl-${Date.now()}`,
           status: 'created' as ShipmentStatus,
-          updatedAt: new Date().toISOString(),
-          timeline: updatedTimeline,
-        };
-      })
-    );
+          title: '✅ تم موافقة وتأكيد الأوردر بواسطة الأدمن',
+          description: 'تمت الموافقة وتأكيد الأوردر ضمن الموافقة الجماعية بواسطة أدمن النظام',
+          timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+          actorRole: 'system' as const,
+        },
+      ];
+      return {
+        ...s,
+        status: 'created' as ShipmentStatus,
+        updatedAt: new Date().toISOString(),
+        timeline: updatedTimeline,
+      };
+    });
+
+    setShipments(nextShipments);
+    broadcastDataChange({ shipments: nextShipments });
 
     if (count > 0) {
       showToast(`🎉 تم تأكيد وموافقة جميع الطلبات المعلّقة (${count} أوردر) بنجاح!`);
@@ -579,98 +579,97 @@ export default function App() {
     note?: string,
     extraUpdates?: Partial<Shipment>
   ) => {
-    let nextShipments: Shipment[] = [];
+    let updatedWallet = wallet;
 
-    setShipments((prev) => {
-      nextShipments = prev.map((s) => {
-        if (s.id !== shipmentId) return s;
+    const nextShipments = shipments.map((s) => {
+      if (s.id !== shipmentId) return s;
 
-        let effectiveExtra = { ...extraUpdates };
+      let effectiveExtra = { ...extraUpdates };
 
-        // For returned or refused orders: Calculate merchant payout based on whether shipping was paid
-        if (newStatus === 'returned' || newStatus === 'refused') {
-          const currentFinancials = effectiveExtra.financials || s.financials;
-          const isShippingPaid = effectiveExtra.refusedDetails?.shippingFeePaid ?? s.refusedDetails?.shippingFeePaid;
+      // For returned or refused orders: Calculate merchant payout based on whether shipping was paid
+      if (newStatus === 'returned' || newStatus === 'refused') {
+        const currentFinancials = effectiveExtra.financials || s.financials;
+        const isShippingPaid = effectiveExtra.refusedDetails?.shippingFeePaid ?? s.refusedDetails?.shippingFeePaid;
 
-          let calculatedNetPayout = 0;
-          if (isShippingPaid === false) {
-            // لم يدفع شحن: خصم مصاريف الشحن من التاجر
-            calculatedNetPayout = -currentFinancials.shippingFee;
-          } else if (isShippingPaid === true) {
-            // دفع شحن ورجع: مستحقات التاجر تساوي 0
-            calculatedNetPayout = 0;
-          } else if (effectiveExtra.financials?.netPayout !== undefined) {
-            calculatedNetPayout = effectiveExtra.financials.netPayout;
-          } else {
-            calculatedNetPayout = 0;
-          }
-
-          effectiveExtra = {
-            ...effectiveExtra,
-            financials: {
-              ...currentFinancials,
-              codAmount: isShippingPaid === true ? currentFinancials.shippingFee : (isShippingPaid === false ? 0 : (effectiveExtra.financials?.codAmount ?? currentFinancials.codAmount)),
-              netPayout: calculatedNetPayout,
-            },
-          };
+        let calculatedNetPayout = 0;
+        if (isShippingPaid === false) {
+          // لم يدفع شحن: خصم مصاريف الشحن من التاجر
+          calculatedNetPayout = -currentFinancials.shippingFee;
+        } else if (isShippingPaid === true) {
+          // دفع شحن ورجع: مستحقات التاجر تساوي 0
+          calculatedNetPayout = 0;
+        } else if (effectiveExtra.financials?.netPayout !== undefined) {
+          calculatedNetPayout = effectiveExtra.financials.netPayout;
+        } else {
+          calculatedNetPayout = 0;
         }
 
-        const updatedTimeline = [
-          ...s.timeline,
-          {
-            id: `tl-${Date.now()}`,
-            status: newStatus,
-            title:
-              newStatus === 'created'
-                ? 'تم تأكيد واعتماد الشحنة'
-                : newStatus === 'pending_approval'
-                ? 'بانتظار موافقة الأدمن'
-                : newStatus === 'delivered'
-                ? 'تم التسليم بنجاح وتحصيل المبلغ'
-                : newStatus === 'partial_delivery'
-                ? 'استلام جزئي من العميل وتحصيل المبلغ'
-                : newStatus === 'refused'
-                ? 'رفض الاستلام من العميل'
-                : newStatus === 'returned'
-                ? 'مرتجع للتاجر (مستحقات التاجر 0 ج.م)'
-                : newStatus === 'out_for_delivery'
-                ? 'خرجت للتسليم مع المندوب'
-                : newStatus === 'failed_attempt'
-                ? 'محاولة تسليم غير ناجحة'
-                : newStatus === 'in_hub'
-                ? 'وصلت المستودع الرئيسي'
-                : 'تحديث حالة الشحنة',
-            description: note || 'تم التحديث بواسطة نظام A&Mshipping الإداري',
-            timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-            actorRole: currentRole === 'courier' ? 'courier' : 'system',
-          },
-        ];
-
-        // Adjust wallet if delivered or partial delivery
-        if ((newStatus === 'delivered' || newStatus === 'partial_delivery') && (s.status !== 'delivered' && s.status !== 'partial_delivery')) {
-          setWallet((w) => ({
-            ...w,
-            availableBalance: w.availableBalance + (effectiveExtra?.financials?.netPayout || s.financials.netPayout),
-            pendingCod: Math.max(0, w.pendingCod - s.financials.codAmount),
-          }));
-        }
-
-        return {
-          ...s,
+        effectiveExtra = {
           ...effectiveExtra,
-          status: newStatus,
-          updatedAt: new Date().toISOString(),
-          timeline: updatedTimeline,
+          financials: {
+            ...currentFinancials,
+            codAmount: isShippingPaid === true ? currentFinancials.shippingFee : (isShippingPaid === false ? 0 : (effectiveExtra.financials?.codAmount ?? currentFinancials.codAmount)),
+            netPayout: calculatedNetPayout,
+          },
         };
-      });
+      }
 
-      return nextShipments;
+      const updatedTimeline = [
+        ...s.timeline,
+        {
+          id: `tl-${Date.now()}`,
+          status: newStatus,
+          title:
+            newStatus === 'created'
+              ? 'تم تأكيد واعتماد الشحنة'
+              : newStatus === 'pending_approval'
+              ? 'بانتظار موافقة الأدمن'
+              : newStatus === 'delivered'
+              ? 'تم التسليم بنجاح وتحصيل المبلغ'
+              : newStatus === 'partial_delivery'
+              ? 'استلام جزئي من العميل وتحصيل المبلغ'
+              : newStatus === 'refused'
+              ? 'رفض الاستلام من العميل'
+              : newStatus === 'returned'
+              ? 'مرتجع للتاجر (مستحقات التاجر 0 ج.م)'
+              : newStatus === 'out_for_delivery'
+              ? 'خرجت للتسليم مع المندوب'
+              : newStatus === 'failed_attempt'
+              ? 'محاولة تسليم غير ناجحة'
+              : newStatus === 'in_hub'
+              ? 'وصلت المستودع الرئيسي'
+              : 'تحديث حالة الشحنة',
+          description: note || 'تم التحديث بواسطة نظام A&Mshipping الإداري',
+          timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+          actorRole: currentRole === 'courier' ? 'courier' : 'system',
+        },
+      ];
+
+      // Adjust wallet if delivered or partial delivery
+      if ((newStatus === 'delivered' || newStatus === 'partial_delivery') && (s.status !== 'delivered' && s.status !== 'partial_delivery')) {
+        updatedWallet = {
+          ...updatedWallet,
+          availableBalance: updatedWallet.availableBalance + (effectiveExtra?.financials?.netPayout || s.financials.netPayout),
+          pendingCod: Math.max(0, updatedWallet.pendingCod - s.financials.codAmount),
+        };
+      }
+
+      return {
+        ...s,
+        ...effectiveExtra,
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+        timeline: updatedTimeline,
+      };
     });
 
-    // Broadcast immediately so Admin and other devices get this status update right away
-    setTimeout(() => {
-      broadcastDataChange({ shipments: nextShipments });
-    }, 20);
+    setShipments(nextShipments);
+    if (updatedWallet !== wallet) {
+      setWallet(updatedWallet);
+    }
+
+    // Broadcast IMMEDIATELY to Admin and all connected instances
+    broadcastDataChange({ shipments: nextShipments, wallet: updatedWallet });
 
     // Also update current active detail modal if open
     if (selectedDetailShipment && selectedDetailShipment.id === shipmentId) {
@@ -729,40 +728,41 @@ export default function App() {
   const handleAssignCourier = (shipmentId: string, courier: CourierInfo) => {
     let targetShipmentObj: Shipment | undefined;
 
-    setShipments((prev) =>
-      prev.map((s) => {
-        if (s.id !== shipmentId) return s;
+    const nextShipments = shipments.map((s) => {
+      if (s.id !== shipmentId) return s;
 
-        const nowFormatted = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-        const updatedStatus: ShipmentStatus = s.status === 'created' || s.status === 'in_hub' ? 'out_for_delivery' : s.status;
+      const nowFormatted = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      const updatedStatus: ShipmentStatus = s.status === 'created' || s.status === 'in_hub' ? 'out_for_delivery' : s.status;
 
-        const updatedTimeline = [
-          ...s.timeline,
-          {
-            id: `tl-${Date.now()}`,
-            status: updatedStatus,
-            title: `تم تعيين المندوب ${courier.name}`,
-            description: `تم إسناد الشحنة رسمياً للمندوب ${courier.name} (${courier.phone}) للمتابعة والتسليم`,
-            timestamp: nowFormatted,
-            actorRole: 'hub' as const,
-          },
-        ];
-
-        const updatedShipment: Shipment = {
-          ...s,
-          assignedCourier: courier,
+      const updatedTimeline = [
+        ...s.timeline,
+        {
+          id: `tl-${Date.now()}`,
           status: updatedStatus,
-          updatedAt: new Date().toISOString(),
-          timeline: updatedTimeline,
-        };
+          title: `تم تعيين المندوب ${courier.name}`,
+          description: `تم إسناد الشحنة رسمياً للمندوب ${courier.name} (${courier.phone}) للمتابعة والتسليم`,
+          timestamp: nowFormatted,
+          actorRole: 'hub' as const,
+        },
+      ];
 
-        targetShipmentObj = updatedShipment;
-        return updatedShipment;
-      })
-    );
+      const updatedShipment: Shipment = {
+        ...s,
+        assignedCourier: courier,
+        status: updatedStatus,
+        updatedAt: new Date().toISOString(),
+        timeline: updatedTimeline,
+      };
+
+      targetShipmentObj = updatedShipment;
+      return updatedShipment;
+    });
+
+    setShipments(nextShipments);
 
     // Get the updated shipment info
     const shipmentData = targetShipmentObj || shipments.find((s) => s.id === shipmentId);
+    let nextNotifications = courierNotifications;
 
     if (shipmentData) {
       const nowTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
@@ -782,10 +782,12 @@ export default function App() {
         read: false,
       };
 
-      setCourierNotifications((prev) => [newNotification, ...prev]);
+      nextNotifications = [newNotification, ...courierNotifications];
+      setCourierNotifications(nextNotifications);
       setActiveCourierToast(newNotification);
     }
 
+    broadcastDataChange({ shipments: nextShipments, notifications: nextNotifications });
     showToast(`🚚 تم إسناد الشحنة ${shipmentId} للكابتن ${courier.name} وإرسال إشعار فوري له!`);
   };
 
@@ -794,37 +796,37 @@ export default function App() {
     const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
     let trackingNum = '';
 
-    setShipments((prev) =>
-      prev.map((s) => {
-        if (s.id !== shipmentId) return s;
-        trackingNum = s.trackingNumber;
+    const nextShipments = shipments.map((s) => {
+      if (s.id !== shipmentId) return s;
+      trackingNum = s.trackingNumber;
 
-        const updatedTimeline = [
-          ...s.timeline,
-          {
-            id: `tl-${Date.now()}`,
-            status: s.status,
-            title: '📞 تنبيه من المندوب: العميل لا يرد على الهاتف',
-            description: courierNote || 'قام المندوب بمحاولة الاتصال بالعميل ولم يقم بالرد. تم إرسال تنبيه للتاجر للتواصل معه.',
-            timestamp: timeStr,
-            actorRole: 'courier' as const,
-          },
-        ];
+      const updatedTimeline = [
+        ...s.timeline,
+        {
+          id: `tl-${Date.now()}`,
+          status: s.status,
+          title: '📞 تنبيه من المندوب: العميل لا يرد على الهاتف',
+          description: courierNote || 'قام المندوب بمحاولة الاتصال بالعميل ولم يقم بالرد. تم إرسال تنبيه للتاجر للتواصل معه.',
+          timestamp: timeStr,
+          actorRole: 'courier' as const,
+        },
+      ];
 
-        return {
-          ...s,
-          updatedAt: new Date().toISOString(),
-          timeline: updatedTimeline,
-          noResponseDetails: {
-            isNoResponse: true,
-            reportedAt: timeStr,
-            courierNote: courierNote || 'العميل لا يرد على اتصال المندوب',
-            merchantResponse: undefined,
-          },
-        };
-      })
-    );
+      return {
+        ...s,
+        updatedAt: new Date().toISOString(),
+        timeline: updatedTimeline,
+        noResponseDetails: {
+          isNoResponse: true,
+          reportedAt: timeStr,
+          courierNote: courierNote || 'العميل لا يرد على اتصال المندوب',
+          merchantResponse: undefined,
+        },
+      };
+    });
 
+    setShipments(nextShipments);
+    broadcastDataChange({ shipments: nextShipments });
     showToast(`📞 تم إرسال تنبيه للتاجر أن العميل لا يرد على البوليصة ${trackingNum || shipmentId}!`);
   };
 
@@ -839,48 +841,49 @@ export default function App() {
     let city = '';
     let cod = 0;
 
-    setShipments((prev) =>
-      prev.map((s) => {
-        if (s.id !== shipmentId) return s;
+    const nextShipments = shipments.map((s) => {
+      if (s.id !== shipmentId) return s;
 
-        targetTracking = s.trackingNumber;
-        courierToNotifyId = s.assignedCourier?.id || 'all';
-        courierToNotifyName = s.assignedCourier?.name || 'الكابتن';
-        recipientName = s.recipient.name;
-        gov = s.recipient.governorate;
-        city = s.recipient.city;
-        cod = s.financials.codAmount;
+      targetTracking = s.trackingNumber;
+      courierToNotifyId = s.assignedCourier?.id || 'all';
+      courierToNotifyName = s.assignedCourier?.name || 'الكابتن';
+      recipientName = s.recipient.name;
+      gov = s.recipient.governorate;
+      city = s.recipient.city;
+      cod = s.financials.codAmount;
 
-        const updatedTimeline = [
-          ...s.timeline,
-          {
-            id: `tl-${Date.now()}`,
-            status: s.status,
-            title: '💬 رد التاجر للمندوب',
-            description: `التاجر تواصل مع العميل وأفاد: "${merchantNote}"`,
-            timestamp: timeStr,
-            actorRole: 'merchant' as const,
+      const updatedTimeline = [
+        ...s.timeline,
+        {
+          id: `tl-${Date.now()}`,
+          status: s.status,
+          title: '💬 رد التاجر للمندوب',
+          description: `التاجر تواصل مع العميل وأفاد: "${merchantNote}"`,
+          timestamp: timeStr,
+          actorRole: 'merchant' as const,
+        },
+      ];
+
+      return {
+        ...s,
+        updatedAt: new Date().toISOString(),
+        timeline: updatedTimeline,
+        noResponseDetails: {
+          isNoResponse: true,
+          reportedAt: s.noResponseDetails?.reportedAt || timeStr,
+          courierNote: s.noResponseDetails?.courierNote,
+          merchantResponse: {
+            contacted: true,
+            responseNote: merchantNote,
+            respondedAt: timeStr,
           },
-        ];
+        },
+      };
+    });
 
-        return {
-          ...s,
-          updatedAt: new Date().toISOString(),
-          timeline: updatedTimeline,
-          noResponseDetails: {
-            isNoResponse: true,
-            reportedAt: s.noResponseDetails?.reportedAt || timeStr,
-            courierNote: s.noResponseDetails?.courierNote,
-            merchantResponse: {
-              contacted: true,
-              responseNote: merchantNote,
-              respondedAt: timeStr,
-            },
-          },
-        };
-      })
-    );
+    setShipments(nextShipments);
 
+    let nextNotifications = courierNotifications;
     // Send notification to Courier
     if (courierToNotifyId) {
       const newNotification: CourierNotification = {
@@ -898,10 +901,12 @@ export default function App() {
         read: false,
       };
 
-      setCourierNotifications((prev) => [newNotification, ...prev]);
+      nextNotifications = [newNotification, ...courierNotifications];
+      setCourierNotifications(nextNotifications);
       setActiveCourierToast(newNotification);
     }
 
+    broadcastDataChange({ shipments: nextShipments, notifications: nextNotifications });
     showToast(`💬 تم إرسال رد التاجر إلى المندوب بنجاح للشحنة ${targetTracking}!`);
   };
 
