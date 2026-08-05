@@ -226,16 +226,33 @@ export const LoginView: React.FC<LoginViewProps> = ({
                    (u.phone && sessionUser.phone && u.phone === sessionUser.phone)
           );
 
-          const isConfirmed = sessionUser.role === 'admin' || 
-            (sessionUser.isConfirmed !== false && (!matchingSystemUser || matchingSystemUser.isConfirmed !== false));
+          // Admin role is always confirmed.
+          // If matchingSystemUser exists in system, its confirmation status takes precedence.
+          // Otherwise, fall back to sessionUser.isConfirmed.
+          const isUserConfirmed = sessionUser.role === 'admin' || 
+            (matchingSystemUser ? matchingSystemUser.isConfirmed !== false : sessionUser.isConfirmed !== false);
 
-          if (!isConfirmed) {
+          if (!isUserConfirmed) {
             setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً قبل الدخول.');
             await supabase.auth.signOut();
             return;
           }
 
-          onLoginSuccess(sessionUser);
+          // Build final session user merged with matching system user data (role, confirmation status, name, etc.)
+          const finalSessionUser: UserSession = {
+            ...sessionUser,
+            ...(matchingSystemUser ? {
+              role: matchingSystemUser.role || sessionUser.role,
+              name: matchingSystemUser.name || sessionUser.name,
+              phone: matchingSystemUser.phone || sessionUser.phone,
+              storeName: matchingSystemUser.storeName || sessionUser.storeName,
+              courierVehicle: matchingSystemUser.courierVehicle || sessionUser.courierVehicle,
+              hubName: matchingSystemUser.hubName || sessionUser.hubName,
+            } : {}),
+            isConfirmed: true,
+          };
+
+          onLoginSuccess(finalSessionUser);
         }
       }
     } catch (err: any) {

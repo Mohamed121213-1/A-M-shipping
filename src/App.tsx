@@ -222,10 +222,18 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user && !currentUser) {
         const user = mapSupabaseUserToSession(session.user);
-        if (user.role === 'admin' || user.isConfirmed !== false) {
-          setCurrentUser(user);
-          setCurrentRole(user.role);
-          if (user.role === 'courier') {
+        const savedUsers = loadLocalState<UserSession[]>('bosta_users', []);
+        const matchingUser = (savedUsers.length > 0 ? savedUsers : INITIAL_USERS).find(
+          (u) => u.id === user.id ||
+                 (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()) ||
+                 (u.phone && user.phone && u.phone === user.phone)
+        );
+        const isUserConfirmed = user.role === 'admin' || (matchingUser ? matchingUser.isConfirmed !== false : user.isConfirmed !== false);
+        if (isUserConfirmed) {
+          const finalUser = { ...user, ...(matchingUser ? { role: matchingUser.role || user.role, name: matchingUser.name || user.name } : {}), isConfirmed: true };
+          setCurrentUser(finalUser);
+          setCurrentRole(finalUser.role);
+          if (finalUser.role === 'courier') {
             setActiveTab('courier_app');
           }
         }
@@ -235,10 +243,18 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         const user = mapSupabaseUserToSession(session.user);
-        if (user.role === 'admin' || user.isConfirmed !== false) {
-          setCurrentUser(user);
-          setCurrentRole(user.role);
-          if (user.role === 'courier') {
+        const savedUsers = loadLocalState<UserSession[]>('bosta_users', []);
+        const matchingUser = (savedUsers.length > 0 ? savedUsers : INITIAL_USERS).find(
+          (u) => u.id === user.id ||
+                 (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()) ||
+                 (u.phone && user.phone && u.phone === user.phone)
+        );
+        const isUserConfirmed = user.role === 'admin' || (matchingUser ? matchingUser.isConfirmed !== false : user.isConfirmed !== false);
+        if (isUserConfirmed) {
+          const finalUser = { ...user, ...(matchingUser ? { role: matchingUser.role || user.role, name: matchingUser.name || user.name } : {}), isConfirmed: true };
+          setCurrentUser(finalUser);
+          setCurrentRole(finalUser.role);
+          if (finalUser.role === 'courier') {
             setActiveTab('courier_app');
           }
         } else {
@@ -263,7 +279,8 @@ export default function App() {
                (u.phone && currentUser.phone && u.phone === currentUser.phone)
       );
 
-      if (currentUser.isConfirmed === false || (matchingUser && matchingUser.isConfirmed === false)) {
+      const isUnconfirmed = matchingUser ? matchingUser.isConfirmed === false : currentUser.isConfirmed === false;
+      if (isUnconfirmed) {
         setCurrentUser(null);
         localStorage.removeItem('bosta_current_user');
         if (isSupabaseConfigured) {
