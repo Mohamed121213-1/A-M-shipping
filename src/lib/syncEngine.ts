@@ -105,6 +105,12 @@ class SyncEngine {
   private handleIncomingUpdate(data: SyncedAppState) {
     if (this.isProcessingIncoming) return;
 
+    // Filter out old mock shipments if present in incoming state payload
+    if (data.shipments && Array.isArray(data.shipments)) {
+      const mockIds = new Set(['BST-804101', 'BST-804102', 'BST-804103', 'BST-804104', 'BST-804105', 'BST-804106']);
+      data.shipments = data.shipments.filter((s) => s && !mockIds.has(s.id) && !mockIds.has(s.trackingNumber));
+    }
+
     const incomingTime = data.timestamp || 0;
     // CRITICAL FIX: If incoming data timestamp is older than or equal to our latest local timestamp, IGNORE it.
     // This prevents old data from remote fetches/broadcasts from overwriting fresh local modifications on refresh.

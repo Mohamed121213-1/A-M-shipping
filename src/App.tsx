@@ -34,9 +34,11 @@ const loadLocalState = <T,>(key: string, defaultValue: T): T => {
 };
 
 export default function App() {
-  const [shipments, setShipments] = useState<Shipment[]>(() =>
-    loadLocalState<Shipment[]>('bosta_shipments', INITIAL_SHIPMENTS)
-  );
+  const [shipments, setShipments] = useState<Shipment[]>(() => {
+    const saved = loadLocalState<Shipment[]>('bosta_shipments', []);
+    const mockIds = new Set(['BST-804101', 'BST-804102', 'BST-804103', 'BST-804104', 'BST-804105', 'BST-804106']);
+    return saved.filter((s) => s && !mockIds.has(s.id) && !mockIds.has(s.trackingNumber));
+  });
 
   const [wallet, setWallet] = useState<MerchantWallet>(() =>
     loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET)
