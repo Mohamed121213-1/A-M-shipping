@@ -23,20 +23,25 @@ export const supabase = createClient(
 // Map Supabase User to App UserSession
 export function mapSupabaseUserToSession(user: any, fallbackRole: AppUserRole = 'merchant'): UserSession {
   const metadata = user.user_metadata || {};
-  const email = user.email || '';
-  const name = metadata.name || metadata.full_name || email.split('@')[0] || 'مستخدم Supabase';
-  const role: AppUserRole = metadata.role || fallbackRole;
+  const email = (user.email || '').toLowerCase();
+
+  // Admin emails list
+  const ADMIN_EMAILS = ['admin@am-shipping.eg', 'mohamedsalah565657@icloud.com'];
+  const isAdminEmail = ADMIN_EMAILS.includes(email);
+
+  const name = metadata.name || metadata.full_name || (isAdminEmail && email.includes('mohamedsalah') ? 'محمد صلاح (أدمن)' : email.split('@')[0]) || 'مستخدم Supabase';
+  const role: AppUserRole = isAdminEmail ? 'admin' : (metadata.role || fallbackRole);
 
   return {
     id: user.id,
     name,
-    email,
+    email: user.email || email,
     phone: metadata.phone || user.phone || '01000000000',
     role,
     avatarUrl: metadata.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=dc2626&color=ffffff`,
     storeName: metadata.storeName || (role === 'merchant' ? `متجر ${name}` : undefined),
     courierVehicle: metadata.courierVehicle || (role === 'courier' ? 'سيارة نقل' : undefined),
     hubName: metadata.hubName || (role === 'hub_manager' ? 'المستودع الرئيسي' : undefined),
-    isConfirmed: metadata.isConfirmed !== undefined ? Boolean(metadata.isConfirmed) : true,
+    isConfirmed: isAdminEmail ? true : (metadata.isConfirmed !== undefined ? Boolean(metadata.isConfirmed) : true),
   };
 }

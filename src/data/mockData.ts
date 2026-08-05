@@ -288,6 +288,16 @@ export const INITIAL_USERS: UserSession[] = [
     phone: '01000000000',
     role: 'admin',
     avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D9%84%D9%85%D8%AF%D9%8A%D8%B1+%D8%A7%D9%84%D8%B9%D8%A7%D9%85&background=dc2626&color=ffffff',
+    isConfirmed: true,
+  },
+  {
+    id: 'USR-ADMIN-2',
+    name: 'محمد صلاح (أدمن الرئيسية)',
+    email: 'mohamedsalah565657@icloud.com',
+    phone: '01000000001',
+    role: 'admin',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF+%D8%B5%D9%84%D8%A7%D8%AD&background=dc2626&color=ffffff',
+    isConfirmed: true,
   },
   {
     id: 'USR-MERCH-1',
