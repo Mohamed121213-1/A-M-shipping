@@ -10,13 +10,14 @@ import { WalletView } from './components/WalletView';
 import { ReturnsAccountingView } from './components/ReturnsAccountingView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { RateCalculatorView } from './components/RateCalculatorView';
+import { CompanyTreasuryView } from './components/CompanyTreasuryView';
 import { LoginView, createSessionUser } from './components/LoginView';
 import { AdminPanelView } from './components/AdminPanelView';
 import { supabase, isSupabaseConfigured, mapSupabaseUserToSession } from './lib/supabase';
 import { syncEngine } from './lib/syncEngine';
 
-import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate } from './types';
-import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES, INITIAL_USERS } from './data/mockData';
+import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate, CompanyTransaction } from './types';
+import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES, INITIAL_USERS, INITIAL_COMPANY_TRANSACTIONS } from './data/mockData';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
 
@@ -81,10 +82,40 @@ export default function App() {
     loadLocalState<string>('bosta_active_tab', 'login')
   );
 
+  // Company Treasury / Account State
+  const [companyTransactions, setCompanyTransactions] = useState<CompanyTransaction[]>(() => {
+    const saved = loadLocalState<CompanyTransaction[]>('bosta_company_txns', []);
+    return saved && saved.length > 0 ? saved : INITIAL_COMPANY_TRANSACTIONS;
+  });
+
   // Courier Notification System State
   const [courierNotifications, setCourierNotifications] = useState<CourierNotification[]>(() =>
     loadLocalState<CourierNotification[]>('bosta_courier_notifications', [])
   );
+
+  // Auto-sync state updates to localStorage and broadcast to all connected devices/accounts
+  useEffect(() => {
+    localStorage.setItem('bosta_company_txns', JSON.stringify(companyTransactions));
+  }, [companyTransactions]);
+
+  const handleAddCompanyTransaction = (txn: Omit<CompanyTransaction, 'id' | 'createdAt'>) => {
+    const newTxn: CompanyTransaction = {
+      ...txn,
+      id: `TXN-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    setCompanyTransactions((prev) => [newTxn, ...prev]);
+  };
+
+  const handleUpdateCompanyTransaction = (id: string, updatedFields: Partial<CompanyTransaction>) => {
+    setCompanyTransactions((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...updatedFields, updatedAt: new Date().toISOString() } : t))
+    );
+  };
+
+  const handleDeleteCompanyTransaction = (id: string) => {
+    setCompanyTransactions((prev) => prev.filter((t) => t.id !== id));
+  };
 
   // Auto-sync state updates to localStorage and broadcast to all connected devices/accounts
   useEffect(() => {
@@ -191,10 +222,12 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user && !currentUser) {
         const user = mapSupabaseUserToSession(session.user);
-        setCurrentUser(user);
-        setCurrentRole(user.role);
-        if (user.role === 'courier') {
-          setActiveTab('courier_app');
+        if (user.role === 'admin' || user.isConfirmed !== false) {
+          setCurrentUser(user);
+          setCurrentRole(user.role);
+          if (user.role === 'courier') {
+            setActiveTab('courier_app');
+          }
         }
       }
     });
@@ -202,10 +235,14 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         const user = mapSupabaseUserToSession(session.user);
-        setCurrentUser(user);
-        setCurrentRole(user.role);
-        if (user.role === 'courier') {
-          setActiveTab('courier_app');
+        if (user.role === 'admin' || user.isConfirmed !== false) {
+          setCurrentUser(user);
+          setCurrentRole(user.role);
+          if (user.role === 'courier') {
+            setActiveTab('courier_app');
+          }
+        } else {
+          setCurrentUser(null);
         }
       } else {
         setCurrentUser(null);
@@ -216,6 +253,25 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Monitor active session: if an account is marked as unconfirmed or pending approval, prevent active session
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin') {
+      const matchingUser = users.find(
+        (u) => u.id === currentUser.id ||
+               (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+               (u.phone && currentUser.phone && u.phone === currentUser.phone)
+      );
+
+      if (currentUser.isConfirmed === false || (matchingUser && matchingUser.isConfirmed === false)) {
+        setCurrentUser(null);
+        localStorage.removeItem('bosta_current_user');
+        if (isSupabaseConfigured) {
+          supabase.auth.signOut();
+        }
+      }
+    }
+  }, [users, currentUser]);
 
   // Data Isolation: Filter shipments based on logged in user's role and identity
   const userShipments = useMemo(() => {
@@ -512,6 +568,36 @@ export default function App() {
       nextShipments = prev.map((s) => {
         if (s.id !== shipmentId) return s;
 
+        let effectiveExtra = { ...extraUpdates };
+
+        // For returned or refused orders: Calculate merchant payout based on whether shipping was paid
+        if (newStatus === 'returned' || newStatus === 'refused') {
+          const currentFinancials = effectiveExtra.financials || s.financials;
+          const isShippingPaid = effectiveExtra.refusedDetails?.shippingFeePaid ?? s.refusedDetails?.shippingFeePaid;
+
+          let calculatedNetPayout = 0;
+          if (isShippingPaid === false) {
+            // لم يدفع شحن: خصم مصاريف الشحن من التاجر
+            calculatedNetPayout = -currentFinancials.shippingFee;
+          } else if (isShippingPaid === true) {
+            // دفع شحن ورجع: مستحقات التاجر تساوي 0
+            calculatedNetPayout = 0;
+          } else if (effectiveExtra.financials?.netPayout !== undefined) {
+            calculatedNetPayout = effectiveExtra.financials.netPayout;
+          } else {
+            calculatedNetPayout = 0;
+          }
+
+          effectiveExtra = {
+            ...effectiveExtra,
+            financials: {
+              ...currentFinancials,
+              codAmount: isShippingPaid === true ? currentFinancials.shippingFee : (isShippingPaid === false ? 0 : (effectiveExtra.financials?.codAmount ?? currentFinancials.codAmount)),
+              netPayout: calculatedNetPayout,
+            },
+          };
+        }
+
         const updatedTimeline = [
           ...s.timeline,
           {
@@ -528,6 +614,8 @@ export default function App() {
                 ? 'استلام جزئي من العميل وتحصيل المبلغ'
                 : newStatus === 'refused'
                 ? 'رفض الاستلام من العميل'
+                : newStatus === 'returned'
+                ? 'مرتجع للتاجر (مستحقات التاجر 0 ج.م)'
                 : newStatus === 'out_for_delivery'
                 ? 'خرجت للتسليم مع المندوب'
                 : newStatus === 'failed_attempt'
@@ -545,14 +633,14 @@ export default function App() {
         if ((newStatus === 'delivered' || newStatus === 'partial_delivery') && (s.status !== 'delivered' && s.status !== 'partial_delivery')) {
           setWallet((w) => ({
             ...w,
-            availableBalance: w.availableBalance + (extraUpdates?.financials?.netPayout || s.financials.netPayout),
+            availableBalance: w.availableBalance + (effectiveExtra?.financials?.netPayout || s.financials.netPayout),
             pendingCod: Math.max(0, w.pendingCod - s.financials.codAmount),
           }));
         }
 
         return {
           ...s,
-          ...extraUpdates,
+          ...effectiveExtra,
           status: newStatus,
           updatedAt: new Date().toISOString(),
           timeline: updatedTimeline,
@@ -569,10 +657,55 @@ export default function App() {
 
     // Also update current active detail modal if open
     if (selectedDetailShipment && selectedDetailShipment.id === shipmentId) {
-      setSelectedDetailShipment((prev) => (prev ? { ...prev, ...extraUpdates, status: newStatus } : null));
+      setSelectedDetailShipment((prev) => (prev ? { 
+        ...prev, 
+        ...extraUpdates, 
+        status: newStatus,
+        financials: (newStatus === 'returned' || newStatus === 'refused') 
+          ? { ...prev.financials, netPayout: 0 } 
+          : prev.financials 
+      } : null));
     }
 
-    showToast(`تم تحديث حالة الشحنة ${shipmentId} إلى ${newStatus}`);
+    showToast(`تم تحديث حالة الشحنة إلى ${newStatus === 'returned' ? 'مرتجع' : newStatus}`);
+  };
+
+  // Delete Single Shipment Handler
+  const handleDeleteShipment = (shipmentId: string) => {
+    let nextShipments: Shipment[] = [];
+    setShipments((prev) => {
+      nextShipments = prev.filter((s) => s.id !== shipmentId);
+      return nextShipments;
+    });
+
+    setTimeout(() => {
+      broadcastDataChange({ shipments: nextShipments });
+    }, 20);
+
+    if (selectedDetailShipment && selectedDetailShipment.id === shipmentId) {
+      setSelectedDetailShipment(null);
+    }
+
+    showToast('تم حذف الأوردر بنجاح');
+  };
+
+  // Delete Multiple Shipments Handler
+  const handleDeleteMultipleShipments = (shipmentIds: string[]) => {
+    let nextShipments: Shipment[] = [];
+    setShipments((prev) => {
+      nextShipments = prev.filter((s) => !shipmentIds.includes(s.id));
+      return nextShipments;
+    });
+
+    setTimeout(() => {
+      broadcastDataChange({ shipments: nextShipments });
+    }, 20);
+
+    if (selectedDetailShipment && shipmentIds.includes(selectedDetailShipment.id)) {
+      setSelectedDetailShipment(null);
+    }
+
+    showToast(`تم حذف ${shipmentIds.length} أوردر بنجاح`);
   };
 
   // Assign Courier Handler
@@ -1029,6 +1162,7 @@ export default function App() {
             onGuestTrack={handleGuestTrackFromLogin}
             currentRole={currentRole}
             systemUsers={users}
+            onRegisterPendingUser={handleAddUser}
           />
         ) : currentUser.role === 'courier' ? (
           <CourierAppView
@@ -1051,6 +1185,8 @@ export default function App() {
                 onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
                 onOpenCreateModal={() => setIsCreateModalOpen(true)}
                 onUpdateStatus={handleUpdateStatus}
+                onDeleteShipment={handleDeleteShipment}
+                onDeleteMultipleShipments={handleDeleteMultipleShipments}
                 onMerchantRespondNoResponse={handleMerchantRespondNoResponse}
                 onAssignCourier={handleAssignCourier}
                 onClearAllData={handleClearAllData}
@@ -1068,6 +1204,17 @@ export default function App() {
 
             {activeTab === 'returns' && (
               <ReturnsAccountingView shipments={userShipments} systemUsers={users} currentUser={currentUser} />
+            )}
+
+            {activeTab === 'company_treasury' && (
+              <CompanyTreasuryView
+                transactions={companyTransactions}
+                onAddTransaction={handleAddCompanyTransaction}
+                onUpdateTransaction={handleUpdateCompanyTransaction}
+                onDeleteTransaction={handleDeleteCompanyTransaction}
+                currentUser={currentUser}
+                couriers={couriers}
+              />
             )}
 
             {activeTab === 'analytics' && <AnalyticsView shipments={userShipments} />}
@@ -1096,6 +1243,8 @@ export default function App() {
                 onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
                 onOpenCreateModal={() => setIsCreateModalOpen(true)}
                 onUpdateStatus={handleUpdateStatus}
+                onDeleteShipment={handleDeleteShipment}
+                onDeleteMultipleShipments={handleDeleteMultipleShipments}
                 onMerchantRespondNoResponse={handleMerchantRespondNoResponse}
                 onAssignCourier={handleAssignCourier}
                 onClearAllData={handleClearAllData}
@@ -1159,6 +1308,17 @@ export default function App() {
               <ReturnsAccountingView shipments={shipments} systemUsers={users} currentUser={currentUser} />
             )}
 
+            {activeTab === 'company_treasury' && (
+              <CompanyTreasuryView
+                transactions={companyTransactions}
+                onAddTransaction={handleAddCompanyTransaction}
+                onUpdateTransaction={handleUpdateCompanyTransaction}
+                onDeleteTransaction={handleDeleteCompanyTransaction}
+                currentUser={currentUser}
+                couriers={couriers}
+              />
+            )}
+
             {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
 
             {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
@@ -1182,6 +1342,7 @@ export default function App() {
         shipment={selectedDetailShipment}
         onClose={() => setSelectedDetailShipment(null)}
         onUpdateStatus={handleUpdateStatus}
+        onDeleteShipment={handleDeleteShipment}
         onAssignCourier={handleAssignCourier}
         onOpenPrintModal={(s) => {
           setSelectedDetailShipment(null);

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Shipment, ShipmentStatus, CourierInfo } from '../types';
-import { X, CheckCircle2, Clock, MapPin, Truck, AlertTriangle, ShieldCheck, Sparkles, Printer, User, Phone, Package, DollarSign, ArrowRight, KeyRound, MessageSquare } from 'lucide-react';
+import { X, CheckCircle2, Clock, MapPin, Truck, AlertTriangle, ShieldCheck, Sparkles, Printer, User, Phone, Package, DollarSign, ArrowRight, KeyRound, MessageSquare, Trash2 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
 interface ShipmentDetailModalProps {
   shipment: Shipment | null;
   onClose: () => void;
-  onUpdateStatus: (shipmentId: string, newStatus: ShipmentStatus, note?: string) => void;
+  onUpdateStatus: (shipmentId: string, newStatus: ShipmentStatus, note?: string, extraUpdates?: Partial<Shipment>) => void;
+  onDeleteShipment?: (shipmentId: string) => void;
   onAssignCourier: (shipmentId: string, courier: CourierInfo) => void;
   onOpenPrintModal: (shipment: Shipment) => void;
   couriers?: CourierInfo[];
@@ -16,6 +17,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   shipment,
   onClose,
   onUpdateStatus,
+  onDeleteShipment,
   onAssignCourier,
   onOpenPrintModal,
   couriers = [],
@@ -25,6 +27,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   const [statusNote, setStatusNote] = useState('');
   const [selectedCourierId, setSelectedCourierId] = useState(shipment.assignedCourier?.id || '');
   const [selectedStatus, setSelectedStatus] = useState<ShipmentStatus>(shipment.status);
+  const [refusePaidOption, setRefusePaidOption] = useState<'paid' | 'unpaid'>('paid');
   const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
 
   // AI Risk Check state
@@ -33,7 +36,28 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
 
   const handleStatusChangeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateStatus(shipment.id, selectedStatus, statusNote);
+    let extraUpdates: Partial<Shipment> = {};
+    
+    if (selectedStatus === 'returned' || selectedStatus === 'refused') {
+      const isPaid = refusePaidOption === 'paid';
+      const amountCollected = isPaid ? shipment.financials.shippingFee : 0;
+      const netPayout = isPaid ? 0 : -shipment.financials.shippingFee;
+
+      extraUpdates = {
+        financials: {
+          ...shipment.financials,
+          codAmount: amountCollected,
+          netPayout,
+        },
+        refusedDetails: {
+          shippingFeePaid: isPaid,
+          amountCollected,
+          reason: statusNote || (isPaid ? 'دفع الشحن ورجع' : 'لم يدفع شحن'),
+        },
+      };
+    }
+
+    onUpdateStatus(shipment.id, selectedStatus, statusNote, extraUpdates);
     setStatusNote('');
   };
 
@@ -99,6 +123,20 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               <Printer className="w-4 h-4 text-red-400" />
               طباعة البوليصة
             </button>
+            {onDeleteShipment && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`هل أنت تأكد من حذف هذا الأوردر (${shipment.trackingNumber}) نهائياً؟`)) {
+                    onDeleteShipment(shipment.id);
+                    onClose();
+                  }
+                }}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4 text-white" />
+                حذف الأوردر
+              </button>
+            )}
             <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg">
               <X className="w-6 h-6" />
             </button>
@@ -330,27 +368,40 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                   <option value="out_for_delivery">خرجت للتسليم مع المندوب</option>
                   <option value="delivered">تم التسليم للعميل وتحصيل المبلغ</option>
                   <option value="partial_delivery">استلام جزئي من العميل</option>
-                  <option value="refused">رفض الاستلام من العميل</option>
-                  <option value="failed_attempt">محاولة تسليم فاشلة</option>
-                  <option value="returned">مرتجع للتاجر</option>
+                  <option value="returned">🔄 مرتجع للتاجر</option>
+                  <option value="refused">🚫 رفض الاستلام من العميل</option>
+                  <option value="failed_attempt">⚠️ محاولة تسليم فاشلة</option>
                   <option value="cancelled">ملغاة</option>
                 </select>
               </div>
 
-              <div>
-                <input
-                  type="text"
-                  placeholder="ملاحظات الحالة (مثال: تم الاتصال والعميل غير متاح)..."
-                  value={statusNote}
-                  onChange={(e) => setStatusNote(e.target.value)}
-                  className="w-full text-xs p-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
-                />
-              </div>
+              {(selectedStatus === 'returned' || selectedStatus === 'refused') ? (
+                <div>
+                  <select
+                    value={refusePaidOption}
+                    onChange={(e) => setRefusePaidOption(e.target.value as 'paid' | 'unpaid')}
+                    className="w-full text-xs p-2 bg-amber-950 border border-amber-700 rounded-lg text-amber-200 font-extrabold"
+                  >
+                    <option value="paid">دفع الشحن ورجع (مستحقات التاجر 0 ج.م)</option>
+                    <option value="unpaid">لم يدفع شحن (خصم {shipment.financials.shippingFee} ج.م شحن من التاجر)</option>
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <input
+                    type="text"
+                    placeholder="ملاحظات الحالة (مثال: تم الاتصال والعميل غير متاح)..."
+                    value={statusNote}
+                    onChange={(e) => setStatusNote(e.target.value)}
+                    className="w-full text-xs p-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+              )}
 
               <div>
                 <button
                   type="submit"
-                  className="w-full bg-red-600 hover:bg-red-700 text-white font-bold text-xs p-2 rounded-lg transition-colors"
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-bold text-xs p-2 rounded-lg transition-colors cursor-pointer"
                 >
                   حفظ التحديث
                 </button>

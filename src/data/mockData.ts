@@ -1,4 +1,4 @@
-import { GovernorateRate, HubInfo, CourierInfo, Shipment, MerchantWallet, UserSession } from '../types';
+import { GovernorateRate, HubInfo, CourierInfo, Shipment, MerchantWallet, UserSession, CompanyTransaction } from '../types';
 
 export const EGYPT_GOVERNORATES: GovernorateRate[] = [
   {
@@ -335,4 +335,57 @@ export const INITIAL_MERCHANT_WALLET: MerchantWallet = {
 };
 
 export const INITIAL_SHIPMENTS: Shipment[] = [];
+
+export const INITIAL_COMPANY_TRANSACTIONS: CompanyTransaction[] = [
+  {
+    id: 'TXN-1001',
+    type: 'income',
+    title: 'تحصيل مصاريف شحن - شحنات القاهرة والجيزة',
+    amount: 3850,
+    category: 'إيرادات شحن',
+    date: new Date().toISOString().split('T')[0],
+    paymentMethod: 'cash',
+    relatedCourier: 'كابتن / أحمد محمود',
+    notes: 'تحصيل كاش من المندوب عن شحنات اليوم المكتملة',
+    createdBy: 'المدير العام',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'TXN-1002',
+    type: 'expense',
+    title: 'وقود وبنزين دراجات نارية وسيارات الشحن',
+    amount: 650,
+    category: 'وقود ومحروقات',
+    date: new Date().toISOString().split('T')[0],
+    paymentMethod: 'cash',
+    relatedCourier: 'كابتن / أحمد محمود',
+    notes: 'تمويل وقود المندوبين للرحلات اليومية',
+    createdBy: 'المدير العام',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'TXN-1003',
+    type: 'income',
+    title: 'عمولة تحصيل خدمات كاش عند الاستلام (COD)',
+    amount: 1200,
+    category: 'رسوم وخدمات',
+    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
+    paymentMethod: 'instapay',
+    notes: 'رسوم خدمة التحصيل للكاش من التجار',
+    createdBy: 'المدير العام',
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+  },
+  {
+    id: 'TXN-1004',
+    type: 'expense',
+    title: 'شراء أكياس ومواد تغليف وبوالص للشركة',
+    amount: 1450,
+    category: 'مستلزمات وتغليف',
+    date: new Date(Date.now() - 172800000).toISOString().split('T')[0],
+    paymentMethod: 'bank_transfer',
+    notes: 'مستلزمات مخازن وطباعة',
+    createdBy: 'المدير العام',
+    createdAt: new Date(Date.now() - 172800000).toISOString(),
+  }
+];
 

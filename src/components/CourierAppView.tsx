@@ -222,10 +222,24 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     };
 
     const statusNote = refuseShippingFeePaid
-      ? `رفض الاستلام (دفع الشحن ورجع - تم تحصيل ${amountCollected} ج.م مصاريف شحن): ${refuseReason}`
-      : `رفض الاستلام (لم يدفع شحن - تحصيل 0 ج.م): ${refuseReason}`;
+      ? `مرتجع (دفع الشحن ورجع - تم تحصيل ${amountCollected} ج.م مصاريف شحن - مستحقات التاجر 0 ج.م): ${refuseReason}`
+      : `مرتجع (لم يدفع شحن - خصم مصاريف الشحن ${selectedShipment.financials.shippingFee} ج.م من التاجر): ${refuseReason}`;
 
-    onUpdateStatus(selectedShipment.id, 'refused', statusNote, { refusedDetails });
+    const calculatedNetPayout = refuseShippingFeePaid
+      ? 0
+      : -selectedShipment.financials.shippingFee; // خصم الشحن من التاجر
+
+    const extraUpdates: Partial<Shipment> = {
+      financials: {
+        ...selectedShipment.financials,
+        codAmount: amountCollected,
+        netPayout: calculatedNetPayout,
+      },
+      refusedDetails,
+    };
+
+    // تعيين حالة الأوردر إلى مرتجع (returned) كما طلب المستخدم
+    onUpdateStatus(selectedShipment.id, 'returned', statusNote, extraUpdates);
 
     setIsRefuseModalOpen(false);
     setSelectedShipment(null);

@@ -335,6 +335,20 @@ export const Header: React.FC<HeaderProps> = ({
 
               {(currentRole === 'merchant' || currentRole === 'admin') && (
                 <button
+                  onClick={() => handleNavClick('company_treasury')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    activeTab === 'company_treasury'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4 text-emerald-500" />
+                  خزينة الشركة (حساب الوارد والصادر)
+                </button>
+              )}
+
+              {(currentRole === 'merchant' || currentRole === 'admin') && (
+                <button
                   onClick={() => handleNavClick('analytics')}
                   className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
                     activeTab === 'analytics'

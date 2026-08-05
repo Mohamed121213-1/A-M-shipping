@@ -411,7 +411,15 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
   };
 
   const filteredUsers = users.filter(u => {
-    const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+    let matchesRole = false;
+    if (userRoleFilter === 'all') {
+      matchesRole = true;
+    } else if ((userRoleFilter as string) === 'pending') {
+      matchesRole = u.isConfirmed === false;
+    } else {
+      matchesRole = u.role === userRoleFilter;
+    }
+
     const matchesSearch = 
       u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
       u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -751,6 +759,19 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                 <Building2 className="w-3.5 h-3.5" />
                 المستودعات ({users.filter((u) => u.role === 'hub_manager').length})
               </button>
+              {users.some((u) => u.isConfirmed === false) && (
+                <button
+                  onClick={() => setUserRoleFilter('pending' as any)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                    (userRoleFilter as string) === 'pending'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300'
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                  بانتظار التفعيل ({users.filter((u) => u.isConfirmed === false).length})
+                </button>
+              )}
             </div>
           </div>
 

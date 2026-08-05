@@ -203,3 +203,21 @@ export interface CourierNotification {
   timestamp: string;
   read: boolean;
 }
+
+export type CompanyTransactionType = 'income' | 'expense';
+
+export interface CompanyTransaction {
+  id: string;
+  type: CompanyTransactionType; // 'income' (وارد / إيراد) | 'expense' (صادر / مصروف)
+  title: string;                 // البيان / الوصف
+  amount: number;                // المبلغ (ج.م)
+  category: string;              // التصنيف
+  date: string;                  // التاريخ (YYYY-MM-DD or ISO)
+  paymentMethod: 'cash' | 'bank_transfer' | 'vodafone_cash' | 'instapay' | 'check' | 'other';
+  relatedMerchant?: string;      // التاجر المرتبط (اختياري)
+  relatedCourier?: string;       // المندوب المرتبط (اختياري)
+  notes?: string;                // ملاحظات إضافية
+  createdBy?: string;            // اسم الموظف/الأدمن
+  createdAt: string;
+  updatedAt?: string;
+}

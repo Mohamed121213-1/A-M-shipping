@@ -29,6 +29,7 @@ interface LoginViewProps {
   onGuestTrack: (trackingNumber: string) => void;
   currentRole?: AppUserRole;
   systemUsers?: UserSession[];
+  onRegisterPendingUser?: (user: UserSession) => void;
 }
 
 export const createSessionUser = (identifier: string, role: AppUserRole, existingUsers?: UserSession[]): UserSession => {
@@ -61,7 +62,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
   onLoginSuccess,
   onGuestTrack,
   currentRole = 'merchant',
-  systemUsers = []
+  systemUsers = [],
+  onRegisterPendingUser
 }) => {
   const [selectedRoleTab, setSelectedRoleTab] = useState<AppUserRole>(
     currentRole === 'public_tracker' ? 'merchant' : currentRole
@@ -100,6 +102,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setFullNameInput('');
     setPhoneInput('');
     setStoreNameInput('');
+    if (role === 'admin') {
+      setIsSignUpMode(false);
+    }
   };
 
   // Main Authentication Form Handler (Supabase)
@@ -117,6 +122,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
     let finalEmail = emailInput.trim();
 
     if (isSignUpMode) {
+      if (selectedRoleTab === 'admin') {
+        setErrorMessage('غير مسموح بإنشاء حساب أدمن من هنا. يتم إنشاء حسابات الأدمن حصراً بواسطة الأدمن الحالي من داخل لوحة التحكم.');
+        return;
+      }
+
       const phone = phoneInput.trim();
       if (!phone) {
         setErrorMessage('يرجى إدخال رقم الهاتف (إجباري لإنشاء الحساب)');
@@ -172,14 +182,29 @@ export const LoginView: React.FC<LoginViewProps> = ({
           throw error;
         }
 
-        if (data.user) {
-          const sessionUser = {
-            ...mapSupabaseUserToSession(data.user, selectedRoleTab),
-            isConfirmed: false,
-          };
-          setSuccessMessage('تم إنشاء الحساب بنجاح في Supabase! الحساب بانتظار التأكيد المباشر والتفعيل من قبل الأدمن في لوحة التحكم.');
-          onLoginSuccess(sessionUser);
+        const pendingUser: UserSession = {
+          id: data.user?.id || `USR-${Date.now()}`,
+          name: fullNameInput.trim() || phoneInput.trim(),
+          email: finalEmail,
+          phone: phoneInput.trim(),
+          role: selectedRoleTab,
+          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullNameInput || phoneInput)}&background=dc2626&color=ffffff`,
+          storeName: selectedRoleTab === 'merchant' ? (storeNameInput.trim() || `متجر ${fullNameInput || phoneInput}`) : undefined,
+          courierVehicle: selectedRoleTab === 'courier' ? 'سيارة نقل / تروسيكل' : undefined,
+          hubName: selectedRoleTab === 'hub_manager' ? 'المستودع الرئيسي' : undefined,
+          isConfirmed: false,
+        };
+
+        if (onRegisterPendingUser) {
+          onRegisterPendingUser(pendingUser);
         }
+
+        // Immediately sign out so unconfirmed session is not kept active
+        await supabase.auth.signOut();
+
+        setSuccessMessage('تم تسجيل الحساب بنجاح! ⏳ الحساب حالياً بانتظار تفعيل وموافقة الأدمن. لن يمكنك تسجيل الدخول حتى يتم تأكيد وتفعيل حسابك من قِبل الأدمن من داخل لوحة التحكم.');
+        setIsSignUpMode(false);
+        setPasswordInput('');
       } else {
         // --- SUPABASE SIGN IN ---
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -193,6 +218,23 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         if (data.user) {
           const sessionUser = mapSupabaseUserToSession(data.user, selectedRoleTab);
+
+          // Check if systemUsers list has an explicit status for this user
+          const matchingSystemUser = systemUsers.find(
+            (u) => u.id === sessionUser.id || 
+                   (u.email && sessionUser.email && u.email.toLowerCase() === sessionUser.email.toLowerCase()) || 
+                   (u.phone && sessionUser.phone && u.phone === sessionUser.phone)
+          );
+
+          const isConfirmed = sessionUser.role === 'admin' || 
+            (sessionUser.isConfirmed !== false && (!matchingSystemUser || matchingSystemUser.isConfirmed !== false));
+
+          if (!isConfirmed) {
+            setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً قبل الدخول.');
+            await supabase.auth.signOut();
+            return;
+          }
+
           onLoginSuccess(sessionUser);
         }
       }
@@ -411,7 +453,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <div>
                   <h2 className="text-lg font-black text-slate-900">
                     {isSignUpMode 
-                      ? `إنشاء حساب جديد (${selectedRoleTab === 'admin' ? 'أدمن' : selectedRoleTab === 'merchant' ? 'تاجر' : selectedRoleTab === 'courier' ? 'مندوب' : 'مدير فرع'})`
+                      ? `إنشاء حساب جديد (${selectedRoleTab === 'merchant' ? 'تاجر' : selectedRoleTab === 'courier' ? 'مندوب' : 'مدير فرع'})`
                       : `تسجيل الدخول عبر Supabase (${selectedRoleTab === 'admin' ? 'أدمن' : selectedRoleTab === 'merchant' ? 'تاجر' : selectedRoleTab === 'courier' ? 'مندوب' : 'مدير فرع'})`
                     }
                   </h2>
@@ -422,29 +464,39 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </p>
                 </div>
 
-                {/* Mode Switcher Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSignUpMode(!isSignUpMode);
-                    setErrorMessage(null);
-                    setSuccessMessage(null);
-                  }}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shrink-0"
-                >
-                  {isSignUpMode ? (
-                    <>
-                      <User className="w-3.5 h-3.5 text-red-600" />
-                      <span>لديك حساب؟ تسجيل الدخول</span>
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="w-3.5 h-3.5 text-red-600" />
-                      <span>حساب جديد؟ إنشاء حساب</span>
-                    </>
-                  )}
-                </button>
+                {/* Mode Switcher Button - Only shown for non-admin roles */}
+                {selectedRoleTab !== 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSignUpMode(!isSignUpMode);
+                      setErrorMessage(null);
+                      setSuccessMessage(null);
+                    }}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  >
+                    {isSignUpMode ? (
+                      <>
+                        <User className="w-3.5 h-3.5 text-red-600" />
+                        <span>لديك حساب؟ تسجيل الدخول</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-3.5 h-3.5 text-red-600" />
+                        <span>حساب جديد؟ إنشاء حساب</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
+
+              {/* Admin Note Badge */}
+              {selectedRoleTab === 'admin' && (
+                <div className="bg-slate-100 border border-slate-200 text-slate-700 p-2.5 rounded-2xl text-[11px] font-bold flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>تنبيه: يتم إضافة وإدارة حسابات الأدمن حصراً من داخل لوحة تحكم الأدمن بواسطة أدمن رئيسي.</span>
+                </div>
+              )}
 
               {/* Status Notifications */}
               {errorMessage && (

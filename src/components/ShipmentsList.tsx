@@ -34,6 +34,8 @@ interface ShipmentsListProps {
   onOpenPrintModal: (shipment: Shipment) => void;
   onOpenCreateModal: () => void;
   onUpdateStatus: (shipmentId: string, newStatus: ShipmentStatus) => void;
+  onDeleteShipment?: (shipmentId: string) => void;
+  onDeleteMultipleShipments?: (shipmentIds: string[]) => void;
   onMerchantRespondNoResponse?: (shipmentId: string, merchantNote: string) => void;
   onAssignCourier?: (shipmentId: string, courier: CourierInfo) => void;
   onClearAllData?: () => void;
@@ -51,6 +53,8 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   onOpenPrintModal,
   onOpenCreateModal,
   onUpdateStatus,
+  onDeleteShipment,
+  onDeleteMultipleShipments,
   onMerchantRespondNoResponse,
   onAssignCourier,
   onClearAllData,
@@ -189,15 +193,15 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
       case 'picked_up':
         return <span className="bg-indigo-100 text-indigo-800 font-bold text-xs px-2.5 py-1 rounded-full border border-indigo-200">تم الاستلام</span>;
       case 'refused':
-        return s.refusedDetails?.shippingFeePaid ? (
-          <span className="bg-amber-100 text-amber-900 font-bold text-xs px-2.5 py-1 rounded-full border border-amber-300">دفع الشحن ورجع</span>
-        ) : (
-          <span className="bg-red-100 text-red-800 font-bold text-xs px-2.5 py-1 rounded-full border border-red-200">لم يدفع شحن</span>
-        );
+      case 'returned':
+        if (s.refusedDetails?.shippingFeePaid === true) {
+          return <span className="bg-amber-100 text-amber-900 font-extrabold text-xs px-2.5 py-1 rounded-full border border-amber-300">دفع الشحن ورجع (مرتجع)</span>;
+        } else if (s.refusedDetails?.shippingFeePaid === false || s.financials.netPayout < 0) {
+          return <span className="bg-rose-100 text-rose-900 font-extrabold text-xs px-2.5 py-1 rounded-full border border-rose-300">لم يدفع شحن (خصم الشحن من التاجر)</span>;
+        }
+        return <span className="bg-purple-100 text-purple-800 font-bold text-xs px-2.5 py-1 rounded-full border border-purple-200">مرتجع (مستحقات 0)</span>;
       case 'failed_attempt':
         return <span className="bg-amber-100 text-amber-900 font-bold text-xs px-2.5 py-1 rounded-full border border-amber-200">محاولة فاشلة</span>;
-      case 'returned':
-        return <span className="bg-purple-100 text-purple-800 font-bold text-xs px-2.5 py-1 rounded-full border border-purple-200">مرتجع</span>;
       case 'cancelled':
         return <span className="bg-slate-100 text-slate-600 font-bold text-xs px-2.5 py-1 rounded-full">ملغاة</span>;
       default:
@@ -483,6 +487,20 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                 >
                   <Printer className="w-3.5 h-3.5" /> طباعة البوالص
                 </button>
+                {onDeleteMultipleShipments && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`هل أنت تأكد من حذف ${selectedIds.length} أوردر محدد نهائياً؟`)) {
+                        onDeleteMultipleShipments(selectedIds);
+                        setSelectedIds([]);
+                      }
+                    }}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-black text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all shadow-2xs cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    حذف الأوردرات المحدد ({selectedIds.length})
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -627,8 +645,10 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                       <span className="font-extrabold text-red-600 block text-sm">
                         {s.financials.codAmount.toLocaleString()} ج.م
                       </span>
-                      <span className="text-[10px] text-slate-400 block">
-                        الصافي: {s.financials.netPayout.toLocaleString()} ج.م
+                      <span className={`text-[10px] font-extrabold block ${s.financials.netPayout < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                        {s.financials.netPayout < 0 
+                          ? `الصافي: خصم ${Math.abs(s.financials.netPayout).toLocaleString()} ج.م` 
+                          : `الصافي: ${s.financials.netPayout.toLocaleString()} ج.م`}
                       </span>
                     </td>
                     <td className="p-3">
@@ -716,10 +736,24 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                         <button
                           onClick={() => onOpenDetailModal(s)}
                           title="عرض التفاصيل والتاريخ"
-                          className="p-1.5 text-slate-600 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-600 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
+
+                        {onDeleteShipment && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`هل أنت تأكد من حذف الأوردر رقم (${s.trackingNumber}) نهائياً؟`)) {
+                                onDeleteShipment(s.id);
+                              }
+                            }}
+                            title="حذف الأوردر"
+                            className="p-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
