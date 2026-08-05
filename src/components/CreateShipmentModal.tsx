@@ -5,7 +5,7 @@ import { EGYPT_GOVERNORATES, BOSTA_HUBS } from '../data/mockData';
 import { 
   X, Sparkles, MapPin, Package, DollarSign, User, Phone, AlertCircle, CheckCircle, 
   Calculator, Building, ShieldCheck, FileSpreadsheet, Upload, Download, Trash2, Plus, 
-  Check, RefreshCw, FileText, Store
+  Check, RefreshCw, FileText, Store, Image as ImageIcon, Camera
 } from 'lucide-react';
 
 interface CreateShipmentModalProps {
@@ -95,10 +95,41 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
     }
   };
 
-  // AI Paste Text state
+  // AI Paste Text & Image OCR state
   const [aiRawText, setAiRawText] = useState('');
+  const [aiImagePreview, setAiImagePreview] = useState<string | null>(null);
+  const [aiImageBase64, setAiImageBase64] = useState<string | null>(null);
+  const [aiImageMimeType, setAiImageMimeType] = useState<string>('image/jpeg');
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [aiSuccessMessage, setAiSuccessMessage] = useState('');
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('يرجى اختيار صورة صحيحة (JPG, PNG, WEBP, إلخ)');
+      return;
+    }
+
+    setAiImageMimeType(file.type || 'image/jpeg');
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      setAiImagePreview(result);
+      setAiImageBase64(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setAiImagePreview(null);
+    setAiImageBase64(null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+  };
 
   // Single Form Fields
   const [recipientName, setRecipientName] = useState('');
@@ -144,9 +175,9 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   const calculatedCodFee = 0;
   const calculatedNetPayout = Math.max(0, codAmount - calculatedShippingFee);
 
-  // AI Address Parsing Handler
+  // AI Address & Image OCR Parsing Handler
   const handleAiParse = async () => {
-    if (!aiRawText.trim()) return;
+    if (!aiRawText.trim() && !aiImageBase64) return;
     setIsAiParsing(true);
     setAiSuccessMessage('');
 
@@ -154,10 +185,14 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       const res = await fetch('/api/parse-address', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText: aiRawText }),
+        body: JSON.stringify({
+          rawText: aiRawText,
+          imageBase64: aiImageBase64,
+          mimeType: aiImageMimeType,
+        }),
       });
 
-      if (!res.ok) throw new Error('فشل في الاتصال بخدمة التحليل الذكي');
+      if (!res.ok) throw new Error('فشل في الاتصال بخدمة التحليل الذكي وتفريغ البيانات');
       const data = await res.json();
 
       if (data.recipientName) setRecipientName(data.recipientName);
@@ -170,6 +205,10 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       if (data.apartmentNo) setApartmentNo(data.apartmentNo);
       if (data.deliveryNotes) setNotes(data.deliveryNotes);
 
+      if (data.description) setDescription(data.description);
+      if (typeof data.codAmount === 'number' && data.codAmount > 0) setCodAmount(data.codAmount);
+      if (typeof data.itemsCount === 'number' && data.itemsCount > 0) setItemsCount(data.itemsCount);
+
       // Match governorate
       if (data.governorate) {
         const matchedGov = governoratesList.find((g) =>
@@ -178,10 +217,14 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         if (matchedGov) setGovernorateCode(matchedGov.code);
       }
 
-      setAiSuccessMessage('✨ تم استخراج وتعبئة بيانات العنوان بنجاح بواسطة الذكاء الاصطناعي!');
+      setAiSuccessMessage(
+        aiImageBase64
+          ? '✨ تم تفريغ البيانات واستخراج العنوان بنجاح من الصورة بواسطة الذكاء الاصطناعي!'
+          : '✨ تم استخراج وتعبئة بيانات العنوان بنجاح بواسطة الذكاء الاصطناعي!'
+      );
     } catch (err: any) {
       console.error(err);
-      setAiSuccessMessage('تعذر التحليل الذكي التلقائي، يرجى ملء الحقول يدوياً');
+      setAiSuccessMessage('تعذر تفريغ البيانات تلقائياً، يرجى ملء الحقول يدوياً');
     } finally {
       setIsAiParsing(false);
     }
@@ -595,46 +638,94 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         {/* TAB 1: SINGLE SHIPMENT FORM */}
         {activeTab === 'single' && (
           <form onSubmit={handleSingleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1">
-            {/* AI Smart Address Parser Section */}
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-4 shadow-xs">
-              <div className="flex items-center justify-between mb-2">
-                <span className="flex items-center gap-1.5 font-bold text-indigo-900 text-xs sm:text-sm">
+            {/* AI Smart Address & Image OCR Parser Section */}
+            <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-indigo-200 rounded-xl p-4 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 font-extrabold text-indigo-950 text-xs sm:text-sm">
                   <Sparkles className="w-4 h-4 text-indigo-600 animate-bounce" />
-                  المحلل الذكي للعنوان (Gemini AI Address Extractor)
+                  المحلل الذكي وتفريغ البيانات من الصورة والنص (Gemini AI Vision & OCR)
                 </span>
-                <span className="text-[11px] text-indigo-600 font-medium">الصق رسالة العميل أو عنوان الواتساب</span>
+                <span className="text-[11px] text-indigo-700 font-bold bg-indigo-100/80 px-2 py-0.5 rounded-full">
+                  استخراج فوري للعنوان، الهاتف، والمبلغ
+                </span>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2">
-                <textarea
-                  value={aiRawText}
-                  onChange={(e) => setAiRawText(e.target.value)}
-                  rows={2}
-                  placeholder="مثال: أحمد سامي 01012345678 شارع التحرير عممارة 12 شقة 4 الدقي الجيزة (الاتصال قبل الاستلام)"
-                  className="w-full text-xs p-2.5 bg-white border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500/30 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleAiParse}
-                  disabled={isAiParsing || !aiRawText.trim()}
-                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 shrink-0"
-                >
-                  {isAiParsing ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      جاري التحليل...
-                    </>
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-start">
+                <div className="md:col-span-8 space-y-2">
+                  <textarea
+                    value={aiRawText}
+                    onChange={(e) => setAiRawText(e.target.value)}
+                    rows={2}
+                    placeholder="الصق نص الرسالة أو عنوان الواتساب... مثال: أحمد سامي 01012345678 شارع التحرير عمارة 12 شقة 4 الدقي الجيزة (مبلغ التحصيل 1400 ج.م)"
+                    className="w-full text-xs p-2.5 bg-white border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500/30 focus:outline-none"
+                  />
+                </div>
+
+                {/* Image Upload / Preview Controls */}
+                <div className="md:col-span-4 flex flex-col justify-between gap-2 h-full">
+                  <input
+                    type="file"
+                    ref={imageInputRef}
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+
+                  {aiImagePreview ? (
+                    <div className="relative group bg-white border border-indigo-200 rounded-lg p-1.5 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <img
+                          src={aiImagePreview}
+                          alt="صورة البوليصة"
+                          className="w-10 h-10 object-cover rounded-md border border-slate-200 shrink-0"
+                        />
+                        <div className="text-[11px] font-bold text-slate-700 truncate">
+                          صورة مرفقة للذكاء الاصطناعي
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveImage}
+                        className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                        title="إزالة الصورة"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      استخراج بالذكاء الاصطناعي
-                    </>
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="w-full bg-white hover:bg-indigo-50 text-indigo-700 border border-dashed border-indigo-300 font-bold text-xs p-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                    >
+                      <ImageIcon className="w-4 h-4 text-indigo-600" />
+                      تفريغ بيانات من صورة / بوليصة
+                    </button>
                   )}
-                </button>
+
+                  <button
+                    type="button"
+                    onClick={handleAiParse}
+                    disabled={isAiParsing || (!aiRawText.trim() && !aiImageBase64)}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold text-xs py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-xs"
+                  >
+                    {isAiParsing ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        جاري تفريغ البيانات...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        تفريغ بالذكاء الاصطناعي
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {aiSuccessMessage && (
-                <p className="text-xs text-indigo-700 font-semibold mt-2 flex items-center gap-1.5">
+                <p className="text-xs text-indigo-800 font-bold mt-1 flex items-center gap-1.5 bg-indigo-100/60 p-2 rounded-lg border border-indigo-200">
                   <CheckCircle className="w-4 h-4 text-indigo-600 shrink-0" />
                   {aiSuccessMessage}
                 </p>

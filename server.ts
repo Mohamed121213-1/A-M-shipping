@@ -34,46 +34,76 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", service: "Bosta Logistics API", timestamp: new Date().toISOString() });
 });
 
-// AI Smart Address Parser API
+// AI Smart Address & Image OCR Data Extractor API
 app.post("/api/parse-address", async (req, res) => {
   try {
-    const { rawText } = req.body;
-    if (!rawText || typeof rawText !== "string" || !rawText.trim()) {
-      return res.status(400).json({ error: "الرجاء توفير نص العنوان للتحليل" });
+    const { rawText, imageBase64, mimeType } = req.body;
+    if ((!rawText || typeof rawText !== "string" || !rawText.trim()) && !imageBase64) {
+      return res.status(400).json({ error: "الرجاء توفير نص أو صورة بوليصة/فاتورة للتحليل" });
     }
 
     const ai = getGenAIClient();
     if (!ai) {
       // Fallback simple parsing if no API key is available
+      const text = rawText || "";
       return res.json({
         recipientName: "عميل بوسطة",
-        phone: rawText.match(/01[0125]\d{8}/)?.[0] || "",
-        governorate: rawText.includes("القاهرة") ? "القاهرة" : rawText.includes("الجيزة") ? "الجيزة" : rawText.includes("الإسكندرية") ? "الإسكندرية" : "القاهرة",
+        phone: text.match(/01[0125]\d{8}/)?.[0] || "",
+        governorate: text.includes("القاهرة") ? "القاهرة" : text.includes("الجيزة") ? "الجيزة" : text.includes("الإسكندرية") ? "الإسكندرية" : "القاهرة",
         city: "مدينة نصر",
         district: "",
-        streetAddress: rawText,
+        streetAddress: text || "عنوان مفرغ من الصورة",
         buildingNo: "",
         apartmentNo: "",
         deliveryNotes: "تم التحليل اليدوي التلقائي",
+        description: "طرد ملابس واكسسوارات",
+        codAmount: 500,
+        itemsCount: 1,
       });
     }
 
-    const systemPrompt = `أنت مساعد خبير في تحليل العناوين وأرقام الهواتف لشحنات بوسطة في مصر.
-قم باستخراج البيانات التالية بطلب دقيق من النص المعطى:
+    const systemPrompt = `أنت مساعد خبير ومتخصص في تفريغ واستخراج بيانات بوليصات الشحن والفواتير ومحادثات الواتساب لشحنات بوسطة و A&M shipping في مصر.
+قم باستخراج وتفريغ البيانات التالية بدقة عالية سواء من النص أو من الصورة المرفقة:
 - recipientName: اسم المستلم الكامل.
 - phone: رقم الهاتف المصري الأساسي (يبدأ بـ 010 أو 011 أو 012 أو 015).
 - secondaryPhone: رقم هاتف إضافي إن وجد.
-- governorate: المحافظة المصرية (مثل: القاهرة، الجيزة، الإسكندرية، الدقهلية، الغربية، الشرقية، أسيوط، إلخ).
-- city: المدينة أو المركز (مثل: مدينة نصر، المعادي، الدقي، سموحة، طنطا، المنصورة، إلخ).
+- governorate: المحافظة المصرية (مثل: القاهرة، الجيزة، الإسكندرية، الدقهلية، الغربية، الشرقية، المنوفية، أسيوط، البحيرة، إلخ).
+- city: المدينة أو المركز (مثل: مدينة نصر، المعادي، التجمع، الدقي، 6 أكتوبر، سموحة، طنطا، المنصورة، إلخ).
 - district: الحي أو الشارع الرئيسي.
 - streetAddress: العنوان التفصيلي للشارع مع العلامات المميزة.
 - buildingNo: رقم المبنى أو العمارة إن وجد.
 - apartmentNo: رقم الشقة أو الدور إن وجد.
-- deliveryNotes: أية تعليمات خاصة للتسليم (مثل الاتصال قبل الوصول، معاينة الطرد، التسليم مساءً).`;
+- deliveryNotes: أية تعليمات خاصة للتسليم (مثل الاتصال قبل الوصول، معاينة الطرد، التسليم مساءً).
+- description: وصف الطرد أو المحتويات (مثل: فستان، ساعة، ملابس أطفال، إلكترونيات).
+- codAmount: مبلغ التحصيل المطلوب (الدفع عند الاستلام / COD) بالأرقام فقط إن وجد.
+- itemsCount: عدد القطع داخل الطرد (أرقام فقط).`;
+
+    let contentsPayload: any;
+    if (imageBase64) {
+      // Clean base64 string if it contains data prefix
+      const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+      contentsPayload = {
+        parts: [
+          {
+            inlineData: {
+              data: cleanBase64,
+              mimeType: mimeType || "image/jpeg",
+            },
+          },
+          {
+            text: rawText
+              ? `قم بتفريغ بيانات الشحنة والعنوان والمستلم ومبلغ التحصيل من هذه الصورة والنص المرفق: ${rawText}`
+              : "قم بتفريغ وتفريغ كافة بيانات بوليصة الشحن أو الرسالة الموضحة في الصورة بدقة.",
+          },
+        ],
+      };
+    } else {
+      contentsPayload = rawText;
+    }
 
     const response = await ai.models.generateContent({
       model: "gemini-3.6-flash",
-      contents: rawText,
+      contents: contentsPayload,
       config: {
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
@@ -90,6 +120,9 @@ app.post("/api/parse-address", async (req, res) => {
             buildingNo: { type: Type.STRING, description: "رقم المبنى" },
             apartmentNo: { type: Type.STRING, description: "رقم الشقة" },
             deliveryNotes: { type: Type.STRING, description: "ملاحظات التسليم" },
+            description: { type: Type.STRING, description: "وصف المحتويات والطرد" },
+            codAmount: { type: Type.NUMBER, description: "مبلغ التحصيل النقدي COD" },
+            itemsCount: { type: Type.NUMBER, description: "عدد القطع داخل الطرد" },
           },
           required: ["recipientName", "phone", "governorate", "streetAddress"],
         },
@@ -101,7 +134,7 @@ app.post("/api/parse-address", async (req, res) => {
   } catch (error: any) {
     console.error("Error parsing address with Gemini:", error);
     return res.status(500).json({
-      error: "فشل في تحليل العنوان بواسطة الذكاء الاصطناعي",
+      error: "فشل في تفريغ بيانات الصورة أو العنوان بواسطة الذكاء الاصطناعي",
       details: error.message,
     });
   }

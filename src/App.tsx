@@ -128,22 +128,22 @@ export default function App() {
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
     const unsubscribe = syncEngine.subscribe((incoming) => {
-      if (incoming.shipments && Array.isArray(incoming.shipments) && incoming.shipments.length > 0) {
+      if (incoming.shipments && Array.isArray(incoming.shipments)) {
         setShipments(incoming.shipments);
       }
       if (incoming.wallet) {
         setWallet(incoming.wallet);
       }
-      if (incoming.users && Array.isArray(incoming.users) && incoming.users.length > 0) {
+      if (incoming.users && Array.isArray(incoming.users)) {
         setUsers(incoming.users);
       }
-      if (incoming.couriers && Array.isArray(incoming.couriers) && incoming.couriers.length > 0) {
+      if (incoming.couriers && Array.isArray(incoming.couriers)) {
         setCouriers(incoming.couriers);
       }
-      if (incoming.hubs && Array.isArray(incoming.hubs) && incoming.hubs.length > 0) {
+      if (incoming.hubs && Array.isArray(incoming.hubs)) {
         setHubs(incoming.hubs);
       }
-      if (incoming.governorates && Array.isArray(incoming.governorates) && incoming.governorates.length > 0) {
+      if (incoming.governorates && Array.isArray(incoming.governorates)) {
         setGovernorates(incoming.governorates);
       }
       if (incoming.notifications && Array.isArray(incoming.notifications)) {

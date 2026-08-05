@@ -22,8 +22,21 @@ class SyncEngine {
   private isProcessingIncoming = false;
   private instanceId = `CLIENT-${Math.random().toString(36).substring(2, 9)}`;
   private latestStateCache: SyncedAppState | null = null;
+  private latestTimestamp: number = 0;
 
   constructor() {
+    // 0. Initialize latest timestamp from localStorage if available
+    if (typeof window !== 'undefined') {
+      try {
+        const savedTime = localStorage.getItem('bosta_last_updated');
+        if (savedTime) {
+          this.latestTimestamp = Number(savedTime) || 0;
+        }
+      } catch (e) {
+        console.warn('Error reading bosta_last_updated:', e);
+      }
+    }
+
     // 1. Initialize local BroadcastChannel for same-device multi-window / multi-tab syncing
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
@@ -72,7 +85,11 @@ class SyncEngine {
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', (e) => {
         if (e.key && e.key.startsWith('bosta_')) {
-          this.handleIncomingUpdate({ timestamp: Date.now() });
+          const storedTime = localStorage.getItem('bosta_last_updated');
+          const timeNum = storedTime ? Number(storedTime) : Date.now();
+          if (timeNum > this.latestTimestamp) {
+            this.latestTimestamp = timeNum;
+          }
         }
       });
     }
@@ -87,10 +104,29 @@ class SyncEngine {
 
   private handleIncomingUpdate(data: SyncedAppState) {
     if (this.isProcessingIncoming) return;
+
+    const incomingTime = data.timestamp || 0;
+    // CRITICAL FIX: If incoming data timestamp is older than or equal to our latest local timestamp, IGNORE it.
+    // This prevents old data from remote fetches/broadcasts from overwriting fresh local modifications on refresh.
+    if (incomingTime > 0 && incomingTime <= this.latestTimestamp) {
+      return;
+    }
+
     this.isProcessingIncoming = true;
-    if (data.shipments || data.users || data.couriers || data.wallet) {
+
+    if (incomingTime > this.latestTimestamp) {
+      this.latestTimestamp = incomingTime;
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('bosta_last_updated', String(incomingTime));
+        } catch (e) {}
+      }
+    }
+
+    if (data.shipments || data.users || data.couriers || data.wallet || data.hubs || data.governorates || data.notifications) {
       this.latestStateCache = { ...this.latestStateCache, ...data };
     }
+
     this.listeners.forEach((cb) => {
       try {
         cb(data);
@@ -98,6 +134,7 @@ class SyncEngine {
         console.error('Error in sync listener:', e);
       }
     });
+
     setTimeout(() => {
       this.isProcessingIncoming = false;
     }, 50);
@@ -127,7 +164,21 @@ class SyncEngine {
         .maybeSingle();
 
       if (!error && data?.state) {
-        this.handleIncomingUpdate(data.state);
+        const remoteTime = data.state.timestamp || 0;
+        // Only apply state from Supabase if it's strictly NEWER than our current local timestamp
+        if (remoteTime > this.latestTimestamp) {
+          this.handleIncomingUpdate(data.state);
+        } else if (this.latestTimestamp > remoteTime && this.latestStateCache) {
+          // Local state is NEWER than Supabase DB! Push local state to Supabase.
+          await supabase
+            .from('bosta_app_state')
+            .upsert({ id: 'global_state', state: this.latestStateCache, updated_at: new Date().toISOString() });
+        }
+      } else if (!error && !data && this.latestStateCache) {
+        // First time initialization in Supabase DB
+        await supabase
+          .from('bosta_app_state')
+          .upsert({ id: 'global_state', state: this.latestStateCache, updated_at: new Date().toISOString() });
       }
     } catch (e) {
       // Table may not exist yet in Supabase project, ignore
@@ -137,10 +188,18 @@ class SyncEngine {
   public broadcastState(state: SyncedAppState) {
     if (this.isProcessingIncoming) return;
 
+    const now = Date.now();
+    this.latestTimestamp = now;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('bosta_last_updated', String(now));
+      } catch (e) {}
+    }
+
     const payload: SyncedAppState = {
       ...state,
       senderId: this.instanceId,
-      timestamp: Date.now(),
+      timestamp: now,
     };
 
     this.latestStateCache = payload;
