@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import { Shipment, MerchantWallet, UserSession, CourierInfo, HubInfo, GovernorateRate, CourierNotification } from '../types';
+import { Shipment, MerchantWallet, UserSession, CourierInfo, HubInfo, GovernorateRate, CourierNotification, CompanyTransaction } from '../types';
 
 export interface SyncedAppState {
   shipments?: Shipment[];
@@ -9,6 +9,7 @@ export interface SyncedAppState {
   hubs?: HubInfo[];
   governorates?: GovernorateRate[];
   notifications?: CourierNotification[];
+  companyTransactions?: CompanyTransaction[];
   timestamp?: number;
   senderId?: string;
 }
@@ -101,6 +102,7 @@ class SyncEngine {
             const hubsRaw = localStorage.getItem('bosta_hubs');
             const governoratesRaw = localStorage.getItem('bosta_governorates');
             const notificationsRaw = localStorage.getItem('bosta_courier_notifications');
+            const txnsRaw = localStorage.getItem('bosta_company_txns');
 
             const mockIds = new Set(['BST-804101', 'BST-804102', 'BST-804103', 'BST-804104', 'BST-804105', 'BST-804106']);
 
@@ -117,6 +119,7 @@ class SyncEngine {
               hubs: hubsRaw ? JSON.parse(hubsRaw) : undefined,
               governorates: governoratesRaw ? JSON.parse(governoratesRaw) : undefined,
               notifications: notificationsRaw ? JSON.parse(notificationsRaw) : undefined,
+              companyTransactions: txnsRaw ? JSON.parse(txnsRaw) : undefined,
               timestamp: timeNum,
               senderId: 'storage_sync',
             };
@@ -168,10 +171,11 @@ class SyncEngine {
         if (data.hubs) localStorage.setItem('bosta_hubs', JSON.stringify(data.hubs));
         if (data.governorates) localStorage.setItem('bosta_governorates', JSON.stringify(data.governorates));
         if (data.notifications) localStorage.setItem('bosta_courier_notifications', JSON.stringify(data.notifications));
+        if (data.companyTransactions) localStorage.setItem('bosta_company_txns', JSON.stringify(data.companyTransactions));
       } catch (e) {}
     }
 
-    if (data.shipments || data.users || data.couriers || data.wallet || data.hubs || data.governorates || data.notifications) {
+    if (data.shipments || data.users || data.couriers || data.wallet || data.hubs || data.governorates || data.notifications || data.companyTransactions) {
       this.latestStateCache = { ...this.latestStateCache, ...data };
     }
 

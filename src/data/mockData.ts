@@ -375,7 +375,7 @@ export const INITIAL_MERCHANT_WALLET: MerchantWallet = {
   merchantId: 'merch-admin-default',
   merchantName: 'متجر التاجر المسجل (إعدادات الأدمن)',
   availableBalance: 14250,
-  pendingCod: 6800,
+  pendingCod: 0,
   totalPaidOut: 98500,
   bankAccount: {
     bankName: 'البنك الأهلي المصري',

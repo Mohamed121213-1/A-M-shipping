@@ -150,12 +150,17 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     return matchId || matchPhone || matchName;
   });
 
-  const deliveredShipments = courierShipments.filter((s) => s.status === 'delivered');
+  const collectedCustodyShipments = courierShipments.filter(
+    (s) =>
+      s.status === 'delivered' ||
+      s.status === 'partial_delivery' ||
+      ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid)
+  );
 
   const totalCodCollectedToday = courierShipments.reduce((sum, s) => {
     if (s.status === 'delivered') return sum + s.financials.codAmount;
     if (s.status === 'partial_delivery') return sum + (s.partialDetails?.partialCodAmount ?? s.financials.codAmount);
-    if (s.status === 'refused' && s.refusedDetails?.shippingFeePaid) {
+    if ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid) {
       return sum + (s.refusedDetails.amountCollected || s.financials.shippingFee);
     }
     return sum;
@@ -166,7 +171,11 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   const commVal = activeCourier.commissionValue ?? 20;
 
   const courierCommissionEarned = courierShipments.reduce((sum, s) => {
-    if (s.status === 'delivered') {
+    if (
+      s.status === 'delivered' ||
+      s.status === 'partial_delivery' ||
+      ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid)
+    ) {
       if (commType === 'percentage') {
         return sum + (s.financials.shippingFee * commVal) / 100;
       }
@@ -450,7 +459,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
             >
               <span className="text-[10px] text-amber-300 block font-bold">العهدة والعمولات ←</span>
               <span className="text-xs font-extrabold text-white block">
-                {deliveredShipments.length} شحنات محصلة (+{courierCommissionEarned.toLocaleString()} ج.م عمولة)
+                {collectedCustodyShipments.length} شحنات محصلة (+{courierCommissionEarned.toLocaleString()} ج.م عمولة)
               </span>
             </button>
           </div>
@@ -761,40 +770,56 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
             <div className="flex items-center justify-between border-b border-slate-700 pb-2">
               <span className="text-xs font-extrabold text-white flex items-center gap-1.5">
                 <Receipt className="w-4 h-4 text-amber-400" />
-                سجل المبالغ المحصلة لكل شحنة
+                سجل المبالغ المحصلة بحساب العهدة (الكاش)
               </span>
-              <span className="text-[10px] text-slate-400 font-bold">{deliveredShipments.length} عملية</span>
+              <span className="text-[10px] text-slate-400 font-bold">{collectedCustodyShipments.length} عملية</span>
             </div>
 
-            {deliveredShipments.length === 0 ? (
+            {collectedCustodyShipments.length === 0 ? (
               <div className="text-center py-6 text-slate-400 text-xs">
-                لم تقم بتحصيل أي مبالغ حتى الآن اليوم.
+                لم تقم بتحصيل أي مبالغ أو مصاريف شحن في العهدة حتى الآن اليوم.
               </div>
             ) : (
               <div className="space-y-2">
-                {deliveredShipments.map((s) => (
-                  <div 
-                    key={s.id}
-                    className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/80 flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-black text-red-400">#{s.trackingNumber}</span>
-                        <span className="text-xs font-bold text-white">{s.recipient.name}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{s.recipient.governorate} - {s.recipient.city}</div>
-                    </div>
+                {collectedCustodyShipments.map((s) => {
+                  const collectedAmt =
+                    (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid
+                      ? (s.refusedDetails.amountCollected || s.financials.shippingFee)
+                      : s.status === 'partial_delivery'
+                      ? (s.partialDetails?.partialCodAmount ?? s.financials.codAmount)
+                      : s.financials.codAmount;
 
-                    <div className="text-left">
-                      <div className="text-xs font-black text-emerald-400">
-                        +{s.financials.codAmount.toLocaleString()} ج.م
+                  const typeLabel =
+                    (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid
+                      ? 'دفع الشحن ورجع'
+                      : s.status === 'partial_delivery'
+                      ? 'استلام جزئي'
+                      : 'تسليم كامل';
+
+                  return (
+                    <div 
+                      key={s.id}
+                      className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/80 flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-black text-red-400">#{s.trackingNumber}</span>
+                          <span className="text-xs font-bold text-white">{s.recipient.name}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{s.recipient.governorate} - {s.recipient.city}</div>
                       </div>
-                      <span className="text-[9px] font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/50">
-                        محتفظ بها بالعهدة
-                      </span>
+
+                      <div className="text-left">
+                        <div className="text-xs font-black text-emerald-400">
+                          +{collectedAmt.toLocaleString()} ج.م
+                        </div>
+                        <span className="text-[9px] font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/50">
+                          {typeLabel} • بالعهدة
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

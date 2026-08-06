@@ -50,12 +50,12 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
   // All collected shipments (for merchant ledger)
   const collectedShipments = shipments.filter(
-    (s) => s.status === 'delivered' || s.status === 'partial_delivery' || (s.status === 'refused' && s.refusedDetails?.shippingFeePaid)
+    (s) => s.status === 'delivered' || s.status === 'partial_delivery' || ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid)
   );
 
   // Unsettled collected shipments for courier custody
   const unsettledCollectedShipments = shipments.filter(
-    (s) => !s.isCourierSettled && (s.status === 'delivered' || s.status === 'partial_delivery' || (s.status === 'refused' && s.refusedDetails?.shippingFeePaid))
+    (s) => !s.isCourierSettled && (s.status === 'delivered' || s.status === 'partial_delivery' || ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid))
   );
 
   // Combine passed couriers + system Users with role 'courier' + any couriers assigned on shipments
@@ -113,7 +113,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
     });
 
     const totalCollected = courierCollected.reduce((sum, s) => {
-      if (s.status === 'refused' && s.refusedDetails?.shippingFeePaid) {
+      if ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid) {
         return sum + (s.refusedDetails.amountCollected || s.financials.shippingFee);
       }
       if (s.status === 'partial_delivery') {
@@ -311,7 +311,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                       <td className="p-3 font-mono font-black text-slate-900">{s.trackingNumber}</td>
                       <td className="p-3 font-bold text-slate-800">{s.recipient.name}</td>
                       <td className="p-3 font-extrabold text-slate-900">
-                        {s.status === 'refused' && s.refusedDetails?.shippingFeePaid
+                        {(s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid
                           ? `${s.refusedDetails.amountCollected || s.financials.shippingFee} ج.م (شحن)`
                           : `${s.financials.codAmount.toLocaleString()} ج.م`}
                       </td>
@@ -324,7 +324,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                           <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-amber-300">
                             استلام جزئي ({s.financials.codAmount} ج.م)
                           </span>
-                        ) : s.status === 'refused' ? (
+                        ) : (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid ? (
                           <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-amber-300">
                             دفع الشحن ورجع ({s.refusedDetails?.amountCollected || s.financials.shippingFee} ج.م)
                           </span>
@@ -446,7 +446,13 @@ export const WalletView: React.FC<WalletViewProps> = ({
                               <span className="font-mono font-extrabold text-red-600 block">#{ship.trackingNumber}</span>
                               <span className="text-[11px] font-bold text-slate-800">{ship.recipient.name}</span>
                             </div>
-                            <span className="font-black text-emerald-600">{ship.financials.codAmount} ج.م</span>
+                            <span className="font-black text-emerald-600">
+                              {(ship.status === 'refused' || ship.status === 'returned') && ship.refusedDetails?.shippingFeePaid
+                                ? `${ship.refusedDetails.amountCollected || ship.financials.shippingFee} ج.م (شحن)`
+                                : ship.status === 'partial_delivery'
+                                ? `${ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount} ج.م (جزئي)`
+                                : `${ship.financials.codAmount} ج.م`}
+                            </span>
                           </div>
                         ))}
                       </div>

@@ -281,7 +281,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                       {shipment.refusedDetails.shippingFeePaid ? 'دفع الشحن ورجع' : 'لم يدفع شحن'}
                     </span>
                   </p>
-                  <p>المبلغ المحصل من العميل: <span className="font-bold">{shipment.refusedDetails.amountCollected} ج.م</span></p>
+                  <p>المبلغ المحصل من العميل (بحساب عهدة المندوب): <span className="font-bold">{shipment.refusedDetails.amountCollected} ج.م</span></p>
                   {shipment.refusedDetails.reason && <p className="text-[11px] opacity-80">السبب: {shipment.refusedDetails.reason}</p>}
                 </div>
               )}

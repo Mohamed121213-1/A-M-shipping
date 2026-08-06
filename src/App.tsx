@@ -41,9 +41,13 @@ export default function App() {
     return saved.filter((s) => s && !mockIds.has(s.id) && !mockIds.has(s.trackingNumber));
   });
 
-  const [wallet, setWallet] = useState<MerchantWallet>(() =>
-    loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET)
-  );
+  const [wallet, setWallet] = useState<MerchantWallet>(() => {
+    const saved = loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET);
+    return {
+      ...saved,
+      pendingCod: saved.pendingCod === 6800 ? 0 : (saved.pendingCod ?? 0),
+    };
+  });
 
   // Dynamic system entities customizable by Admin
   const [users, setUsers] = useState<UserSession[]>(() => {
@@ -259,6 +263,9 @@ export default function App() {
       if (incoming.notifications && Array.isArray(incoming.notifications)) {
         setCourierNotifications(incoming.notifications);
       }
+      if (incoming.companyTransactions && Array.isArray(incoming.companyTransactions)) {
+        setCompanyTransactions(incoming.companyTransactions);
+      }
     });
 
     return () => {
@@ -275,6 +282,7 @@ export default function App() {
     hubs: HubInfo[];
     governorates: GovernorateRate[];
     notifications: CourierNotification[];
+    companyTransactions: CompanyTransaction[];
   }>) => {
     syncEngine.broadcastState({
       shipments: overrideState?.shipments || shipments,
@@ -284,6 +292,7 @@ export default function App() {
       hubs: overrideState?.hubs || hubs,
       governorates: overrideState?.governorates || governorates,
       notifications: overrideState?.notifications || courierNotifications,
+      companyTransactions: overrideState?.companyTransactions || companyTransactions,
     });
   };
 
@@ -1058,7 +1067,7 @@ export default function App() {
           collectedForThisShipment = s.financials.codAmount;
         } else if (s.status === 'partial_delivery') {
           collectedForThisShipment = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
-        } else if (s.status === 'refused' && s.refusedDetails?.shippingFeePaid) {
+        } else if ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid) {
           collectedForThisShipment = s.refusedDetails.amountCollected || s.financials.shippingFee;
         }
 
@@ -1091,6 +1100,46 @@ export default function App() {
 
     setShipments(nextShipments);
 
+    let updatedWallet = wallet;
+    let nextCompanyTxns = companyTransactions;
+
+    if (totalCollected > 0) {
+      updatedWallet = {
+        ...wallet,
+        availableBalance: wallet.availableBalance + totalCollected,
+        pendingCod: Math.max(0, wallet.pendingCod - totalCollected),
+      };
+      setWallet(updatedWallet);
+      try {
+        localStorage.setItem('bosta_wallet', JSON.stringify(updatedWallet));
+      } catch (e) {
+        console.error(e);
+      }
+
+      // Automatically add income transaction to Company Treasury for incoming custody
+      const courierCustodyTxn: CompanyTransaction = {
+        id: `TXN-IN-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        type: 'income',
+        title: `توريد عهدة كاش من المندوب (${courierName})`,
+        amount: totalCollected,
+        category: 'تحصيل كاش COD',
+        date: new Date().toISOString().split('T')[0],
+        paymentMethod: 'cash',
+        relatedCourier: courierName,
+        createdBy: currentUser?.name || 'النظام',
+        notes: `استلام وتوريد عهدة شحنات كاش محصلة من المندوب إلى خزينة الشركة الرئيسيّة`,
+        createdAt: new Date().toISOString(),
+      };
+
+      nextCompanyTxns = [courierCustodyTxn, ...companyTransactions];
+      setCompanyTransactions(nextCompanyTxns);
+      try {
+        localStorage.setItem('bosta_company_txns', JSON.stringify(nextCompanyTxns));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     // Reset courier's codCollectedToday counter in couriers state
     setCouriers((prev) =>
       prev.map((c) => {
@@ -1104,18 +1153,61 @@ export default function App() {
       })
     );
 
-    broadcastDataChange({ shipments: nextShipments });
-    showToast(`💰 تم استلام وتوريد المبلغ ${totalCollected.toLocaleString()} ج.م من ${courierName} وتصفير الشحنات المسجّل لها حالة، وتنسيق باقي الأوردرات النشطة!`);
+    broadcastDataChange({ shipments: nextShipments, wallet: updatedWallet, companyTransactions: nextCompanyTxns });
+    showToast(`💰 تم استلام وتوريد المبلغ ${totalCollected.toLocaleString()} ج.م من ${courierName} وتسجيل المعاملة بخزينة الشركة وتصفير الحساب!`);
   };
 
   // Payout Request Handler
   const handleRequestPayout = (amount: number, method: string) => {
-    setWallet((prev) => ({
-      ...prev,
-      availableBalance: Math.max(0, prev.availableBalance - amount),
-      totalPaidOut: prev.totalPaidOut + amount,
-    }));
-    showToast(`تم تحويل مبلغ ${amount.toLocaleString()} ج.م بنجاح عبر ${method}`);
+    if (amount <= 0) return;
+
+    let updatedWallet: MerchantWallet = {
+      ...wallet,
+      availableBalance: Math.max(0, wallet.availableBalance - amount),
+      totalPaidOut: wallet.totalPaidOut + amount,
+      lastPayoutDate: new Date().toISOString().split('T')[0],
+    };
+
+    setWallet(updatedWallet);
+    try {
+      localStorage.setItem('bosta_wallet', JSON.stringify(updatedWallet));
+    } catch (e) {
+      console.error(e);
+    }
+
+    const mappedPaymentMethod =
+      method === 'instapay'
+        ? 'instapay'
+        : method === 'vodafone'
+        ? 'vodafone_cash'
+        : method === 'bank'
+        ? 'bank_transfer'
+        : 'cash';
+
+    const payoutTxn: CompanyTransaction = {
+      id: `TXN-OUT-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      type: 'expense',
+      title: `تسليم مستحقات وحسابات التاجر (${updatedWallet.merchantName || 'التاجر'})`,
+      amount: amount,
+      category: 'تسليم مستحقات تجار',
+      date: new Date().toISOString().split('T')[0],
+      paymentMethod: mappedPaymentMethod as any,
+      relatedMerchant: updatedWallet.merchantName || 'التاجر',
+      createdBy: currentUser?.name || 'النظام',
+      notes: `صرف وتسليم مستحقات التاجر المالية من خزينة الشركة عبر ${method.toUpperCase()}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    const nextCompanyTxns = [payoutTxn, ...companyTransactions];
+    setCompanyTransactions(nextCompanyTxns);
+    try {
+      localStorage.setItem('bosta_company_txns', JSON.stringify(nextCompanyTxns));
+    } catch (e) {
+      console.error(e);
+    }
+
+    broadcastDataChange({ wallet: updatedWallet, companyTransactions: nextCompanyTxns });
+    showToast(`💸 تم تحويل وتسليم مبلغ ${amount.toLocaleString()} ج.م للتاجر عبر ${method.toUpperCase()} وتسجيل الصادر بخزينة الشركة!`);
   };
 
   // Admin CRUD Handlers

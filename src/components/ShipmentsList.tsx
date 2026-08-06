@@ -24,6 +24,7 @@ import {
   Store,
   PhoneCall,
   PhoneOff,
+  Calendar,
   X
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
@@ -66,7 +67,9 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   systemUsers = [],
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('active_main');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'specific'>('all');
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [governorateFilter, setGovernorateFilter] = useState<string>('all');
   const [merchantFilter, setMerchantFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -114,23 +117,46 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
         (s.sender?.storeName && s.sender.storeName.toLowerCase().includes(searchLower)) ||
         (s.sender?.contactName && s.sender.contactName.toLowerCase().includes(searchLower));
 
-      // Status
-      const matchesStatus =
-        statusFilter === 'all'
-          ? true
-          : statusFilter === 'active'
-          ? ['created', 'pickup_requested', 'picked_up', 'in_hub', 'out_for_delivery'].includes(s.status)
-          : statusFilter === 'delivered'
-          ? s.status === 'delivered'
-          : statusFilter === 'partial_delivery'
-          ? s.status === 'partial_delivery'
-          : statusFilter === 'refused'
-          ? s.status === 'refused'
-          : statusFilter === 'failed'
-          ? s.status === 'failed_attempt'
-          : statusFilter === 'returned'
-          ? s.status === 'returned'
-          : s.status === statusFilter;
+      // Status Filter
+      let matchesStatus = true;
+      if (statusFilter === 'active_main') {
+        // Keep active, pending, delayed, no response, or failed attempt orders on Main View
+        // Hide finalized delivered, partial_delivery, refused, and returned orders from Main View
+        const isCompleted =
+          s.status === 'delivered' ||
+          s.status === 'partial_delivery' ||
+          s.status === 'refused' ||
+          s.status === 'returned';
+        matchesStatus = !isCompleted;
+      } else if (statusFilter === 'active') {
+        matchesStatus = ['created', 'pickup_requested', 'picked_up', 'in_hub', 'out_for_delivery', 'pending_approval'].includes(s.status);
+      } else if (statusFilter === 'delivered') {
+        matchesStatus = s.status === 'delivered' || s.status === 'partial_delivery';
+      } else if (statusFilter === 'paid_returns') {
+        matchesStatus = (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid === true;
+      } else if (statusFilter === 'unpaid_returns') {
+        matchesStatus = (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid === false;
+      } else if (statusFilter === 'refused') {
+        matchesStatus = s.status === 'refused' || s.status === 'returned';
+      } else if (statusFilter === 'failed') {
+        matchesStatus = s.status === 'failed_attempt';
+      } else if (statusFilter === 'all') {
+        matchesStatus = true;
+      } else {
+        matchesStatus = s.status === statusFilter;
+      }
+
+      // Date Filter & Sync
+      let matchesDate = true;
+      if (dateFilter === 'today' || dateFilter === 'specific') {
+        const targetDate = dateFilter === 'today' ? new Date().toISOString().split('T')[0] : selectedDate;
+        if (targetDate) {
+          const createdDate = s.createdAt ? s.createdAt.substring(0, 10) : '';
+          const updatedDate = s.updatedAt ? s.updatedAt.substring(0, 10) : '';
+          const timelineHasDate = s.timeline?.some((t) => t.timestamp && t.timestamp.includes(targetDate));
+          matchesDate = createdDate === targetDate || updatedDate === targetDate || Boolean(timelineHasDate);
+        }
+      }
 
       // Governorate
       const matchesGov =
@@ -140,16 +166,17 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
       const matchesMerchant =
         merchantFilter === 'all' ? true : s.sender?.storeName === merchantFilter;
 
-      return matchesSearch && matchesStatus && matchesGov && matchesMerchant;
+      return matchesSearch && matchesStatus && matchesDate && matchesGov && matchesMerchant;
     });
-  }, [shipments, searchTerm, statusFilter, governorateFilter, merchantFilter, currentRole]);
+  }, [shipments, searchTerm, statusFilter, dateFilter, selectedDate, governorateFilter, merchantFilter, currentRole]);
 
   // Key KPI Metrics
   const totalCount = shipments.length;
   const pendingCount = shipments.filter((s) => s.status === 'pending_approval').length;
-  const deliveredCount = shipments.filter((s) => s.status === 'delivered').length;
-  const partialCount = shipments.filter((s) => s.status === 'partial_delivery').length;
-  const refusedCount = shipments.filter((s) => s.status === 'refused').length;
+  const activeMainCount = shipments.filter((s) => !['delivered', 'partial_delivery', 'refused', 'returned'].includes(s.status)).length;
+  const deliveredCount = shipments.filter((s) => s.status === 'delivered' || s.status === 'partial_delivery').length;
+  const paidReturnsCount = shipments.filter((s) => (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid === true).length;
+  const unpaidReturnsCount = shipments.filter((s) => (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid === false).length;
   const activeCount = shipments.filter((s) =>
     ['created', 'pickup_requested', 'picked_up', 'in_hub', 'out_for_delivery'].includes(s.status)
   ).length;
@@ -293,22 +320,25 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-4">
         <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
           {/* Status Tabs */}
-          <div className="flex items-center gap-1 overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0 scrollbar-none">
+          <div className="flex items-center gap-1.5 overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0 scrollbar-none">
             <button
-              onClick={() => setStatusFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all ${
-                statusFilter === 'all'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
+              onClick={() => setStatusFilter('active_main')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                statusFilter === 'active_main'
+                  ? 'bg-red-600 text-white shadow-md ring-2 ring-red-600/30'
+                  : 'text-slate-700 bg-slate-100 hover:bg-slate-200'
               }`}
             >
-              جميع الشحنات ({totalCount})
+              <span>📌 الرئيسية (الأوردرات النشطة والمؤجلة)</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] ${statusFilter === 'active_main' ? 'bg-white text-red-700 font-extrabold' : 'bg-slate-200 text-slate-800'}`}>
+                {activeMainCount}
+              </span>
             </button>
 
             {currentRole === 'admin' && pendingCount > 0 && (
               <button
                 onClick={() => setStatusFilter('pending_approval')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all flex items-center gap-1 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
                   statusFilter === 'pending_approval'
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'text-amber-900 bg-amber-100 border border-amber-300 hover:bg-amber-200'
@@ -319,69 +349,58 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             )}
 
             <button
-              onClick={() => setStatusFilter('active')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all ${
-                statusFilter === 'active'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              قيد الشحن والتوزيع ({activeCount})
-            </button>
-
-            <button
               onClick={() => setStatusFilter('delivered')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
                 statusFilter === 'delivered'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              تم التسليم ({deliveredCount})
+              ✅ تم التسليم ({deliveredCount})
             </button>
 
             <button
-              onClick={() => setStatusFilter('partial_delivery')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all ${
-                statusFilter === 'partial_delivery'
+              onClick={() => setStatusFilter('paid_returns')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                statusFilter === 'paid_returns'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              استلام جزئي ({partialCount})
+              🚚 دفع الشحن ورجع ({paidReturnsCount})
             </button>
 
             <button
-              onClick={() => setStatusFilter('refused')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all ${
-                statusFilter === 'refused'
+              onClick={() => setStatusFilter('unpaid_returns')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                statusFilter === 'unpaid_returns'
                   ? 'bg-rose-600 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              رفض الاستلام ({refusedCount})
+              ❌ لم يدفع شحن ({unpaidReturnsCount})
             </button>
 
             <button
               onClick={() => setStatusFilter('failed')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
                 statusFilter === 'failed'
-                  ? 'bg-amber-600 text-white shadow-xs'
+                  ? 'bg-amber-700 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              محاولات فاشلة
+              📞 مؤجل / لا يرد
             </button>
 
             <button
-              onClick={() => setStatusFilter('returned')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all ${
-                statusFilter === 'returned'
-                  ? 'bg-purple-600 text-white shadow-xs'
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                statusFilter === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              مرتجعات
+              📂 أرشيف كافة التواريخ ({totalCount})
             </button>
           </div>
 
@@ -417,9 +436,9 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
           </div>
         </div>
 
-        {/* Search & Governorate Filters Row */}
+        {/* Search, Date Sync & Governorate Filters Row */}
         <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 border-t border-slate-100">
-          <div className="relative w-full sm:w-80">
+          <div className="relative w-full sm:w-72">
             <input
               type="text"
               placeholder="ابحث برقم البوليصة، المستلم، المدينة، المنطقة..."
@@ -430,12 +449,35 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
           </div>
 
+          {/* Date Sync / Filter Control */}
+          <div className="w-full sm:w-auto flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl p-1">
+            <Calendar className="w-4 h-4 text-red-600 shrink-0 mr-1" />
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as any)}
+              className="text-xs font-extrabold text-slate-800 bg-transparent focus:outline-none cursor-pointer p-1"
+            >
+              <option value="all">🗓️ مزامنة كافة التواريخ</option>
+              <option value="today">📅 تاريخ اليوم ({new Date().toISOString().split('T')[0]})</option>
+              <option value="specific">🔍 اختيار تاريخ محدد...</option>
+            </select>
+
+            {dateFilter === 'specific' && (
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="text-xs p-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-900 focus:outline-none"
+              />
+            )}
+          </div>
+
           <div className="w-full sm:w-auto flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400 shrink-0" />
             <select
               value={governorateFilter}
               onChange={(e) => setGovernorateFilter(e.target.value)}
-              className="w-full sm:w-48 text-xs p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:bg-white"
+              className="w-full sm:w-44 text-xs p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:bg-white"
             >
               <option value="all">جميع المحافظات</option>
               {EGYPT_GOVERNORATES.map((g) => (

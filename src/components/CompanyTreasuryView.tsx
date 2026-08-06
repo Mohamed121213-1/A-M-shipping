@@ -124,7 +124,7 @@ export const CompanyTreasuryView: React.FC<CompanyTreasuryViewProps> = ({
 
   // Categories list options
   const incomeCategories = ['إيرادات شحن', 'رسوم وخدمات', 'عمولات توصيل', 'تحصيل كاش COD', 'أرباح تسوية', 'إيرادات أخرى'];
-  const expenseCategories = ['وقود ومحروقات', 'مستلزمات وتغليف', 'رواتب ومستحقات', 'إيجار ومرافق', 'صيانة وتصليح', 'عمولات مناديب', 'مصروفات إدارية', 'مصروفات أخرى'];
+  const expenseCategories = ['تسليم مستحقات تجار', 'وقود ومحروقات', 'مستلزمات وتغليف', 'رواتب ومستحقات', 'إيجار ومرافق', 'صيانة وتصليح', 'عمولات مناديب', 'مصروفات إدارية', 'مصروفات أخرى'];
 
   // Categories list for Filter
   const allCategories = useMemo(() => {
