@@ -272,15 +272,23 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     e.preventDefault();
     if (!selectedShipment) return;
 
+    const totalItems = selectedShipment.packageDetails?.itemsCount || 1;
+    const totalOriginalCod = selectedShipment.financials?.codAmount || partialCodCollected;
+    const returnedItems = Math.max(0, totalItems - partialItemsAccepted);
+    const remainingCod = Math.max(0, totalOriginalCod - partialCodCollected);
+
     const extra: Partial<Shipment> = {
       financials: {
         ...selectedShipment.financials,
-        codAmount: partialCodCollected,
+        codAmount: partialCodCollected, // Collected partial COD goes to wallet/financials normally
         netPayout: Math.max(0, partialCodCollected - selectedShipment.financials.shippingFee),
       },
       partialDetails: {
         acceptedItemsCount: partialItemsAccepted,
+        returnedItemsCount: returnedItems,
         partialCodAmount: partialCodCollected,
+        remainingCodAmount: remainingCod,
+        originalCodAmount: totalOriginalCod,
         notes: partialNotes,
       },
       assignedCourier: selectedShipment.assignedCourier || activeCourier,
@@ -289,7 +297,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     onUpdateStatus(
       selectedShipment.id,
       'partial_delivery',
-      `استلام جزئي بواسطة المندوب ${activeCourier.name}: تم استلام ${partialItemsAccepted} قطعة بقيمة ${partialCodCollected} ج.م. (${partialNotes})`,
+      `استلام جزئي بواسطة المندوب ${activeCourier.name}: تسليم ${partialItemsAccepted} قطعة واصل (${partialCodCollected} ج.م) وارتجاع ${returnedItems} قطعة بقيمة (${remainingCod} ج.م). (${partialNotes})`,
       extra
     );
 

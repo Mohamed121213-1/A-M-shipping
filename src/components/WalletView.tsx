@@ -202,6 +202,57 @@ export const WalletView: React.FC<WalletViewProps> = ({
   const totalCouriersCashHeld = courierFinancials
     .reduce((sum, cf) => sum + cf.totalCollected, 0);
 
+  // Calculate total net payouts earned by merchant across all completed/refused shipments
+  const totalEarnedMerchantNetPayout = shipments.reduce((sum, s) => {
+    if (s.status === 'delivered') {
+      return sum + (s.financials.netPayout ?? (s.financials.codAmount - s.financials.shippingFee));
+    }
+    if (s.status === 'partial_delivery') {
+      const collected = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
+      return sum + (s.financials.netPayout ?? Math.max(0, collected - s.financials.shippingFee));
+    }
+    if ((s.status === 'refused' || s.status === 'returned') && (s.refusedDetails?.shippingFeePaid === false || s.financials.netPayout < 0)) {
+      return sum - s.financials.shippingFee;
+    }
+    return sum;
+  }, 0);
+
+  const expectedAvailableBalance = Math.max(0, totalEarnedMerchantNetPayout - wallet.totalPaidOut);
+
+  const handleSyncPendingCodWithCouriers = () => {
+    if (onUpdateWallet) {
+      onUpdateWallet({
+        ...wallet,
+        pendingCod: totalCouriersCashHeld,
+      });
+      setSettlementSuccessMsg(`تمت مزامنة مبالغ قيد التحصيل بنجاح لتصبح (${totalCouriersCashHeld.toLocaleString()} ج.م) بناءً على عهدة المناديب الفعلية الحالية.`);
+      setTimeout(() => setSettlementSuccessMsg(null), 5000);
+    }
+  };
+
+  const handleSyncAvailableBalance = () => {
+    if (onUpdateWallet) {
+      onUpdateWallet({
+        ...wallet,
+        availableBalance: expectedAvailableBalance,
+      });
+      setSettlementSuccessMsg(`تمت مزامنة الرصيد المتاح للسحب بنجاح ليصبح (${expectedAvailableBalance.toLocaleString()} ج.م) بناءً على صافي أرباح الشحنات المكتملة بعد خصم السحوبات.`);
+      setTimeout(() => setSettlementSuccessMsg(null), 5000);
+    }
+  };
+
+  const handleSyncAllWallet = () => {
+    if (onUpdateWallet) {
+      onUpdateWallet({
+        ...wallet,
+        pendingCod: totalCouriersCashHeld,
+        availableBalance: expectedAvailableBalance,
+      });
+      setSettlementSuccessMsg(`تمت المزامنة الشاملة للمحفظة بنجاح (العهدة: ${totalCouriersCashHeld.toLocaleString()} ج.م | الرصيد المتاح: ${expectedAvailableBalance.toLocaleString()} ج.م).`);
+      setTimeout(() => setSettlementSuccessMsg(null), 5000);
+    }
+  };
+
   const handlePayoutSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (payoutAmount <= 0 || payoutAmount > wallet.availableBalance) {
@@ -275,21 +326,31 @@ export const WalletView: React.FC<WalletViewProps> = ({
       {activeSubTab === 'merchant' ? (
         <>
           {/* Action Bar for Freedom of Control */}
-          <div className="flex items-center justify-between bg-amber-50 border border-amber-200 p-3 rounded-2xl">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-amber-50 border border-amber-200 p-3 rounded-2xl gap-3">
             <div className="flex items-center gap-2">
-              <Sliders className="w-5 h-5 text-amber-700" />
+              <Sliders className="w-5 h-5 text-amber-700 shrink-0" />
               <div>
-                <h4 className="text-xs font-black text-amber-950">التحكم الحر المباشر في المحفظة والأرصدة</h4>
-                <p className="text-[11px] font-bold text-amber-800">يمكنك تعديل مبالغ قيد التحصيل (Pending COD) وإجمالي التحويلات (Total Paid Out) ورصيدك الحسابي في أي وقت</p>
+                <h4 className="text-xs font-black text-amber-950">التحكم الحر والمزامنة المباشرة للمحفظة</h4>
+                <p className="text-[11px] font-bold text-amber-800">يمكنك تعديل مبالغ قيد التحصيل (Pending COD) والرصيد المتاح (Available Balance) يدويًا أو مزامنتها بضغطة زر واحدة</p>
               </div>
             </div>
-            <button
-              onClick={handleOpenEditModal}
-              className="px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-black rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0 cursor-pointer"
-            >
-              <Edit3 className="w-4 h-4 text-amber-400" />
-              <span>تعديل المبالغ والتحكم بها</span>
-            </button>
+            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+              <button
+                onClick={handleSyncAllWallet}
+                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                title="مزامنة شاملة للعهدة والرصيد المتاح من واقع الشحنات الفعلية"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>مزامنة المحفظة تلقائياً ⚡</span>
+              </button>
+              <button
+                onClick={handleOpenEditModal}
+                className="px-3 py-2 bg-slate-900 hover:bg-black text-white text-xs font-black rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                <span>تعديل يدوي</span>
+              </button>
+            </div>
           </div>
 
           {/* Wallet Summary Cards */}
@@ -302,14 +363,24 @@ export const WalletView: React.FC<WalletViewProps> = ({
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-emerald-100 uppercase tracking-wider block">الرصيد المتاح للسحب المباشر (Available Balance):</span>
                 {inlineEditingField !== 'availableBalance' && (
-                  <button
-                    onClick={() => handleStartInlineEdit('availableBalance', wallet.availableBalance)}
-                    className="px-2.5 py-1 bg-emerald-800/80 hover:bg-emerald-800 text-white text-xs font-black rounded-lg transition-all flex items-center gap-1 shrink-0 cursor-pointer"
-                    title="تعديل الرصيد المتاح"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>تعديل</span>
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={handleSyncAvailableBalance}
+                      className="px-2 py-1 bg-amber-400 hover:bg-amber-300 text-emerald-950 text-[11px] font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                      title="مزامنة الرصيد المتاح مع صافي أرباح الشحنات الفعلية المكتملة"
+                    >
+                      <RefreshCw className="w-3 h-3 text-emerald-950" />
+                      <span>زامن ({expectedAvailableBalance.toLocaleString()} ج.م)</span>
+                    </button>
+                    <button
+                      onClick={() => handleStartInlineEdit('availableBalance', wallet.availableBalance)}
+                      className="px-2.5 py-1 bg-emerald-800/80 hover:bg-emerald-800 text-white text-xs font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                      title="تعديل الرصيد المتاح"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>تعديل</span>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -344,9 +415,22 @@ export const WalletView: React.FC<WalletViewProps> = ({
               ) : (
                 <>
                   <p className="text-3xl font-black mt-2">{wallet.availableBalance.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
-                  <p className="text-xs text-emerald-100 mt-2 flex items-center gap-1">
-                    <ShieldCheck className="w-4 h-4" /> جاهز للتحويل الفوري لمقرك أو حسابك
-                  </p>
+                  {wallet.availableBalance !== expectedAvailableBalance ? (
+                    <div className="mt-2 text-[11px] font-black text-amber-950 bg-amber-300/90 border border-amber-400 p-2 rounded-xl flex items-center justify-between gap-2">
+                      <span>💡 صافي أرباح الشحنات المكتملة الآن: {expectedAvailableBalance.toLocaleString()} ج.م</span>
+                      <button
+                        onClick={handleSyncAvailableBalance}
+                        className="underline text-emerald-950 font-black hover:text-black cursor-pointer shrink-0"
+                      >
+                        مزامنة الآن ⚡
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-emerald-100 mt-2 flex items-center gap-1 font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300 inline shrink-0" />
+                      مطابقة 100% مع صافي أرباح الشحنات المكتملة ({expectedAvailableBalance.toLocaleString()} ج.م)
+                    </p>
+                  )}
                 </>
               )}
             </div>
@@ -358,11 +442,18 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 {inlineEditingField !== 'pendingCod' && (
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
+                      onClick={handleSyncPendingCodWithCouriers}
+                      className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold rounded-lg transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+                      title="مزامنة مبالغ قيد التحصيل مع إجمالي عهدة الكباتن الفعلية"
+                    >
+                      <RefreshCw className="w-3 h-3 text-white" />
+                      <span>زامن ({totalCouriersCashHeld.toLocaleString()} ج.م)</span>
+                    </button>
+                    <button
                       onClick={() => handleQuickZeroOut('pendingCod')}
                       className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-extrabold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
                       title="تصفير العهدة وتحديد قيمتها كـ 0 ج.م"
                     >
-                      <RefreshCw className="w-3 h-3 text-amber-700" />
                       <span>تصفير (0 ج.م)</span>
                     </button>
                     <button
@@ -415,7 +506,22 @@ export const WalletView: React.FC<WalletViewProps> = ({
               ) : (
                 <>
                   <p className="text-3xl font-black text-amber-600 mt-2">{wallet.pendingCod.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
-                  <p className="text-xs text-slate-500 mt-2">تُحتسب العهدة مع المندوبين وتتحول للرصيد وتتصفر فور استلام العهدة وتوريدها للشركة</p>
+                  {wallet.pendingCod !== totalCouriersCashHeld ? (
+                    <div className="mt-2 text-[11px] font-extrabold text-amber-800 bg-amber-50 border border-amber-200 p-2 rounded-xl flex items-center justify-between gap-2">
+                      <span>💡 عهدة المناديب الفعلية الآن: {totalCouriersCashHeld.toLocaleString()} ج.م</span>
+                      <button
+                        onClick={handleSyncPendingCodWithCouriers}
+                        className="underline text-amber-950 font-black hover:text-amber-900 cursor-pointer shrink-0"
+                      >
+                        مزامنة الآن ⚡
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1 font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline shrink-0" />
+                      مزامنة مطابقة 100% مع عهدة المناديب الحالية ({totalCouriersCashHeld.toLocaleString()} ج.م)
+                    </p>
+                  )}
                 </>
               )}
             </div>
@@ -608,10 +714,19 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
           {/* Summary Box */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-amber-600 to-orange-700 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden">
-              <span className="text-xs font-bold text-amber-100 block">إجمالي العُهد الكاش لدى المناديب الآن:</span>
-              <p className="text-3xl font-black mt-2">{totalCouriersCashHeld.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
-              <p className="text-xs text-amber-100 mt-2">مبالغ كاش محصلة من العملاء وفي طريقها للخزينة</p>
+            <div className="bg-gradient-to-br from-amber-600 to-orange-700 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-bold text-amber-100 block">إجمالي العُهد الكاش لدى المناديب الآن:</span>
+                <p className="text-3xl font-black mt-2">{totalCouriersCashHeld.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
+                <p className="text-xs text-amber-100 mt-2">مبالغ كاش محصلة من العملاء وفي طريقها للخزينة</p>
+              </div>
+              <button
+                onClick={handleSyncPendingCodWithCouriers}
+                className="mt-3 w-full py-2 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-white/30 shadow-xs"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>مزامنة العهدة مع المحفظة المباشرة ({totalCouriersCashHeld.toLocaleString()} ج.م)</span>
+              </button>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs">

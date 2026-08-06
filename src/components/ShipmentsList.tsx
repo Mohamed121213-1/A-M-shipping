@@ -206,35 +206,141 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
     switch (s.status) {
       case 'pending_approval':
         return (
-          <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-xs px-2.5 py-1 rounded-full flex items-center gap-1 w-fit animate-pulse">
-            <Clock className="w-3 h-3 text-amber-700" />
-            بانتظار موافقة الأدمن
-          </span>
+          <div className="space-y-1">
+            <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs animate-pulse">
+              <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span>⏳ بانتظار موافقة الأدمن</span>
+            </span>
+            <span className="block text-[10px] text-amber-800 font-bold">بانتظار الاعتماد للبدء</span>
+          </div>
         );
       case 'delivered':
-        return <span className="bg-emerald-100 text-emerald-800 font-bold text-xs px-2.5 py-1 rounded-full border border-emerald-200">تم التسليم</span>;
-      case 'partial_delivery':
-        return <span className="bg-amber-100 text-amber-900 font-bold text-xs px-2.5 py-1 rounded-full border border-amber-300">استلام جزئي</span>;
+        return (
+          <div className="space-y-1">
+            <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>✅ تم التسليم بنجاح</span>
+            </span>
+            <span className="block text-[10px] text-emerald-700 font-black">
+              تم تحصيل {s.financials.codAmount.toLocaleString()} ج.م
+            </span>
+          </div>
+        );
+      case 'partial_delivery': {
+        const totalItems = s.packageDetails?.itemsCount || 1;
+        const acceptedItems = s.partialDetails?.acceptedItemsCount || 0;
+        const returnedItems = s.partialDetails?.returnedItemsCount ?? Math.max(0, totalItems - acceptedItems);
+        const collectedCod = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
+        const totalOrigCod = s.partialDetails?.originalCodAmount ?? s.financials.codAmount;
+        const remainingCod = s.partialDetails?.remainingCodAmount ?? Math.max(0, totalOrigCod - collectedCod);
+        return (
+          <div className="space-y-1">
+            <span className="bg-amber-100 text-amber-950 border border-amber-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+              <RotateCcw className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span>🧩 استلام جزئي</span>
+            </span>
+            <div className="text-[10px] bg-amber-50 border border-amber-200 rounded-md p-1 font-bold text-amber-900 space-y-0.5">
+              <p>📦 تسليم {acceptedItems} قطعة ({collectedCod.toLocaleString()} ج.م)</p>
+              <p className="text-rose-700">↩️ ارتجاع {returnedItems} قطعة ({remainingCod.toLocaleString()} ج.م)</p>
+            </div>
+          </div>
+        );
+      }
       case 'out_for_delivery':
-        return <span className="bg-amber-100 text-amber-800 font-bold text-xs px-2.5 py-1 rounded-full border border-amber-200 flex items-center gap-1 w-fit"><Truck className="w-3 h-3 animate-pulse" /> مع المندوب</span>;
+        return (
+          <div className="space-y-1">
+            <span className="bg-teal-100 text-teal-900 border border-teal-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+              <Truck className="w-3.5 h-3.5 text-teal-700 shrink-0 animate-bounce" />
+              <span>🚚 مع المندوب (جاري التوصيل)</span>
+            </span>
+            {s.assignedCourier && (
+              <span className="block text-[10px] text-teal-800 font-bold truncate max-w-[150px]">
+                المندوب: {s.assignedCourier.name}
+              </span>
+            )}
+          </div>
+        );
       case 'in_hub':
-        return <span className="bg-blue-100 text-blue-800 font-bold text-xs px-2.5 py-1 rounded-full border border-blue-200">في المستودع</span>;
+        return (
+          <div className="space-y-1">
+            <span className="bg-blue-100 text-blue-900 border border-blue-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+              <Store className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+              <span>🏬 في المستودع الرئيسي</span>
+            </span>
+            <span className="block text-[10px] text-blue-800 font-bold">جاهزة للتخصيص للمندوب</span>
+          </div>
+        );
       case 'picked_up':
-        return <span className="bg-indigo-100 text-indigo-800 font-bold text-xs px-2.5 py-1 rounded-full border border-indigo-200">تم الاستلام</span>;
+        return (
+          <div className="space-y-1">
+            <span className="bg-indigo-100 text-indigo-900 border border-indigo-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+              <Package className="w-3.5 h-3.5 text-indigo-700 shrink-0" />
+              <span>📦 تم الاستلام من التاجر</span>
+            </span>
+            <span className="block text-[10px] text-indigo-800 font-bold">في الطريق للمستودع</span>
+          </div>
+        );
       case 'refused':
       case 'returned':
         if (s.refusedDetails?.shippingFeePaid === true) {
-          return <span className="bg-amber-100 text-amber-900 font-extrabold text-xs px-2.5 py-1 rounded-full border border-amber-300">دفع الشحن ورجع (مرتجع)</span>;
+          return (
+            <div className="space-y-1">
+              <span className="bg-amber-100 text-amber-950 border border-amber-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+                <RotateCcw className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                <span>🚚 دفع الشحن ورجع (مرتجع)</span>
+              </span>
+              <span className="block text-[10px] text-emerald-800 font-bold">
+                تم تحصيل الشحن ({s.refusedDetails.amountCollected || s.financials.shippingFee} ج.م)
+              </span>
+            </div>
+          );
         } else if (s.refusedDetails?.shippingFeePaid === false || s.financials.netPayout < 0) {
-          return <span className="bg-rose-100 text-rose-900 font-extrabold text-xs px-2.5 py-1 rounded-full border border-rose-300">لم يدفع شحن (خصم الشحن من التاجر)</span>;
+          return (
+            <div className="space-y-1">
+              <span className="bg-rose-100 text-rose-950 border border-rose-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-700 shrink-0" />
+                <span>❌ لم يدفع شحن (خصم من التاجر)</span>
+              </span>
+              <span className="block text-[10px] text-rose-800 font-bold">
+                خصم رسوم الشحن ({s.financials.shippingFee} ج.م)
+              </span>
+            </div>
+          );
         }
-        return <span className="bg-purple-100 text-purple-800 font-bold text-xs px-2.5 py-1 rounded-full border border-purple-200">مرتجع (مستحقات 0)</span>;
+        return (
+          <div className="space-y-1">
+            <span className="bg-purple-100 text-purple-900 border border-purple-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+              <RotateCcw className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+              <span>🔄 مرتجع كامل (مستحقات 0)</span>
+            </span>
+          </div>
+        );
       case 'failed_attempt':
-        return <span className="bg-amber-100 text-amber-900 font-bold text-xs px-2.5 py-1 rounded-full border border-amber-200">محاولة فاشلة</span>;
+        return (
+          <div className="space-y-1">
+            <span className="bg-orange-100 text-orange-950 border border-orange-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+              <PhoneOff className="w-3.5 h-3.5 text-orange-700 shrink-0" />
+              <span>⚠️ محاولة فاشلة / لا يرد</span>
+            </span>
+            <span className="block text-[10px] text-orange-900 font-bold">بانتظار إعادة التنسيق</span>
+          </div>
+        );
       case 'cancelled':
-        return <span className="bg-slate-100 text-slate-600 font-bold text-xs px-2.5 py-1 rounded-full">ملغاة</span>;
+        return (
+          <span className="bg-slate-100 text-slate-700 border border-slate-300 font-bold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 w-fit">
+            <X className="w-3.5 h-3.5 text-slate-500" />
+            <span>🚫 ملغاة</span>
+          </span>
+        );
       default:
-        return <span className="bg-slate-100 text-slate-800 font-bold text-xs px-2.5 py-1 rounded-full border border-slate-200">جديدة</span>;
+        return (
+          <div className="space-y-1">
+            <span className="bg-slate-100 text-slate-800 border border-slate-300 font-bold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit">
+              <Package className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+              <span>📝 جديدة (قيد المعالجة)</span>
+            </span>
+          </div>
+        );
     }
   };
 

@@ -63,7 +63,7 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
 
     // Calculate returns count per merchant
     shipments.forEach(s => {
-      const isReturn = s.status === 'returned' || s.status === 'refused' || s.status === 'failed_attempt';
+      const isReturn = s.status === 'returned' || s.status === 'refused' || s.status === 'failed_attempt' || s.status === 'partial_delivery';
       if (isReturn) {
         const storeName = s.sender?.storeName || s.sender?.contactName;
         if (storeName && map.has(storeName)) {
@@ -76,10 +76,10 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
     return Array.from(map.values());
   }, [shipments, systemUsers]);
 
-  // All returned shipments in the system
+  // All returned & partial delivery shipments in the system
   const allReturnShipments = useMemo(() => {
     return shipments.filter(s => 
-      s.status === 'returned' || s.status === 'refused' || s.status === 'failed_attempt'
+      s.status === 'returned' || s.status === 'refused' || s.status === 'failed_attempt' || s.status === 'partial_delivery'
     );
   }, [shipments]);
 
@@ -122,7 +122,26 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
   
   // Total Product Value of Returns (COD Amount without deducting shipping)
   const totalProductValue = useMemo(() => {
-    return merchantReturns.reduce((sum, s) => sum + s.financials.codAmount, 0);
+    return merchantReturns.reduce((sum, s) => {
+      if (s.status === 'partial_delivery') {
+        const collected = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
+        const total = s.partialDetails?.originalCodAmount ?? s.financials.codAmount;
+        return sum + (s.partialDetails?.remainingCodAmount ?? Math.max(0, total - collected));
+      }
+      return sum + s.financials.codAmount;
+    }, 0);
+  }, [merchantReturns]);
+
+  // Total Returned Items / Pieces Count
+  const totalReturnedPiecesCount = useMemo(() => {
+    return merchantReturns.reduce((sum, s) => {
+      if (s.status === 'partial_delivery') {
+        const totalItems = s.packageDetails?.itemsCount || 1;
+        const accepted = s.partialDetails?.acceptedItemsCount || 0;
+        return sum + (s.partialDetails?.returnedItemsCount ?? Math.max(0, totalItems - accepted));
+      }
+      return sum + (s.packageDetails?.itemsCount || 1);
+    }, 0);
   }, [merchantReturns]);
 
   // Total Shipping Fees Excluded / Zeroed
@@ -224,10 +243,10 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
 
       {/* Financial Metrics Summary (No Shipping Fees Included) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Returns Count */}
+        {/* Total Returns Count & Pieces */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs relative overflow-hidden">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">إجمالي شحنات المرتجعات</span>
+            <span className="text-xs font-bold text-slate-500">إجمالي شحنات وقطع المرتجعات</span>
             <div className="p-2 rounded-xl bg-red-50 text-red-600">
               <PackageX className="w-5 h-5" />
             </div>
@@ -235,8 +254,8 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
           <p className="text-2xl font-black text-slate-900 mt-2">
             {totalReturnsCount} <span className="text-xs font-extrabold text-slate-500">شحنة</span>
           </p>
-          <p className="text-[11px] text-slate-500 font-bold mt-1">
-            لـ {selectedMerchant === 'all' ? 'جميع التجار' : selectedMerchant}
+          <p className="text-xs text-amber-700 font-extrabold mt-1">
+            📦 إجمالي القطع المرتجعة: {totalReturnedPiecesCount} قطعة
           </p>
         </div>
 
@@ -252,7 +271,7 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
             {totalProductValue.toLocaleString()} <span className="text-xs font-bold text-emerald-100">ج.م</span>
           </p>
           <p className="text-[11px] text-emerald-100 font-extrabold mt-1 flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5" /> مستردة للتاجر بالكامل (بدون خصم شحن)
+            <ShieldCheck className="w-3.5 h-3.5" /> شاملة باقي مبالغ التسليم الجزئي و المرتجعات
           </p>
         </div>
 
@@ -313,6 +332,7 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
           >
             <option value="all">جميع المرتجعات ({merchantReturns.length})</option>
             <option value="returned">مرتجع تم الاستلام</option>
+            <option value="partial_delivery">استلام جزئي (تسليم جزء وارتجاع الباقي)</option>
             <option value="refused">مرفوض من العميل</option>
             <option value="failed_attempt">محاولة تسليم فاشلة</option>
           </select>
@@ -325,7 +345,7 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
           <div className="flex items-center gap-2">
             <RotateCcw className="w-4 h-4 text-red-600" />
             <h3 className="font-extrabold text-sm text-slate-900">
-              جدول المرتجعات التفصيلي — {selectedMerchant === 'all' ? 'جميع التجار' : selectedMerchant}
+              جدول المرتجعات والتسليم الجزئي — {selectedMerchant === 'all' ? 'جميع التجار' : selectedMerchant}
             </h3>
           </div>
           <span className="text-xs font-black text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-xl">
@@ -352,25 +372,39 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                   <th className="p-3.5">تاريخ الطلب</th>
                   <th className="p-3.5">التاجر / المتجر</th>
                   <th className="p-3.5">المستلم والمحافظة</th>
-                  <th className="p-3.5">قيمة البضاعة (COD)</th>
+                  <th className="p-3.5">إجمالي الطلب / الواصل</th>
                   <th className="p-3.5">رسوم الشحن</th>
-                  <th className="p-3.5">صافي المسترد للتاجر</th>
-                  <th className="p-3.5">حالة المرتجع والسبب</th>
+                  <th className="p-3.5">قيمة المرتجع لكشف الحساب</th>
+                  <th className="p-3.5">حالة المرتجع وتفاصيل القطع</th>
                   <th className="p-3.5">المندوب</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredReturns.map((s, idx) => {
-                  const productVal = s.financials.codAmount;
-                  const netReturnVal = productVal; // Shipping excluded
+                  const isPartial = s.status === 'partial_delivery';
+                  const totalItems = s.packageDetails?.itemsCount || 1;
+                  const acceptedItems = s.partialDetails?.acceptedItemsCount || 0;
+                  const returnedItems = s.partialDetails?.returnedItemsCount ?? Math.max(0, totalItems - acceptedItems);
+
+                  const collectedAmt = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
+                  const totalOrigCod = s.partialDetails?.originalCodAmount ?? s.financials.codAmount;
+                  const returnedCodVal = isPartial
+                    ? (s.partialDetails?.remainingCodAmount ?? Math.max(0, totalOrigCod - collectedAmt))
+                    : s.financials.codAmount;
 
                   let statusBadge = (
                     <span className="bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-lg text-[10px] font-black">
-                      مرتجع
+                      مرتجع ({totalItems} قطعة)
                     </span>
                   );
 
-                  if (s.status === 'refused') {
+                  if (isPartial) {
+                    statusBadge = (
+                      <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-lg text-[10px] font-black">
+                        استلام جزئي (مرتجع {returnedItems} من {totalItems} قطعة)
+                      </span>
+                    );
+                  } else if (s.status === 'refused') {
                     statusBadge = (
                       <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg text-[10px] font-black">
                         {s.refusedDetails?.shippingFeePaid ? 'مرفوض (دفع الشحن)' : 'مرفوض من العميل'}
@@ -406,7 +440,14 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                         </p>
                       </td>
                       <td className="p-3.5 font-black text-slate-900">
-                        {productVal.toLocaleString()} ج.م
+                        {isPartial ? (
+                          <div>
+                            <span className="block text-xs font-black text-slate-900">{totalOrigCod.toLocaleString()} ج.م</span>
+                            <span className="block text-[10px] font-extrabold text-emerald-700">واصل عادي: {collectedAmt.toLocaleString()} ج.م</span>
+                          </div>
+                        ) : (
+                          <span>{totalOrigCod.toLocaleString()} ج.م</span>
+                        )}
                       </td>
                       <td className="p-3.5">
                         <span className="text-emerald-700 font-black bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md text-[11px]">
@@ -414,13 +455,19 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                         </span>
                       </td>
                       <td className="p-3.5 font-black text-emerald-600 text-sm">
-                        {netReturnVal.toLocaleString()} ج.م
+                        {returnedCodVal.toLocaleString()} ج.م
                       </td>
                       <td className="p-3.5 space-y-1">
                         <div>{statusBadge}</div>
-                        <p className="text-[11px] text-slate-500 font-medium line-clamp-1">
-                          {s.refusedDetails?.reason || s.recipient.notes || 'طلب التاجر / عدم استلام العميل'}
-                        </p>
+                        {isPartial ? (
+                          <p className="text-[11px] text-slate-600 font-bold">
+                            تسليم {acceptedItems} قطعة ({collectedAmt} ج.م) — مرتجع {returnedItems} قطعة ({returnedCodVal} ج.م)
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-slate-500 font-medium line-clamp-1">
+                            {s.refusedDetails?.reason || s.recipient.notes || 'طلب التاجر / عدم استلام العميل'}
+                          </p>
+                        )}
                       </td>
                       <td className="p-3.5 font-bold text-slate-700">
                         {s.assignedCourier?.name || 'غير مخصص'}

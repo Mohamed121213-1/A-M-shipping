@@ -127,7 +127,10 @@ export interface Shipment {
   proofOfDelivery?: ProofOfDelivery;
   partialDetails?: {
     acceptedItemsCount: number;
+    returnedItemsCount?: number;
     partialCodAmount: number;
+    remainingCodAmount?: number;
+    originalCodAmount?: number;
     notes?: string;
   };
   refusedDetails?: {

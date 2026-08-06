@@ -125,15 +125,26 @@ export const exportReturnsToExcel = (
   }
 
   const data = returns.map((s, index) => {
-    let statusAr = 'مرتجع';
-    if (s.status === 'refused') {
+    const isPartial = s.status === 'partial_delivery';
+    const totalItems = s.packageDetails?.itemsCount || 1;
+    const acceptedItems = s.partialDetails?.acceptedItemsCount || 0;
+    const returnedItems = s.partialDetails?.returnedItemsCount ?? Math.max(0, totalItems - acceptedItems);
+    const collectedAmt = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
+    const totalOrigCod = s.partialDetails?.originalCodAmount ?? s.financials.codAmount;
+    const remainingCod = isPartial
+      ? (s.partialDetails?.remainingCodAmount ?? Math.max(0, totalOrigCod - collectedAmt))
+      : s.financials.codAmount;
+
+    let statusAr = 'مرتجع بالكامل';
+    if (isPartial) {
+      statusAr = `استلام جزئي (تسليم ${acceptedItems} قطعة وارتجاع ${returnedItems} قطعة)`;
+    } else if (s.status === 'refused') {
       statusAr = s.refusedDetails?.shippingFeePaid ? 'مرفوض (دفع الشحن)' : 'مرفوض (لم يدفع الشحن)';
     } else if (s.status === 'failed_attempt') {
       statusAr = 'محاولة تسليم فاشلة';
     }
 
-    // Returns Value without deducting shipping fee
-    const productValue = s.financials.codAmount;
+    const productValue = isPartial ? remainingCod : s.financials.codAmount;
     const shippingFeeExcluded = 0; // Excluded from merchant calculations
     const netReturnVal = productValue;
 
@@ -145,12 +156,17 @@ export const exportReturnsToExcel = (
       'اسم المستلم': s.recipient.name,
       'هاتف المستلم': s.recipient.phone,
       'المحافظة': s.recipient.governorate,
-      'المدينة / العنوان': s.recipient.streetAddress,
-      'قيمة البضاعة المرتجعة COD (ج.م)': productValue,
+      'إجمالي قيمة الشحنة الأصلية (ج.م)': totalOrigCod,
+      'المبلغ المحصل (واصل للتاجر عادي)': isPartial ? collectedAmt : 0,
+      'القطع المستلمة': isPartial ? acceptedItems : 0,
+      'القطع المرتجعة': isPartial ? returnedItems : totalItems,
+      'قيمة البضاعة المرتجعة لكشف الحساب (ج.م)': productValue,
       'رسوم الشحن (مستبعدة)': shippingFeeExcluded,
       'صافي المسترد للتاجر (ج.م)': netReturnVal,
       'حالة الارتجاع': statusAr,
-      'سبب الارتجاع / التفاصيل': s.refusedDetails?.reason || s.recipient.notes || 'طلب التاجر / العميل رفض الاستلام',
+      'سبب الارتجاع / التفاصيل': isPartial
+        ? `تسليم ${acceptedItems} قطعة (${collectedAmt} ج.م) وارتجاع ${returnedItems} قطعة (${remainingCod} ج.م) - ${s.partialDetails?.notes || ''}`
+        : (s.refusedDetails?.reason || s.recipient.notes || 'طلب التاجر / العميل رفض الاستلام'),
       'المندوب المعالج': s.assignedCourier?.name || 'غير مخصص',
       'المستودع / الفرع': s.assignedHub || 'المستودع الرئيسي'
     };

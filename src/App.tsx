@@ -735,13 +735,23 @@ export default function App() {
         },
       ];
 
-      // Adjust wallet if delivered or partial delivery
+      // Adjust wallet if delivered, partial_delivery, or refused
       if ((newStatus === 'delivered' || newStatus === 'partial_delivery') && (s.status !== 'delivered' && s.status !== 'partial_delivery')) {
+        const collectedAmt = effectiveExtra?.partialDetails?.partialCodAmount ?? effectiveExtra?.financials?.codAmount ?? s.financials.codAmount;
+        const netPayoutAmt = effectiveExtra?.financials?.netPayout ?? s.financials.netPayout ?? Math.max(0, collectedAmt - s.financials.shippingFee);
         updatedWallet = {
           ...updatedWallet,
-          availableBalance: updatedWallet.availableBalance + (effectiveExtra?.financials?.netPayout || s.financials.netPayout),
-          pendingCod: Math.max(0, updatedWallet.pendingCod - s.financials.codAmount),
+          pendingCod: updatedWallet.pendingCod + collectedAmt,
+          availableBalance: updatedWallet.availableBalance + netPayoutAmt,
         };
+      } else if ((newStatus === 'refused' || newStatus === 'returned') && s.status !== 'refused' && s.status !== 'returned') {
+        const isShippingPaid = effectiveExtra?.refusedDetails?.shippingFeePaid ?? s.refusedDetails?.shippingFeePaid;
+        if (isShippingPaid === false) {
+          updatedWallet = {
+            ...updatedWallet,
+            availableBalance: Math.max(0, updatedWallet.availableBalance - s.financials.shippingFee),
+          };
+        }
       }
 
       return {
@@ -1081,7 +1091,6 @@ export default function App() {
     if (totalCollected > 0) {
       updatedWallet = {
         ...wallet,
-        availableBalance: wallet.availableBalance + totalCollected,
         pendingCod: Math.max(0, wallet.pendingCod - totalCollected),
       };
       setWallet(updatedWallet);
