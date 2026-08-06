@@ -387,8 +387,15 @@ export default function App() {
 
     setUsers((prev) => {
       const exists = prev.some((u) => u.id === fullUser.id || (u.phone && u.phone === fullUser.phone) || (u.email && u.email === fullUser.email));
-      if (!exists) return [...prev, fullUser];
-      return prev.map((u) => (u.id === fullUser.id || (u.phone && u.phone === fullUser.phone) ? { ...u, ...fullUser } : u));
+      let nextUsers: UserSession[];
+      if (!exists) {
+        nextUsers = [fullUser, ...prev];
+      } else {
+        nextUsers = prev.map((u) => (u.id === fullUser.id || (u.phone && u.phone === fullUser.phone) || (u.email && u.email === fullUser.email) ? { ...u, ...fullUser } : u));
+      }
+      localStorage.setItem('bosta_users', JSON.stringify(nextUsers));
+      broadcastDataChange({ users: nextUsers });
+      return nextUsers;
     });
 
     if (fullUser.role === 'courier') {
@@ -461,50 +468,72 @@ export default function App() {
     }, 4000);
   };
 
-  // Create Shipment Handler
-  const handleCreateShipment = (
-    newShipmentData: Omit<Shipment, 'id' | 'trackingNumber' | 'createdAt' | 'updatedAt' | 'timeline'>
+  // Create Batch Shipments Handler (for Excel import or batch creation)
+  const handleCreateBatchShipments = (
+    shipmentsDataList: Omit<Shipment, 'id' | 'trackingNumber' | 'createdAt' | 'updatedAt' | 'timeline'>[]
   ) => {
-    const randomNum = Math.floor(100000 + Math.random() * 900000);
-    const trackingNo = `BST-${randomNum}`;
+    if (!shipmentsDataList || shipmentsDataList.length === 0) return;
+
+    let totalAddedCod = 0;
     const nowIso = new Date().toISOString();
-    const isPending = newShipmentData.status === 'pending_approval';
+    const nowTimeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
-    const createdShipment: Shipment = {
-      ...newShipmentData,
-      id: trackingNo,
-      trackingNumber: trackingNo,
-      createdAt: nowIso,
-      updatedAt: nowIso,
-      timeline: [
-        {
-          id: `tl-${Date.now()}`,
-          status: newShipmentData.status || (currentRole === 'admin' ? 'created' : 'pending_approval'),
-          title: isPending ? '⏳ طلب جديد - بانتظار موافقة الأدمن' : '✨ تم إنشاء بوليصة الشحن بنجاح',
-          description: isPending
-            ? 'تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن'
-            : 'تم اعتماد الشحنة وجاري تجهيز الاستلام من المتجر',
-          timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-          actorRole: currentRole === 'admin' ? 'system' : 'merchant',
-        },
-      ],
-    };
+    const newCreatedShipments: Shipment[] = shipmentsDataList.map((item, idx) => {
+      const randomNum = Math.floor(100000 + Math.random() * 900000);
+      const trackingNo = `BST-${randomNum}`;
+      const isPending = item.status === 'pending_approval';
 
-    const nextShipments = [createdShipment, ...shipments];
+      totalAddedCod += item.financials.codAmount || 0;
+
+      return {
+        ...item,
+        id: trackingNo,
+        trackingNumber: trackingNo,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        timeline: [
+          {
+            id: `tl-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+            status: item.status || (currentRole === 'admin' ? 'created' : 'pending_approval'),
+            title: isPending ? '⏳ طلب جديد - بانتظار موافقة الأدمن' : '✨ تم إنشاء بوليصة الشحن بنجاح',
+            description: isPending
+              ? 'تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن'
+              : 'تم اعتماد الشحنة وجاري تجهيز الاستلام من المتجر',
+            timestamp: nowTimeStr,
+            actorRole: currentRole === 'admin' ? 'system' : 'merchant',
+          },
+        ],
+      };
+    });
+
+    const nextShipments = [...newCreatedShipments, ...shipments];
     const nextWallet = {
       ...wallet,
-      pendingCod: wallet.pendingCod + createdShipment.financials.codAmount,
+      pendingCod: wallet.pendingCod + totalAddedCod,
     };
 
     setShipments(nextShipments);
     setWallet(nextWallet);
     broadcastDataChange({ shipments: nextShipments, wallet: nextWallet });
 
-    if (isPending) {
-      showToast(`⏳ تم تسجيل الطلب ${trackingNo} وبانتظار موافقة وتأكيد الأدمن!`);
+    const count = newCreatedShipments.length;
+    if (count === 1) {
+      const single = newCreatedShipments[0];
+      if (single.status === 'pending_approval') {
+        showToast(`⏳ تم تسجيل الطلب ${single.trackingNumber} وبانتظار موافقة وتأكيد الأدمن!`);
+      } else {
+        showToast(`✨ تم إنشاء بوليصة الشحن رقم ${single.trackingNumber} وتأكيدها بنجاح!`);
+      }
     } else {
-      showToast(`✨ تم إنشاء بوليصة الشحن رقم ${trackingNo} وتأكيدها بنجاح!`);
+      showToast(`🎉 تم استيراد وتأكيد (${count} أوردر) بنجاح من ملف الإكسيل!`);
     }
+  };
+
+  // Create Single Shipment Handler
+  const handleCreateShipment = (
+    newShipmentData: Omit<Shipment, 'id' | 'trackingNumber' | 'createdAt' | 'updatedAt' | 'timeline'>
+  ) => {
+    handleCreateBatchShipments([newShipmentData]);
   };
 
   // Approve single pending shipment
@@ -937,7 +966,9 @@ export default function App() {
       const matchPhone = Boolean(s.assignedCourier.phone && targetCourier?.phone && s.assignedCourier.phone === targetCourier.phone);
       const matchName = Boolean(s.assignedCourier.name && targetCourier?.name && s.assignedCourier.name === targetCourier.name);
 
-      if ((matchId || matchPhone || matchName) && !s.isCourierSettled) {
+      const isRecordedStatus = ['delivered', 'partial_delivery', 'refused', 'returned', 'failed_attempt', 'cancelled'].includes(s.status);
+
+      if ((matchId || matchPhone || matchName) && !s.isCourierSettled && isRecordedStatus) {
         let collectedForThisShipment = 0;
         if (s.status === 'delivered') {
           collectedForThisShipment = s.financials.codAmount;
@@ -990,7 +1021,7 @@ export default function App() {
     );
 
     broadcastDataChange({ shipments: nextShipments });
-    showToast(`💰 تم استلام العهدة النقدية بمبلغ ${totalCollected.toLocaleString()} ج.م من ${courierName} وتصفير حسابه وحذف الشحنات المسواة!`);
+    showToast(`💰 تم استلام وتوريد المبلغ ${totalCollected.toLocaleString()} ج.م من ${courierName} وتصفير الشحنات المسجّل لها حالة، وتنسيق باقي الأوردرات النشطة!`);
   };
 
   // Payout Request Handler
@@ -1007,7 +1038,26 @@ export default function App() {
   const handleAddUser = (user: UserSession) => {
     const userId = user.id || `USR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const fullUser: UserSession = { ...user, id: userId };
-    setUsers((prev) => [...prev, fullUser]);
+
+    setUsers((prev) => {
+      const existsIndex = prev.findIndex(
+        (u) => u.id === fullUser.id ||
+               (u.email && fullUser.email && u.email.toLowerCase() === fullUser.email.toLowerCase()) ||
+               (u.phone && fullUser.phone && u.phone === fullUser.phone)
+      );
+
+      let nextUsers: UserSession[];
+      if (existsIndex >= 0) {
+        nextUsers = prev.map((u, i) => (i === existsIndex ? { ...u, ...fullUser } : u));
+      } else {
+        nextUsers = [fullUser, ...prev];
+      }
+
+      localStorage.setItem('bosta_users', JSON.stringify(nextUsers));
+      broadcastDataChange({ users: nextUsers });
+      return nextUsers;
+    });
+
     if (fullUser.role === 'courier') {
       const courierObj: CourierInfo = {
         id: fullUser.id,
@@ -1021,20 +1071,31 @@ export default function App() {
         photoUrl: fullUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullUser.name)}&background=2563eb&color=ffffff`,
       };
       setCouriers((prev) => {
+        let nextCouriers: CourierInfo[];
         if (prev.some((c) => c.id === courierObj.id || (c.phone && c.phone === courierObj.phone))) {
-          return prev.map((c) => (c.id === courierObj.id || (c.phone && c.phone === courierObj.phone) ? { ...c, ...courierObj } : c));
+          nextCouriers = prev.map((c) => (c.id === courierObj.id || (c.phone && c.phone === courierObj.phone) ? { ...c, ...courierObj } : c));
+        } else {
+          nextCouriers = [...prev, courierObj];
         }
-        return [...prev, courierObj];
+        localStorage.setItem('bosta_couriers', JSON.stringify(nextCouriers));
+        broadcastDataChange({ couriers: nextCouriers });
+        return nextCouriers;
       });
     }
-    showToast(`✅ تم إضافة الحساب ${fullUser.name} بنجاح`);
+    showToast(`✅ تم تسديد وإضافة الحساب ${fullUser.name} بنجاح`);
   };
 
   const handleUpdateUser = (updatedUser: UserSession) => {
-    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+    setUsers((prev) => {
+      const nextUsers = prev.map((u) => (u.id === updatedUser.id ? updatedUser : u));
+      localStorage.setItem('bosta_users', JSON.stringify(nextUsers));
+      broadcastDataChange({ users: nextUsers });
+      return nextUsers;
+    });
+
     if (updatedUser.role === 'courier') {
-      setCouriers((prev) =>
-        prev.map((c) =>
+      setCouriers((prev) => {
+        const nextCouriers = prev.map((c) =>
           c.id === updatedUser.id || c.phone === updatedUser.phone
             ? {
                 ...c,
@@ -1044,15 +1105,30 @@ export default function App() {
                 assignedHub: updatedUser.hubName || 'المستودع الرئيسي',
               }
             : c
-        )
-      );
+        );
+        localStorage.setItem('bosta_couriers', JSON.stringify(nextCouriers));
+        broadcastDataChange({ couriers: nextCouriers });
+        return nextCouriers;
+      });
     }
     showToast(`✏️ تم تحديث بيانات الحساب ${updatedUser.name}`);
   };
 
   const handleDeleteUser = (userId: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== userId));
-    setCouriers((prev) => prev.filter((c) => c.id !== userId));
+    setUsers((prev) => {
+      const nextUsers = prev.filter((u) => u.id !== userId);
+      localStorage.setItem('bosta_users', JSON.stringify(nextUsers));
+      broadcastDataChange({ users: nextUsers });
+      return nextUsers;
+    });
+
+    setCouriers((prev) => {
+      const nextCouriers = prev.filter((c) => c.id !== userId);
+      localStorage.setItem('bosta_couriers', JSON.stringify(nextCouriers));
+      broadcastDataChange({ couriers: nextCouriers });
+      return nextCouriers;
+    });
+
     showToast('🗑️ تم حذف الحساب من النظام');
   };
 
@@ -1431,6 +1507,7 @@ export default function App() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreateShipment={handleCreateShipment}
+        onCreateBatchShipments={handleCreateBatchShipments}
         governorates={governorates}
         hubs={hubs}
         currentRole={currentRole}

@@ -155,6 +155,30 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
 
     if (!isSupabaseConfigured) {
+      if (isSignUpMode) {
+        const pendingUser: UserSession = {
+          id: `USR-${Date.now()}`,
+          name: fullNameInput.trim() || phoneInput.trim(),
+          email: finalEmail,
+          phone: phoneInput.trim(),
+          role: selectedRoleTab,
+          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullNameInput || phoneInput)}&background=dc2626&color=ffffff`,
+          storeName: selectedRoleTab === 'merchant' ? (storeNameInput.trim() || `متجر ${fullNameInput || phoneInput}`) : undefined,
+          courierVehicle: selectedRoleTab === 'courier' ? 'سيارة نقل / تروسيكل' : undefined,
+          hubName: selectedRoleTab === 'hub_manager' ? 'المستودع الرئيسي' : undefined,
+          isConfirmed: false,
+        };
+
+        if (onRegisterPendingUser) {
+          onRegisterPendingUser(pendingUser);
+        }
+
+        setSuccessMessage('تم تسجيل الحساب بنجاح! ⏳ الحساب حالياً بانتظار تفعيل وموافقة الأدمن. لن يمكنك تسجيل الدخول حتى يتم تأكيد وتفعيل حسابك من قِبل الأدمن من داخل لوحة التحكم.');
+        setIsSignUpMode(false);
+        setPasswordInput('');
+        return;
+      }
+
       setErrorMessage('يرجى ربط Supabase بإضافة VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY في ملف .env لتشغيل التوثيق الحقيقي.');
       return;
     }

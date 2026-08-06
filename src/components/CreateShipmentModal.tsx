@@ -12,6 +12,7 @@ interface CreateShipmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateShipment: (shipment: Omit<Shipment, 'id' | 'trackingNumber' | 'createdAt' | 'updatedAt' | 'timeline'>) => void;
+  onCreateBatchShipments?: (shipments: Omit<Shipment, 'id' | 'trackingNumber' | 'createdAt' | 'updatedAt' | 'timeline'>[]) => void;
   governorates?: GovernorateRate[];
   hubs?: HubInfo[];
   currentRole?: AppUserRole;
@@ -45,6 +46,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   isOpen,
   onClose,
   onCreateShipment,
+  onCreateBatchShipments,
   governorates = EGYPT_GOVERNORATES,
   hubs = BOSTA_HUBS,
   currentRole = 'merchant',
@@ -504,7 +506,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       return;
     }
 
-    validRows.forEach((row) => {
+    const batchToCreate: Omit<Shipment, 'id' | 'trackingNumber' | 'createdAt' | 'updatedAt' | 'timeline'>[] = validRows.map((row) => {
       const govObj = EGYPT_GOVERNORATES.find((g) => g.code === row.governorateCode) || EGYPT_GOVERNORATES[0];
       const autoShippingFee = Math.round(
         govObj.baseRate + Math.max(0, row.weightKg - 3) * govObj.additionalKgRate + (row.deliveryType === 'express' ? 25 : 0)
@@ -514,7 +516,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       const netPayout = Math.max(0, row.codAmount - shippingFee);
       const matchedHub = BOSTA_HUBS.find((h) => h.governorate.includes(govObj.nameAr)) || BOSTA_HUBS[0];
 
-      onCreateShipment({
+      return {
         status: currentRole === 'admin' ? 'created' : 'pending_approval',
         deliveryType: row.deliveryType,
         sender: {
@@ -555,8 +557,14 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         },
         assignedHub: matchedHub.name,
         estimatedDeliveryDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
-      });
+      };
     });
+
+    if (onCreateBatchShipments) {
+      onCreateBatchShipments(batchToCreate);
+    } else {
+      batchToCreate.forEach((s) => onCreateShipment(s));
+    }
 
     setStagedRows([]);
     onClose();
