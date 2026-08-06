@@ -438,28 +438,24 @@ export default function App() {
     if (!currentUser || currentUser.role !== 'merchant') {
       return wallet;
     }
-    let totalCOD = 0;
-    let pendingCOD = 0;
-    let collectedCOD = 0;
-
-    userShipments.forEach((s) => {
-      const amount = s.codAmount || 0;
-      totalCOD += amount;
-      if (s.status === 'delivered' || s.status === 'partial_delivery') {
-        collectedCOD += amount;
-      } else if (['created', 'pickup_requested', 'picked_up', 'in_hub', 'out_for_delivery'].includes(s.status)) {
-        pendingCOD += amount;
+    // Calculate cash currently held by couriers (delivered/partial/paid returns not yet settled with company)
+    const pendingCourierCod = userShipments.reduce((sum, s) => {
+      if (s.isCourierSettled) return sum;
+      if (s.status === 'delivered') {
+        return sum + (s.financials?.codAmount ?? s.codAmount ?? 0);
       }
-    });
+      if (s.status === 'partial_delivery') {
+        return sum + (s.partialDetails?.partialCodAmount ?? s.financials?.codAmount ?? s.codAmount ?? 0);
+      }
+      if ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid) {
+        return sum + (s.refusedDetails?.amountCollected ?? s.financials?.shippingFee ?? 0);
+      }
+      return sum;
+    }, 0);
 
     return {
-      totalCod: totalCOD,
-      availableBalance: collectedCOD,
-      pendingCod: pendingCOD,
-      lastPayoutDate: wallet.lastPayoutDate,
-      bankAccount: wallet.bankAccount,
-      instapayAddress: wallet.instapayAddress,
-      vodafoneCash: wallet.vodafoneCash,
+      ...wallet,
+      pendingCod: pendingCourierCod,
     };
   }, [wallet, userShipments, currentUser]);
 

@@ -226,7 +226,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs">
               <span className="text-xs font-bold text-slate-500 block">مبالغ قيد التحصيل مع المندوبين (Pending COD):</span>
               <p className="text-3xl font-black text-amber-600 mt-2">{wallet.pendingCod.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
-              <p className="text-xs text-slate-500 mt-2">تتحول للرصيد المتاح فور تسليم الشحنة للعميل</p>
+              <p className="text-xs text-slate-500 mt-2">تُحتسب العهدة مع المندوبين وتتحول للرصيد وتتصفر فور استلام العهدة وتوريدها للشركة</p>
             </div>
 
             {/* Total Paid Out Box */}
