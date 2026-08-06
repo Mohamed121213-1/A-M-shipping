@@ -55,12 +55,39 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
   // Edit Wallet State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [inlineEditingField, setInlineEditingField] = useState<'availableBalance' | 'pendingCod' | 'totalPaidOut' | null>(null);
+  const [inlineValue, setInlineValue] = useState<number>(0);
+
   const [editForm, setEditForm] = useState({
     availableBalance: wallet.availableBalance,
     pendingCod: wallet.pendingCod,
     totalPaidOut: wallet.totalPaidOut,
     merchantName: wallet.merchantName || 'التاجر الرئيسي',
   });
+
+  const handleStartInlineEdit = (field: 'availableBalance' | 'pendingCod' | 'totalPaidOut', currentVal: number) => {
+    setInlineEditingField(field);
+    setInlineValue(currentVal);
+  };
+
+  const handleSaveInlineEdit = () => {
+    if (inlineEditingField && onUpdateWallet) {
+      onUpdateWallet({
+        ...wallet,
+        [inlineEditingField]: Math.max(0, Number(inlineValue) || 0),
+      });
+    }
+    setInlineEditingField(null);
+  };
+
+  const handleQuickZeroOut = (field: 'pendingCod' | 'totalPaidOut' | 'availableBalance') => {
+    if (onUpdateWallet) {
+      onUpdateWallet({
+        ...wallet,
+        [field]: 0,
+      });
+    }
+  };
 
   const handleOpenEditModal = () => {
     setEditForm({
@@ -268,56 +295,198 @@ export const WalletView: React.FC<WalletViewProps> = ({
           {/* Wallet Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Available Balance Box */}
-            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden group">
-              <div className="absolute right-0 bottom-0 opacity-10 p-4">
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden group transition-all">
+              <div className="absolute right-0 bottom-0 opacity-10 p-4 pointer-events-none">
                 <Wallet className="w-32 h-32" />
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-emerald-100 uppercase tracking-wider block">الرصيد المتاح للسحب المباشر (Available Balance):</span>
-                <button
-                  onClick={handleOpenEditModal}
-                  className="p-1.5 bg-emerald-800/60 hover:bg-emerald-800 text-white rounded-lg opacity-80 group-hover:opacity-100 transition-all cursor-pointer"
-                  title="تعديل الرصيد المتاح"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </button>
+                {inlineEditingField !== 'availableBalance' && (
+                  <button
+                    onClick={() => handleStartInlineEdit('availableBalance', wallet.availableBalance)}
+                    className="px-2.5 py-1 bg-emerald-800/80 hover:bg-emerald-800 text-white text-xs font-black rounded-lg transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                    title="تعديل الرصيد المتاح"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>تعديل</span>
+                  </button>
+                )}
               </div>
-              <p className="text-3xl font-black mt-2">{wallet.availableBalance.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
-              <p className="text-xs text-emerald-100 mt-2 flex items-center gap-1">
-                <ShieldCheck className="w-4 h-4" /> جاهز للتحويل الفوري لمقرك أو حسابك
-              </p>
+
+              {inlineEditingField === 'availableBalance' ? (
+                <div className="mt-3 space-y-2 bg-emerald-900/40 p-3 rounded-xl border border-emerald-400/30">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={inlineValue}
+                      onChange={(e) => setInlineValue(Number(e.target.value))}
+                      className="w-full text-xl font-black p-2 bg-white text-emerald-950 rounded-lg focus:outline-none"
+                      placeholder="0"
+                      autoFocus
+                    />
+                    <span className="absolute left-2 top-2.5 text-xs font-black text-slate-500">ج.م</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 justify-end">
+                    <button
+                      onClick={() => setInlineEditingField(null)}
+                      className="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold rounded-md cursor-pointer"
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      onClick={handleSaveInlineEdit}
+                      className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-emerald-950 text-xs font-black rounded-md shadow-xs cursor-pointer"
+                    >
+                      حفظ
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-3xl font-black mt-2">{wallet.availableBalance.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
+                  <p className="text-xs text-emerald-100 mt-2 flex items-center gap-1">
+                    <ShieldCheck className="w-4 h-4" /> جاهز للتحويل الفوري لمقرك أو حسابك
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Pending COD Box */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs relative group">
-              <div className="flex items-center justify-between">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs relative group transition-all">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-slate-500 block">مبالغ قيد التحصيل مع المندوبين (Pending COD):</span>
-                <button
-                  onClick={handleOpenEditModal}
-                  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg opacity-80 group-hover:opacity-100 transition-all cursor-pointer"
-                  title="تعديل مبالغ قيد التحصيل"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </button>
+                {inlineEditingField !== 'pendingCod' && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => handleQuickZeroOut('pendingCod')}
+                      className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-extrabold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                      title="تصفير العهدة وتحديد قيمتها كـ 0 ج.م"
+                    >
+                      <RefreshCw className="w-3 h-3 text-amber-700" />
+                      <span>تصفير (0 ج.م)</span>
+                    </button>
+                    <button
+                      onClick={() => handleStartInlineEdit('pendingCod', wallet.pendingCod)}
+                      className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all cursor-pointer"
+                      title="تعديل مبالغ قيد التحصيل"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
-              <p className="text-3xl font-black text-amber-600 mt-2">{wallet.pendingCod.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
-              <p className="text-xs text-slate-500 mt-2">تُحتسب العهدة مع المندوبين وتتحول للرصيد وتتصفر فور استلام العهدة وتوريدها للشركة</p>
+
+              {inlineEditingField === 'pendingCod' ? (
+                <div className="mt-3 space-y-2 bg-amber-50 p-3 rounded-xl border border-amber-200">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={inlineValue}
+                      onChange={(e) => setInlineValue(Number(e.target.value))}
+                      className="w-full text-xl font-black p-2 bg-white text-amber-700 border border-amber-300 rounded-lg focus:outline-none"
+                      placeholder="0"
+                      autoFocus
+                    />
+                    <span className="absolute left-2 top-2.5 text-xs font-black text-amber-500">ج.م</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 justify-between">
+                    <button
+                      onClick={() => setInlineValue(0)}
+                      className="px-2 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 text-[11px] font-bold rounded-md cursor-pointer"
+                    >
+                      جعله 0
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setInlineEditingField(null)}
+                        className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-md cursor-pointer"
+                      >
+                        إلغاء
+                      </button>
+                      <button
+                        onClick={handleSaveInlineEdit}
+                        className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-md shadow-xs cursor-pointer"
+                      >
+                        حفظ
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-3xl font-black text-amber-600 mt-2">{wallet.pendingCod.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
+                  <p className="text-xs text-slate-500 mt-2">تُحتسب العهدة مع المندوبين وتتحول للرصيد وتتصفر فور استلام العهدة وتوريدها للشركة</p>
+                </>
+              )}
             </div>
 
             {/* Total Paid Out Box */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs relative group">
-              <div className="flex items-center justify-between">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs relative group transition-all">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-slate-500 block">إجمالي التحويلات السابقة (Total Paid Out):</span>
-                <button
-                  onClick={handleOpenEditModal}
-                  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg opacity-80 group-hover:opacity-100 transition-all cursor-pointer"
-                  title="تعديل إجمالي التحويلات السابقة"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </button>
+                {inlineEditingField !== 'totalPaidOut' && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => handleQuickZeroOut('totalPaidOut')}
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-extrabold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                      title="تصفير إجمالي التحويلات السابقة وتحديد قيمته كـ 0 ج.م"
+                    >
+                      <RefreshCw className="w-3 h-3 text-slate-600" />
+                      <span>تصفير (0 ج.م)</span>
+                    </button>
+                    <button
+                      onClick={() => handleStartInlineEdit('totalPaidOut', wallet.totalPaidOut)}
+                      className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all cursor-pointer"
+                      title="تعديل إجمالي التحويلات السابقة"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
-              <p className="text-3xl font-black text-slate-900 mt-2">{wallet.totalPaidOut.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
-              <p className="text-xs text-emerald-600 font-bold mt-2">تسويات مالية ناجحة 100%</p>
+
+              {inlineEditingField === 'totalPaidOut' ? (
+                <div className="mt-3 space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={inlineValue}
+                      onChange={(e) => setInlineValue(Number(e.target.value))}
+                      className="w-full text-xl font-black p-2 bg-white text-slate-900 border border-slate-300 rounded-lg focus:outline-none"
+                      placeholder="0"
+                      autoFocus
+                    />
+                    <span className="absolute left-2 top-2.5 text-xs font-black text-slate-400">ج.م</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 justify-between">
+                    <button
+                      onClick={() => setInlineValue(0)}
+                      className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-800 text-[11px] font-bold rounded-md cursor-pointer"
+                    >
+                      جعله 0
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setInlineEditingField(null)}
+                        className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-md cursor-pointer"
+                      >
+                        إلغاء
+                      </button>
+                      <button
+                        onClick={handleSaveInlineEdit}
+                        className="px-3 py-1 bg-slate-900 hover:bg-black text-white text-xs font-black rounded-md shadow-xs cursor-pointer"
+                      >
+                        حفظ
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-3xl font-black text-slate-900 mt-2">{wallet.totalPaidOut.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
+                  <p className="text-xs text-emerald-600 font-bold mt-2">تسويات مالية ناجحة 100%</p>
+                </>
+              )}
             </div>
           </div>
 
