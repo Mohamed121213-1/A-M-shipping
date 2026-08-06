@@ -18,7 +18,11 @@ import {
   CheckCircle2, 
   Building2,
   HandCoins,
-  RotateCcw
+  RotateCcw,
+  Edit3,
+  X,
+  Sliders,
+  RefreshCw
 } from 'lucide-react';
 
 interface WalletViewProps {
@@ -29,6 +33,7 @@ interface WalletViewProps {
   systemUsers?: UserSession[];
   currentUser?: UserSession | null;
   onSettleCourierCustody?: (courierId: string) => void;
+  onUpdateWallet?: (updatedWallet: MerchantWallet) => void;
 }
 
 export const WalletView: React.FC<WalletViewProps> = ({
@@ -39,14 +44,48 @@ export const WalletView: React.FC<WalletViewProps> = ({
   systemUsers = [],
   currentUser = null,
   onSettleCourierCustody,
+  onUpdateWallet,
 }) => {
   const isAdmin = !currentUser || currentUser.role === 'admin';
   const [activeSubTab, setActiveSubTab] = useState<'merchant' | 'returns' | 'couriers'>('merchant');
   const [payoutAmount, setPayoutAmount] = useState<number>(wallet.availableBalance);
   const [payoutMethod, setPayoutMethod] = useState<'instapay' | 'vodafone' | 'bank'>('instapay');
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState('');
-
   const [settlementSuccessMsg, setSettlementSuccessMsg] = useState<string | null>(null);
+
+  // Edit Wallet State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    availableBalance: wallet.availableBalance,
+    pendingCod: wallet.pendingCod,
+    totalPaidOut: wallet.totalPaidOut,
+    merchantName: wallet.merchantName || 'التاجر الرئيسي',
+  });
+
+  const handleOpenEditModal = () => {
+    setEditForm({
+      availableBalance: wallet.availableBalance,
+      pendingCod: wallet.pendingCod,
+      totalPaidOut: wallet.totalPaidOut,
+      merchantName: wallet.merchantName || 'التاجر الرئيسي',
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveWalletEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: MerchantWallet = {
+      ...wallet,
+      availableBalance: Number(editForm.availableBalance) || 0,
+      pendingCod: Number(editForm.pendingCod) || 0,
+      totalPaidOut: Number(editForm.totalPaidOut) || 0,
+      merchantName: editForm.merchantName,
+    };
+    if (onUpdateWallet) {
+      onUpdateWallet(updated);
+    }
+    setIsEditModalOpen(false);
+  };
 
   // All collected shipments (for merchant ledger)
   const collectedShipments = shipments.filter(
@@ -208,14 +247,41 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
       {activeSubTab === 'merchant' ? (
         <>
+          {/* Action Bar for Freedom of Control */}
+          <div className="flex items-center justify-between bg-amber-50 border border-amber-200 p-3 rounded-2xl">
+            <div className="flex items-center gap-2">
+              <Sliders className="w-5 h-5 text-amber-700" />
+              <div>
+                <h4 className="text-xs font-black text-amber-950">التحكم الحر المباشر في المحفظة والأرصدة</h4>
+                <p className="text-[11px] font-bold text-amber-800">يمكنك تعديل مبالغ قيد التحصيل (Pending COD) وإجمالي التحويلات (Total Paid Out) ورصيدك الحسابي في أي وقت</p>
+              </div>
+            </div>
+            <button
+              onClick={handleOpenEditModal}
+              className="px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-black rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <Edit3 className="w-4 h-4 text-amber-400" />
+              <span>تعديل المبالغ والتحكم بها</span>
+            </button>
+          </div>
+
           {/* Wallet Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Available Balance Box */}
-            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden">
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden group">
               <div className="absolute right-0 bottom-0 opacity-10 p-4">
                 <Wallet className="w-32 h-32" />
               </div>
-              <span className="text-xs font-bold text-emerald-100 uppercase tracking-wider block">الرصيد المتاح للسحب المباشر (Available Balance):</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-100 uppercase tracking-wider block">الرصيد المتاح للسحب المباشر (Available Balance):</span>
+                <button
+                  onClick={handleOpenEditModal}
+                  className="p-1.5 bg-emerald-800/60 hover:bg-emerald-800 text-white rounded-lg opacity-80 group-hover:opacity-100 transition-all cursor-pointer"
+                  title="تعديل الرصيد المتاح"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              </div>
               <p className="text-3xl font-black mt-2">{wallet.availableBalance.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
               <p className="text-xs text-emerald-100 mt-2 flex items-center gap-1">
                 <ShieldCheck className="w-4 h-4" /> جاهز للتحويل الفوري لمقرك أو حسابك
@@ -223,15 +289,33 @@ export const WalletView: React.FC<WalletViewProps> = ({
             </div>
 
             {/* Pending COD Box */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs">
-              <span className="text-xs font-bold text-slate-500 block">مبالغ قيد التحصيل مع المندوبين (Pending COD):</span>
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs relative group">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 block">مبالغ قيد التحصيل مع المندوبين (Pending COD):</span>
+                <button
+                  onClick={handleOpenEditModal}
+                  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg opacity-80 group-hover:opacity-100 transition-all cursor-pointer"
+                  title="تعديل مبالغ قيد التحصيل"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              </div>
               <p className="text-3xl font-black text-amber-600 mt-2">{wallet.pendingCod.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
               <p className="text-xs text-slate-500 mt-2">تُحتسب العهدة مع المندوبين وتتحول للرصيد وتتصفر فور استلام العهدة وتوريدها للشركة</p>
             </div>
 
             {/* Total Paid Out Box */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs">
-              <span className="text-xs font-bold text-slate-500 block">إجمالي التحويلات السابقة (Total Paid Out):</span>
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs relative group">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 block">إجمالي التحويلات السابقة (Total Paid Out):</span>
+                <button
+                  onClick={handleOpenEditModal}
+                  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg opacity-80 group-hover:opacity-100 transition-all cursor-pointer"
+                  title="تعديل إجمالي التحويلات السابقة"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              </div>
               <p className="text-3xl font-black text-slate-900 mt-2">{wallet.totalPaidOut.toLocaleString()} <span className="text-base font-bold">ج.م</span></p>
               <p className="text-xs text-emerald-600 font-bold mt-2">تسويات مالية ناجحة 100%</p>
             </div>
@@ -461,6 +545,122 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Freedom of Control - Edit Wallet Balances Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 duration-200 dir-rtl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-slate-900">
+                <Sliders className="w-5 h-5 text-amber-500" />
+                <h3 className="font-black text-base">تعديل مبالغ وأرصدة المحفظة (Freedom of Control)</h3>
+              </div>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveWalletEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">اسم الحساب / التاجر:</label>
+                <input
+                  type="text"
+                  value={editForm.merchantName}
+                  onChange={(e) => setEditForm({ ...editForm, merchantName: e.target.value })}
+                  className="w-full text-xs font-extrabold p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-emerald-500"
+                />
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-black text-amber-950">
+                    مبالغ قيد التحصيل مع المندوبين (Pending COD):
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, pendingCod: 0 })}
+                    className="text-[11px] font-black text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    تحديد كـ 0 (صفر)
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={editForm.pendingCod}
+                    onChange={(e) => setEditForm({ ...editForm, pendingCod: Number(e.target.value) })}
+                    className="w-full text-lg font-black p-2.5 bg-white border border-amber-300 rounded-xl text-amber-700 focus:ring-2 focus:ring-amber-500"
+                  />
+                  <span className="absolute left-3 top-3 text-xs font-black text-amber-500">ج.م</span>
+                </div>
+                <p className="text-[10px] font-bold text-amber-800">يمكنك كتابة أي رقم يدوياً أو جعلها صفر فور استلام العهدة أو التسوية</p>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-black text-slate-900">
+                    إجمالي التحويلات السابقة (Total Paid Out):
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, totalPaidOut: 0 })}
+                    className="text-[11px] font-black text-slate-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    تحديد كـ 0 (صفر)
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={editForm.totalPaidOut}
+                    onChange={(e) => setEditForm({ ...editForm, totalPaidOut: Number(e.target.value) })}
+                    className="w-full text-lg font-black p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-slate-500"
+                  />
+                  <span className="absolute left-3 top-3 text-xs font-black text-slate-400">ج.م</span>
+                </div>
+                <p className="text-[10px] font-bold text-slate-500">مجموع المبالغ المسحوبة والمحولة سابقاً لحسابك</p>
+              </div>
+
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-1">
+                <label className="block text-xs font-black text-emerald-950">
+                  الرصيد المتاح للسحب المباشر (Available Balance):
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={editForm.availableBalance}
+                    onChange={(e) => setEditForm({ ...editForm, availableBalance: Number(e.target.value) })}
+                    className="w-full text-lg font-black p-2.5 bg-white border border-emerald-300 rounded-xl text-emerald-700 focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <span className="absolute left-3 top-3 text-xs font-black text-emerald-500">ج.م</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>حفظ تعديلات الأرصدة</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -435,29 +435,8 @@ export default function App() {
 
   // Merchant Wallet scoped calculation
   const userWallet = useMemo(() => {
-    if (!currentUser || currentUser.role !== 'merchant') {
-      return wallet;
-    }
-    // Calculate cash currently held by couriers (delivered/partial/paid returns not yet settled with company)
-    const pendingCourierCod = userShipments.reduce((sum, s) => {
-      if (s.isCourierSettled) return sum;
-      if (s.status === 'delivered') {
-        return sum + (s.financials?.codAmount ?? s.codAmount ?? 0);
-      }
-      if (s.status === 'partial_delivery') {
-        return sum + (s.partialDetails?.partialCodAmount ?? s.financials?.codAmount ?? s.codAmount ?? 0);
-      }
-      if ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid) {
-        return sum + (s.refusedDetails?.amountCollected ?? s.financials?.shippingFee ?? 0);
-      }
-      return sum;
-    }, 0);
-
-    return {
-      ...wallet,
-      pendingCod: pendingCourierCod,
-    };
-  }, [wallet, userShipments, currentUser]);
+    return wallet;
+  }, [wallet]);
 
   // Auth handlers
   const handleLoginSuccess = (user: UserSession) => {
@@ -1405,7 +1384,13 @@ export default function App() {
 
   const handleUpdateWallet = (updatedWallet: MerchantWallet) => {
     setWallet(updatedWallet);
-    showToast('💳 تم تحديث أرصدة المحفظة وقيم COD');
+    try {
+      localStorage.setItem('bosta_wallet', JSON.stringify(updatedWallet));
+    } catch (e) {
+      console.error(e);
+    }
+    broadcastDataChange({ wallet: updatedWallet });
+    showToast('💳 تم تحديث أرصدة المحفظة وقيم COD بنجاح');
   };
 
   const handleClearAllShipments = () => {
@@ -1539,7 +1524,15 @@ export default function App() {
             )}
 
             {activeTab === 'wallet' && (
-              <WalletView wallet={userWallet} shipments={userShipments} onRequestPayout={handleRequestPayout} couriers={couriers} systemUsers={users} currentUser={currentUser} />
+              <WalletView
+                wallet={userWallet}
+                shipments={userShipments}
+                onRequestPayout={handleRequestPayout}
+                couriers={couriers}
+                systemUsers={users}
+                currentUser={currentUser}
+                onUpdateWallet={handleUpdateWallet}
+              />
             )}
 
             {activeTab === 'returns' && (
@@ -1649,6 +1642,7 @@ export default function App() {
                 couriers={couriers}
                 systemUsers={users}
                 onSettleCourierCustody={handleSettleCourierCustody}
+                onUpdateWallet={handleUpdateWallet}
               />
             )}
 
