@@ -189,12 +189,13 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
         signatureDate: new Date().toLocaleString('ar-EG'),
         note: `تم التسليم بنجاح بترميز التأكيد (${pinInput || '8492'}) وتحصيل المبلغ ${selectedShipment.financials.codAmount} ج.م`,
       },
+      assignedCourier: selectedShipment.assignedCourier || activeCourier,
     };
 
     onUpdateStatus(
       selectedShipment.id,
       'delivered',
-      `تم التسليم بنجاح بترميز التأكيد (${pinInput || '8492'}) وتحصيل المبلغ ${selectedShipment.financials.codAmount} ج.م`,
+      `تم التسليم بنجاح بواسطة المندوب ${activeCourier.name} وتحصيل المبلغ ${selectedShipment.financials.codAmount} ج.م`,
       extra
     );
 
@@ -207,7 +208,16 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     e.preventDefault();
     if (!selectedShipment) return;
 
-    onUpdateStatus(selectedShipment.id, 'failed_attempt', `محاولة تسليم غير ناجحة: ${failedReason}`);
+    const extra: Partial<Shipment> = {
+      assignedCourier: selectedShipment.assignedCourier || activeCourier,
+    };
+
+    onUpdateStatus(
+      selectedShipment.id,
+      'failed_attempt',
+      `محاولة تسليم غير ناجحة بواسطة المندوب ${activeCourier.name}: ${failedReason}`,
+      extra
+    );
 
     setIsFailModalOpen(false);
     setSelectedShipment(null);
@@ -225,8 +235,8 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     };
 
     const statusNote = refuseShippingFeePaid
-      ? `مرتجع (دفع الشحن ورجع - تم تحصيل ${amountCollected} ج.م مصاريف شحن - مستحقات التاجر 0 ج.م): ${refuseReason}`
-      : `مرتجع (لم يدفع شحن - خصم مصاريف الشحن ${selectedShipment.financials.shippingFee} ج.م من التاجر): ${refuseReason}`;
+      ? `مرتجع بواسطة ${activeCourier.name} (دفع الشحن ورجع - تم تحصيل ${amountCollected} ج.م مصاريف شحن - مستحقات التاجر 0 ج.م): ${refuseReason}`
+      : `مرتجع بواسطة ${activeCourier.name} (لم يدفع شحن - خصم مصاريف الشحن ${selectedShipment.financials.shippingFee} ج.م من التاجر): ${refuseReason}`;
 
     const calculatedNetPayout = refuseShippingFeePaid
       ? 0
@@ -239,6 +249,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
         netPayout: calculatedNetPayout,
       },
       refusedDetails,
+      assignedCourier: selectedShipment.assignedCourier || activeCourier,
     };
 
     // تعيين حالة الأوردر إلى مرتجع (returned) كما طلب المستخدم
@@ -263,12 +274,13 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
         partialCodAmount: partialCodCollected,
         notes: partialNotes,
       },
+      assignedCourier: selectedShipment.assignedCourier || activeCourier,
     };
 
     onUpdateStatus(
       selectedShipment.id,
       'partial_delivery',
-      `استلام جزئي: تم استلام ${partialItemsAccepted} قطعة بقيمة ${partialCodCollected} ج.م. (${partialNotes})`,
+      `استلام جزئي بواسطة المندوب ${activeCourier.name}: تم استلام ${partialItemsAccepted} قطعة بقيمة ${partialCodCollected} ج.م. (${partialNotes})`,
       extra
     );
 

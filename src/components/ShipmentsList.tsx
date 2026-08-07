@@ -109,6 +109,8 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
         s.recipient.name.toLowerCase().includes(searchLower) ||
         s.recipient.phone.includes(searchLower) ||
         s.recipient.streetAddress.toLowerCase().includes(searchLower) ||
+        (s.recipient.governorate && s.recipient.governorate.toLowerCase().includes(searchLower)) ||
+        (s.recipient.city && s.recipient.city.toLowerCase().includes(searchLower)) ||
         (s.sender?.storeName && s.sender.storeName.toLowerCase().includes(searchLower)) ||
         (s.sender?.contactName && s.sender.contactName.toLowerCase().includes(searchLower));
 
@@ -420,7 +422,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
           <div className="relative w-full sm:w-80">
             <input
               type="text"
-              placeholder="ابحث برقم البوليصة، اسم المستلم، الهاتف..."
+              placeholder="ابحث برقم البوليصة، المستلم، المدينة، المنطقة..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20"

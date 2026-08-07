@@ -212,9 +212,12 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       if (typeof data.itemsCount === 'number' && data.itemsCount > 0) setItemsCount(data.itemsCount);
 
       // Match governorate
-      if (data.governorate) {
+      if (data.governorate || data.city) {
+        const govTerm = data.governorate || '';
+        const cityTerm = data.city || '';
         const matchedGov = governoratesList.find((g) =>
-          g.nameAr.includes(data.governorate) || data.governorate.includes(g.nameAr)
+          (govTerm && (g.nameAr.includes(govTerm) || govTerm.includes(g.nameAr))) ||
+          (cityTerm && g.cities?.some((c) => c.toLowerCase().includes(cityTerm.toLowerCase()) || cityTerm.toLowerCase().includes(c.toLowerCase())))
         );
         if (matchedGov) setGovernorateCode(matchedGov.code);
       }
@@ -344,6 +347,12 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
               g.nameAr.includes(govVal) || govVal.includes(g.nameAr) || g.nameEn.toLowerCase().includes(govVal.toLowerCase())
             );
             if (foundGov) matchedGovCode = foundGov.code;
+          }
+          if (cityVal) {
+            const foundByCity = EGYPT_GOVERNORATES.find((g) =>
+              g.cities?.some((c) => c.toLowerCase().includes(cityVal.toLowerCase()) || cityVal.toLowerCase().includes(c.toLowerCase()))
+            );
+            if (foundByCity) matchedGovCode = foundByCity.code;
           }
 
           return {

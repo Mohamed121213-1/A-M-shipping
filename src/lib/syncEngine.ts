@@ -90,10 +90,44 @@ class SyncEngine {
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', (e) => {
         if (e.key && e.key.startsWith('bosta_')) {
-          const storedTime = localStorage.getItem('bosta_last_updated');
-          const timeNum = storedTime ? Number(storedTime) : Date.now();
-          if (timeNum > this.latestTimestamp) {
-            this.latestTimestamp = timeNum;
+          try {
+            const storedTime = localStorage.getItem('bosta_last_updated');
+            const timeNum = storedTime ? Number(storedTime) : Date.now();
+
+            const shipmentsRaw = localStorage.getItem('bosta_shipments');
+            const walletRaw = localStorage.getItem('bosta_wallet');
+            const usersRaw = localStorage.getItem('bosta_users');
+            const couriersRaw = localStorage.getItem('bosta_couriers');
+            const hubsRaw = localStorage.getItem('bosta_hubs');
+            const governoratesRaw = localStorage.getItem('bosta_governorates');
+            const notificationsRaw = localStorage.getItem('bosta_courier_notifications');
+
+            const mockIds = new Set(['BST-804101', 'BST-804102', 'BST-804103', 'BST-804104', 'BST-804105', 'BST-804106']);
+
+            let shipments: Shipment[] | undefined = shipmentsRaw ? JSON.parse(shipmentsRaw) : undefined;
+            if (shipments && Array.isArray(shipments)) {
+              shipments = shipments.filter((s) => s && !mockIds.has(s.id) && !mockIds.has(s.trackingNumber));
+            }
+
+            const incomingState: SyncedAppState = {
+              shipments,
+              wallet: walletRaw ? JSON.parse(walletRaw) : undefined,
+              users: usersRaw ? JSON.parse(usersRaw) : undefined,
+              couriers: couriersRaw ? JSON.parse(couriersRaw) : undefined,
+              hubs: hubsRaw ? JSON.parse(hubsRaw) : undefined,
+              governorates: governoratesRaw ? JSON.parse(governoratesRaw) : undefined,
+              notifications: notificationsRaw ? JSON.parse(notificationsRaw) : undefined,
+              timestamp: timeNum,
+              senderId: 'storage_sync',
+            };
+
+            if (timeNum >= this.latestTimestamp) {
+              this.latestTimestamp = timeNum;
+              this.latestStateCache = { ...this.latestStateCache, ...incomingState };
+              this.listeners.forEach((cb) => cb(incomingState));
+            }
+          } catch (err) {
+            console.warn('Storage sync parse error:', err);
           }
         }
       });
@@ -110,6 +144,9 @@ class SyncEngine {
   private handleIncomingUpdate(data: SyncedAppState) {
     if (this.isProcessingIncoming) return;
 
+    const isFromOtherSender = Boolean(data.senderId && data.senderId !== this.instanceId);
+    if (!isFromOtherSender) return;
+
     // Filter out old mock shipments if present in incoming state payload
     if (data.shipments && Array.isArray(data.shipments)) {
       const mockIds = new Set(['BST-804101', 'BST-804102', 'BST-804103', 'BST-804104', 'BST-804105', 'BST-804106']);
@@ -117,19 +154,20 @@ class SyncEngine {
     }
 
     const incomingTime = data.timestamp || 0;
-    const isFromOtherSender = Boolean(data.senderId && data.senderId !== this.instanceId);
-
-    // CRITICAL FIX: Only process incoming updates if from another sender AND strictly newer than our latest timestamp
-    if (!isFromOtherSender || (incomingTime > 0 && incomingTime <= this.latestTimestamp)) {
-      return;
-    }
 
     this.isProcessingIncoming = true;
-    this.latestTimestamp = incomingTime;
+    this.latestTimestamp = Math.max(this.latestTimestamp, incomingTime);
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && incomingTime > 0) {
       try {
         localStorage.setItem('bosta_last_updated', String(incomingTime));
+        if (data.shipments) localStorage.setItem('bosta_shipments', JSON.stringify(data.shipments));
+        if (data.wallet) localStorage.setItem('bosta_wallet', JSON.stringify(data.wallet));
+        if (data.users) localStorage.setItem('bosta_users', JSON.stringify(data.users));
+        if (data.couriers) localStorage.setItem('bosta_couriers', JSON.stringify(data.couriers));
+        if (data.hubs) localStorage.setItem('bosta_hubs', JSON.stringify(data.hubs));
+        if (data.governorates) localStorage.setItem('bosta_governorates', JSON.stringify(data.governorates));
+        if (data.notifications) localStorage.setItem('bosta_courier_notifications', JSON.stringify(data.notifications));
       } catch (e) {}
     }
 

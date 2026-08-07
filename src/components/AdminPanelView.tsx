@@ -435,7 +435,9 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
   );
 
   const filteredRates = governorates.filter(g =>
-    g.nameAr.includes(rateSearch) || g.nameEn.toLowerCase().includes(rateSearch.toLowerCase())
+    g.nameAr.toLowerCase().includes(rateSearch.toLowerCase()) ||
+    g.nameEn.toLowerCase().includes(rateSearch.toLowerCase()) ||
+    (g.cities && g.cities.some(c => c.toLowerCase().includes(rateSearch.toLowerCase())))
   );
 
   return (
@@ -1231,9 +1233,9 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
               {[
-                { name: 'مدينتي', govCode: 'CAI', defaultGov: 'القاهرة' },
-                { name: 'بدر', govCode: 'CAI', defaultGov: 'القاهرة' },
-                { name: 'الشروق', govCode: 'CAI', defaultGov: 'القاهرة' },
+                { name: 'مدينتي', govCode: 'NCW', defaultGov: 'المدن الجديدة' },
+                { name: 'بدر', govCode: 'NCW', defaultGov: 'المدن الجديدة' },
+                { name: 'الشروق', govCode: 'NCW', defaultGov: 'المدن الجديدة' },
                 { name: 'العبور', govCode: 'QLB', defaultGov: 'القليوبية' },
                 { name: 'القلج', govCode: 'QLB', defaultGov: 'القليوبية' },
                 { name: 'مؤسسة الزكاة (مؤسسة)', govCode: 'CAI', defaultGov: 'القاهرة' },

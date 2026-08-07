@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { EGYPT_GOVERNORATES } from '../data/mockData';
 import { GovernorateRate } from '../types';
-import { Calculator, DollarSign, Truck, MapPin, CheckCircle } from 'lucide-react';
+import { Calculator, DollarSign, Truck, MapPin, CheckCircle, Search, X } from 'lucide-react';
 
 interface RateCalculatorViewProps {
   governorates?: GovernorateRate[];
@@ -9,11 +9,22 @@ interface RateCalculatorViewProps {
 
 export const RateCalculatorView: React.FC<RateCalculatorViewProps> = ({ governorates = EGYPT_GOVERNORATES }) => {
   const [selectedGovCode, setSelectedGovCode] = useState(governorates[0]?.code || 'CAI');
+  const [citySearch, setCitySearch] = useState('');
   const [weightKg, setWeightKg] = useState<number>(2.5);
   const [isExpress, setIsExpress] = useState(false);
   const [codAmount, setCodAmount] = useState<number>(1500);
 
   const selectedGov = governorates.find((g) => g.code === selectedGovCode) || governorates[0] || EGYPT_GOVERNORATES[0];
+
+  // Find cities matching search across all governorates
+  const searchLower = citySearch.trim().toLowerCase();
+  const matchingCitiesResult = searchLower
+    ? governorates.flatMap((g) =>
+        (g.cities || [])
+          .filter((c) => c.toLowerCase().includes(searchLower))
+          .map((c) => ({ city: c, gov: g }))
+      )
+    : [];
 
   const baseRate = selectedGov.baseRate;
   const extraWeightFee = Math.max(0, weightKg - 3) * selectedGov.additionalKgRate;
@@ -31,11 +42,77 @@ export const RateCalculatorView: React.FC<RateCalculatorViewProps> = ({ governor
             <Calculator className="w-6 h-6" />
             حاسبة أسعار A&Mshipping الرسمية (A&Mshipping Calculator)
           </h3>
-          <p className="text-xs text-red-100 mt-1">احسب تكلفة الشحن وصافي تحصيل الكاش لجميع محافظات جمهورية مصر العربية</p>
+          <p className="text-xs text-red-100 mt-1">احسب تكلفة الشحن وصافي تحصيل الكاش لجميع محافظات ومدن جمهورية مصر العربية</p>
         </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs space-y-6">
+        {/* City & Region Search Bar */}
+        <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
+          <label className="block text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+            <Search className="w-4 h-4 text-red-600" />
+            البحث والتصفية بالمدن والمناطق (مثال: فيصل، التجمع، إمبابة، المهندسين، طنطا...):
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              value={citySearch}
+              onChange={(e) => setCitySearch(e.target.value)}
+              placeholder="اكتب اسم المدينة أو المنطقة للبحث الفوري..."
+              className="w-full text-xs font-bold p-3 pr-10 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+            />
+            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+            {citySearch && (
+              <button
+                type="button"
+                onClick={() => setCitySearch('')}
+                className="absolute left-3 top-3 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Display Search Results for Cities */}
+          {searchLower && (
+            <div className="mt-2 space-y-2">
+              {matchingCitiesResult.length > 0 ? (
+                <div>
+                  <span className="text-[11px] font-bold text-slate-600 block mb-1">
+                    المدن والمناطق المطابقة ({matchingCitiesResult.length} نتيجة):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
+                    {matchingCitiesResult.map(({ city, gov }) => (
+                      <button
+                        key={`${gov.code}-${city}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedGovCode(gov.code);
+                        }}
+                        className={`text-xs font-extrabold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer ${
+                          selectedGov.code === gov.code
+                            ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                            : 'bg-white text-slate-800 border-slate-300 hover:border-red-500'
+                        }`}
+                      >
+                        <MapPin className="w-3 h-3 text-current" />
+                        <span>{city}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${selectedGov.code === gov.code ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                          {gov.nameAr} - {gov.baseRate} ج.م
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded-lg font-medium border border-amber-200">
+                  لم يتم العثور على مدينة مطابقة لـ "{citySearch}". يمكنك الاختيار المباشر من قائمة المحافظات أدناه.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="block text-xs font-bold text-slate-700 mb-1">المحافظة المستهدفة:</label>
@@ -44,11 +121,18 @@ export const RateCalculatorView: React.FC<RateCalculatorViewProps> = ({ governor
               onChange={(e) => setSelectedGovCode(e.target.value)}
               className="w-full text-xs font-bold p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:ring-2 focus:ring-red-500/20"
             >
-              {governorates.map((g) => (
-                <option key={g.code} value={g.code}>
-                  {g.nameAr}
-                </option>
-              ))}
+              {governorates
+                .filter((g) =>
+                  searchLower
+                    ? g.nameAr.toLowerCase().includes(searchLower) ||
+                      g.cities?.some((c) => c.toLowerCase().includes(searchLower))
+                    : true
+                )
+                .map((g) => (
+                  <option key={g.code} value={g.code}>
+                    {g.nameAr} - (سعر أساسي: {g.baseRate} ج.م)
+                  </option>
+                ))}
             </select>
 
             {/* Display automatic centers & cities inside selected governorate */}
@@ -56,14 +140,23 @@ export const RateCalculatorView: React.FC<RateCalculatorViewProps> = ({ governor
               <div className="mt-2 p-3 bg-red-50/50 border border-red-100 rounded-xl space-y-1">
                 <span className="text-[11px] font-extrabold text-red-950 flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-red-600" />
-                  المراكز والمدن المغطاة تلقائياً في {selectedGov.nameAr} (التجمع، أكتوبر...):
+                  المراكز والمدن المغطاة في {selectedGov.nameAr} ({selectedGov.cities.length} منطقة):
                 </span>
                 <div className="flex flex-wrap gap-1 pt-1">
-                  {selectedGov.cities.map((c) => (
-                    <span key={c} className="text-[10px] bg-white text-slate-800 border border-red-200 px-2 py-0.5 rounded-md font-bold">
-                      {c}
-                    </span>
-                  ))}
+                  {selectedGov.cities
+                    .filter((c) => (searchLower ? c.toLowerCase().includes(searchLower) : true))
+                    .map((c) => (
+                      <span
+                        key={c}
+                        className={`text-[10px] border px-2 py-0.5 rounded-md font-bold ${
+                          searchLower && c.toLowerCase().includes(searchLower)
+                            ? 'bg-red-600 text-white border-red-600 font-black'
+                            : 'bg-white text-slate-800 border-red-200'
+                        }`}
+                      >
+                        {c}
+                      </span>
+                    ))}
                 </div>
               </div>
             )}

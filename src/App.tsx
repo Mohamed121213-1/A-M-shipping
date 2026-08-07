@@ -66,9 +66,86 @@ export default function App() {
     loadLocalState<HubInfo[]>('bosta_hubs', BOSTA_HUBS)
   );
 
-  const [governorates, setGovernorates] = useState<GovernorateRate[]>(() =>
-    loadLocalState<GovernorateRate[]>('bosta_governorates', EGYPT_GOVERNORATES)
-  );
+  const [governorates, setGovernorates] = useState<GovernorateRate[]>(() => {
+    let saved = loadLocalState<GovernorateRate[]>('bosta_governorates', EGYPT_GOVERNORATES);
+    const hasNCW = saved.some((g) => g.code === 'NCW' || g.nameAr === 'المدن الجديدة');
+    if (!hasNCW) {
+      const newCitiesList = ['مدينتي', 'بدر', 'الشروق', 'العاصمة الإدارية الجديدة', 'مدينة المستقبل', 'الرحاب', 'حدائق العاصمة'];
+      const updated = saved.map((g) => {
+        if (g.code === 'CAI' || g.nameAr === 'القاهرة') {
+          return {
+            ...g,
+            cities: g.cities ? g.cities.filter((c) => !newCitiesList.some(nc => c.includes(nc) || nc.includes(c))) : g.cities,
+          };
+        }
+        return g;
+      });
+      const newGov: GovernorateRate = {
+        code: 'NCW',
+        nameAr: 'المدن الجديدة',
+        nameEn: 'New Cities',
+        baseRate: 50,
+        additionalKgRate: 8,
+        estDays: '24-48 ساعة',
+        cities: ['العاصمة الإدارية الجديدة', 'مدينتي', 'الشروق', 'بدر', 'مدينة المستقبل', 'الرحاب', 'حدائق العاصمة'],
+      };
+      const caiIdx = updated.findIndex((g) => g.code === 'CAI' || g.nameAr === 'القاهرة');
+      if (caiIdx >= 0) {
+        updated.splice(caiIdx + 1, 0, newGov);
+      } else {
+        updated.unshift(newGov);
+      }
+      saved = updated;
+    }
+
+    // Always ensure Tagamoa is in Cairo and removed from New Cities
+    const tagamoaTerms = ['القاهرة الجديدة (التجمع)', 'التجمع الخامس', 'التجمع الأول', 'التجمع الثالث', 'التجمع'];
+    const extraCairoCities = [
+      'القاهرة الجديدة (التجمع)',
+      'التجمع الخامس',
+      'التجمع الأول',
+      'التجمع الثالث',
+      'وسط البلد',
+      'الشرابية',
+      'بولاق',
+      'إمبابة',
+      'الوراق',
+      'المهندسين',
+      'هرم',
+      'فيصل',
+      'حدائق الأهرام',
+      'أكتوبر',
+      'مصر القديمة',
+      'الأباجية',
+      'المنيب',
+      'البحر الأعظم',
+      'حدائق القبة'
+    ];
+
+    return saved.map((g) => {
+      if (g.code === 'NCW' || g.nameAr === 'المدن الجديدة') {
+        const currentCities = g.cities || [];
+        return {
+          ...g,
+          cities: currentCities.filter((c) => !tagamoaTerms.some((t) => c.includes(t) || t.includes(c))),
+        };
+      }
+      if (g.code === 'CAI' || g.nameAr === 'القاهرة') {
+        const currentCities = g.cities || [];
+        const mergedCities = [...currentCities];
+        extraCairoCities.forEach((city) => {
+          if (!mergedCities.some((c) => c.includes(city) || city.includes(c))) {
+            mergedCities.unshift(city);
+          }
+        });
+        return {
+          ...g,
+          cities: mergedCities,
+        };
+      }
+      return g;
+    });
+  });
 
   const [currentRole, setCurrentRole] = useState<AppUserRole>(() =>
     loadLocalState<AppUserRole>('bosta_current_role', 'merchant')
@@ -695,6 +772,13 @@ export default function App() {
     setShipments(nextShipments);
     if (updatedWallet !== wallet) {
       setWallet(updatedWallet);
+    }
+
+    try {
+      localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
+      if (updatedWallet) localStorage.setItem('bosta_wallet', JSON.stringify(updatedWallet));
+    } catch (e) {
+      console.warn('Error persisting shipments update:', e);
     }
 
     // Broadcast IMMEDIATELY to Admin and all connected instances
