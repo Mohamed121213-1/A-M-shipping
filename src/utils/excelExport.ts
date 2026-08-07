@@ -165,7 +165,7 @@ export const exportReturnsToExcel = (
       'صافي المسترد للتاجر (ج.م)': netReturnVal,
       'حالة الارتجاع': statusAr,
       'سبب الارتجاع / التفاصيل': isPartial
-        ? `تسليم ${acceptedItems} قطعة (${collectedAmt} ج.م) وارتجاع ${returnedItems} قطعة (${remainingCod} ج.م) - ${s.partialDetails?.notes || ''}`
+        ? `تسليم ${acceptedItems} قطعة (${collectedAmt} ج.م) وارتجاع ${returnedItems} قطعة (${remainingCod} ج.م)${s.partialDetails?.reportId ? ` [${s.partialDetails.reportId}]` : ''} - ${s.partialDetails?.itemBreakdown?.map((i) => `${i.itemName}:${i.acceptedQuantity}/${i.orderedQuantity}`).join(' | ') || ''} - ${s.partialDetails?.notes || ''}`
         : (s.refusedDetails?.reason || s.recipient.notes || 'طلب التاجر / العميل رفض الاستلام'),
       'المندوب المعالج': s.assignedCourier?.name || 'غير مخصص',
       'المستودع / الفرع': s.assignedHub || 'المستودع الرئيسي'

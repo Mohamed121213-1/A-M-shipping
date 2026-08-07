@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Shipment, CourierInfo, ShipmentStatus, CourierNotification, UserSession } from '../types';
+import { resolveOrderItems, buildPartialDeliveryNote } from '../lib/partialDeliveryService';
 
 import { 
   Truck, 
@@ -85,9 +86,12 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   const [isNoResponseModalOpen, setIsNoResponseModalOpen] = useState(false);
   const [selectedShipmentForNoResponse, setSelectedShipmentForNoResponse] = useState<Shipment | null>(null);
   const [noResponseNote, setNoResponseNote] = useState('العميل لا يرد على الاتصال');
-  const [partialItemsAccepted, setPartialItemsAccepted] = useState(1);
+  const [partialAcceptedQty, setPartialAcceptedQty] = useState<Record<string, number>>({});
+  const [partialReturnReasons, setPartialReturnReasons] = useState<Record<string, string>>({});
   const [partialCodCollected, setPartialCodCollected] = useState(0);
   const [partialNotes, setPartialNotes] = useState('تم استلام جزء من المحتويات وإرجاع المتبقي');
+  const [partialSubmitting, setPartialSubmitting] = useState(false);
+  const [partialErrors, setPartialErrors] = useState<string[]>([]);
   const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false);
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | undefined>(targetShipmentId);
   
@@ -268,41 +272,97 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     setSelectedShipment(null);
   };
 
-  const handleConfirmPartial = (e: React.FormEvent) => {
+  const openPartialModal = (shipment: Shipment) => {
+    const items = resolveOrderItems(shipment);
+    const initialQty: Record<string, number> = {};
+    items.forEach((item, idx) => {
+      // default: accept all except last item gets qty-1 (partial scenario)
+      if (items.length === 1) {
+        initialQty[item.id] = Math.max(1, item.quantity - 1);
+      } else {
+        initialQty[item.id] = idx === items.length - 1 ? Math.max(0, item.quantity - 1) : item.quantity;
+      }
+    });
+    const computedCod = items.reduce((s, i) => s + (initialQty[i.id] ?? 0) * i.unitPrice, 0);
+    setSelectedShipment(shipment);
+    setPartialAcceptedQty(initialQty);
+    setPartialReturnReasons({});
+    setPartialCodCollected(computedCod);
+    setPartialNotes('تم استلام جزء من المحتويات وإرجاع المتبقي');
+    setPartialErrors([]);
+    setIsPartialModalOpen(true);
+  };
+
+  const partialModalItems = useMemo(() => {
+    if (!selectedShipment) return [];
+    return resolveOrderItems(selectedShipment);
+  }, [selectedShipment]);
+
+  const partialComputedCod = useMemo(() => {
+    return partialModalItems.reduce((s, i) => s + (partialAcceptedQty[i.id] ?? 0) * i.unitPrice, 0);
+  }, [partialModalItems, partialAcceptedQty]);
+
+  const updatePartialQty = (itemId: string, qty: number, maxQty: number) => {
+    const clamped = Math.max(0, Math.min(maxQty, qty));
+    const next = { ...partialAcceptedQty, [itemId]: clamped };
+    setPartialAcceptedQty(next);
+    const newCod = partialModalItems.reduce((s, i) => s + (next[i.id] ?? 0) * i.unitPrice, 0);
+    setPartialCodCollected(newCod);
+  };
+
+  const handleConfirmPartial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedShipment) return;
+    setPartialSubmitting(true);
+    setPartialErrors([]);
 
-    const totalItems = selectedShipment.packageDetails?.itemsCount || 1;
-    const totalOriginalCod = selectedShipment.financials?.codAmount || partialCodCollected;
-    const returnedItems = Math.max(0, totalItems - partialItemsAccepted);
-    const remainingCod = Math.max(0, totalOriginalCod - partialCodCollected);
+    try {
+      const res = await fetch('/api/shipments/partial-delivery/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shipment: selectedShipment,
+          acceptedQuantities: partialAcceptedQty,
+          partialCodOverride: partialCodCollected,
+          notes: partialNotes,
+          returnReasons: partialReturnReasons,
+          courierId: activeCourier.id,
+          courierName: activeCourier.name,
+        }),
+      });
 
-    const extra: Partial<Shipment> = {
-      financials: {
-        ...selectedShipment.financials,
-        codAmount: partialCodCollected, // Collected partial COD goes to wallet/financials normally
-        netPayout: Math.max(0, partialCodCollected - selectedShipment.financials.shippingFee),
-      },
-      partialDetails: {
-        acceptedItemsCount: partialItemsAccepted,
-        returnedItemsCount: returnedItems,
-        partialCodAmount: partialCodCollected,
-        remainingCodAmount: remainingCod,
-        originalCodAmount: totalOriginalCod,
-        notes: partialNotes,
-      },
-      assignedCourier: selectedShipment.assignedCourier || activeCourier,
-    };
+      const data = await res.json();
 
-    onUpdateStatus(
-      selectedShipment.id,
-      'partial_delivery',
-      `استلام جزئي بواسطة المندوب ${activeCourier.name}: تسليم ${partialItemsAccepted} قطعة واصل (${partialCodCollected} ج.م) وارتجاع ${returnedItems} قطعة بقيمة (${remainingCod} ج.م). (${partialNotes})`,
-      extra
-    );
+      if (!res.ok) {
+        setPartialErrors(data.errors || [data.error || 'فشل في تسجيل الاستلام الجزئي']);
+        return;
+      }
 
-    setIsPartialModalOpen(false);
-    setSelectedShipment(null);
+      const report = data.report;
+      const extra: Partial<Shipment> = {
+        financials: {
+          ...selectedShipment.financials,
+          codAmount: report.partialCodAmount,
+          netPayout: Math.max(0, report.partialCodAmount - selectedShipment.financials.shippingFee),
+        },
+        partialDetails: report,
+        assignedCourier: selectedShipment.assignedCourier || activeCourier,
+      };
+
+      onUpdateStatus(
+        selectedShipment.id,
+        'partial_delivery',
+        buildPartialDeliveryNote(report, activeCourier.name),
+        extra
+      );
+
+      setIsPartialModalOpen(false);
+      setSelectedShipment(null);
+    } catch {
+      setPartialErrors(['تعذر الاتصال بالخادم — تحقق من الاتصال وحاول مرة أخرى']);
+    } finally {
+      setPartialSubmitting(false);
+    }
   };
 
   const handleHandoverCashToHub = () => {
@@ -620,12 +680,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                         </button>
 
                         <button
-                          onClick={() => {
-                            setSelectedShipment(shipment);
-                            setPartialCodCollected(shipment.financials.codAmount);
-                            setPartialItemsAccepted(Math.max(1, shipment.packageDetails.itemsCount - 1));
-                            setIsPartialModalOpen(true);
-                          }}
+                          onClick={() => openPartialModal(shipment)}
                           className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors"
                         >
                           <Receipt className="w-3.5 h-3.5" />
@@ -663,8 +718,24 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                       </div>
                     )}
                     {shipment.status === 'partial_delivery' && (
-                      <div className="text-[11px] text-amber-300 font-bold flex items-center gap-1 bg-amber-950/60 p-2 rounded-xl border border-amber-800/60">
-                        <Receipt className="w-3.5 h-3.5 text-amber-400" /> تم الاستلام الجزئي (تحصيل {shipment.financials.codAmount} ج.م)
+                      <div className="text-[11px] text-amber-300 font-bold bg-amber-950/60 p-2 rounded-xl border border-amber-800/60 space-y-1">
+                        <div className="flex items-center gap-1">
+                          <Receipt className="w-3.5 h-3.5 text-amber-400" />
+                          استلام جزئي — تحصيل {shipment.partialDetails?.partialCodAmount ?? shipment.financials.codAmount} ج.م
+                        </div>
+                        {shipment.partialDetails?.reportId && (
+                          <p className="text-[10px] text-amber-400/80 font-mono">تقرير: {shipment.partialDetails.reportId}</p>
+                        )}
+                        {shipment.partialDetails?.itemBreakdown && shipment.partialDetails.itemBreakdown.length > 0 && (
+                          <div className="text-[10px] text-amber-200/90 space-y-0.5 pt-1 border-t border-amber-800/40">
+                            {shipment.partialDetails.itemBreakdown.map((item) => (
+                              <p key={item.itemId}>
+                                {item.itemName}: {item.acceptedQuantity}/{item.orderedQuantity} مستلم
+                                {item.returnedQuantity > 0 ? ` — ${item.returnedQuantity} مرتجع` : ''}
+                              </p>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                     {shipment.status === 'refused' && (
@@ -997,50 +1068,112 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
         </div>
       )}
 
-      {/* Partial Delivery Modal */}
+      {/* Partial Delivery Modal — Per-Item Receipt */}
       {isPartialModalOpen && selectedShipment && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 space-y-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h4 className="font-extrabold text-base text-amber-400 flex items-center gap-2">
               <Receipt className="w-5 h-5 text-amber-500" />
-              تسجيل استلام جزئي للطرد (Partial Delivery)
+              تقرير الاستلام الجزئي
             </h4>
 
             <div className="bg-amber-950/40 border border-amber-800/60 p-3 rounded-xl space-y-1 text-xs text-amber-200">
               <p>المستلم: <span className="font-bold text-white">{selectedShipment.recipient.name}</span></p>
               <p>رقم البوليصة: <span className="font-mono font-bold text-white">#{selectedShipment.trackingNumber}</span></p>
-              <p>إجمالي عدد القطع بالطرد الأصلي: <span className="font-bold text-white">{selectedShipment.packageDetails.itemsCount} قطع</span></p>
+              <p>إجمالي المنتجات: <span className="font-bold text-white">{partialModalItems.reduce((s, i) => s + i.quantity, 0)} قطعة</span> — <span className="font-bold text-white">{selectedShipment.financials.codAmount} ج.م</span></p>
             </div>
 
+            {partialErrors.length > 0 && (
+              <div className="bg-rose-950/60 border border-rose-700/60 p-3 rounded-xl text-xs text-rose-300 space-y-1">
+                {partialErrors.map((err, i) => (
+                  <p key={i}>⚠ {err}</p>
+                ))}
+              </div>
+            )}
+
             <form onSubmit={handleConfirmPartial} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">عدد القطع المستلمة من العميل:</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={selectedShipment.packageDetails.itemsCount}
-                  value={partialItemsAccepted}
-                  onChange={(e) => setPartialItemsAccepted(parseInt(e.target.value) || 1)}
-                  className="w-full text-xs font-bold p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white"
-                />
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300">المنتجات — حدد الكمية المستلمة لكل منتج:</label>
+                {partialModalItems.map((item) => {
+                  const accepted = partialAcceptedQty[item.id] ?? 0;
+                  const returned = item.quantity - accepted;
+                  return (
+                    <div key={item.id} className="bg-slate-800/80 border border-slate-700 p-3 rounded-xl space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-bold text-white">{item.name}</p>
+                          {item.sku && <p className="text-[10px] text-slate-400 font-mono">{item.sku}</p>}
+                          <p className="text-[10px] text-slate-400">الطلب: {item.quantity} × {item.unitPrice} ج.م</p>
+                        </div>
+                        <div className="text-left">
+                          <p className="text-[10px] text-emerald-400 font-bold">{(accepted * item.unitPrice).toLocaleString()} ج.م</p>
+                          {returned > 0 && <p className="text-[10px] text-rose-400">{returned} مرتجع</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] text-slate-400 font-bold whitespace-nowrap">مستلم:</label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={item.quantity}
+                          value={accepted}
+                          onChange={(e) => updatePartialQty(item.id, parseInt(e.target.value), item.quantity)}
+                          className="flex-1 accent-amber-500"
+                        />
+                        <span className="text-xs font-black text-amber-300 w-12 text-center">{accepted}/{item.quantity}</span>
+                      </div>
+                      {returned > 0 && (
+                        <input
+                          type="text"
+                          placeholder="سبب إرجاع هذا المنتج..."
+                          value={partialReturnReasons[item.id] || ''}
+                          onChange={(e) => setPartialReturnReasons({ ...partialReturnReasons, [item.id]: e.target.value })}
+                          className="w-full text-[10px] p-2 bg-slate-900 border border-slate-600 rounded-lg text-slate-300"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="bg-slate-800/60 border border-slate-700 p-3 rounded-xl grid grid-cols-3 gap-2 text-center text-xs">
+                <div>
+                  <p className="text-slate-400 font-bold">مستلم</p>
+                  <p className="text-emerald-400 font-black text-sm">
+                    {Object.values(partialAcceptedQty).reduce((s, q) => s + q, 0)} قطعة
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-400 font-bold">مرتجع</p>
+                  <p className="text-rose-400 font-black text-sm">
+                    {partialModalItems.reduce((s, i) => s + i.quantity, 0) - Object.values(partialAcceptedQty).reduce((s, q) => s + q, 0)} قطعة
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-400 font-bold">المتبقي</p>
+                  <p className="text-amber-400 font-black text-sm">
+                    {Math.max(0, selectedShipment.financials.codAmount - partialCodCollected).toLocaleString()} ج.م
+                  </p>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">المبلغ المحصل الفعلي كاش (ج.م):</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">المبلغ المحصل الفعلي (ج.م):</label>
                 <input
                   type="number"
                   min={0}
+                  max={selectedShipment.financials.codAmount}
                   value={partialCodCollected}
                   onChange={(e) => setPartialCodCollected(parseFloat(e.target.value) || 0)}
                   className="w-full text-sm font-extrabold p-2.5 bg-slate-800 border border-amber-500/80 rounded-xl text-amber-300"
                 />
                 <span className="text-[10px] text-slate-400 block mt-1">
-                  المبلغ الأصلي قبل التعديل الجزئي: {selectedShipment.financials.codAmount} ج.م
+                  محسوب تلقائياً: {partialComputedCod.toLocaleString()} ج.م — الأصلي: {selectedShipment.financials.codAmount} ج.م
                 </span>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">سبب الاستلام الجزئي / القطع المرتجعة:</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">ملاحظات التقرير:</label>
                 <textarea
                   rows={2}
                   value={partialNotes}
@@ -1060,9 +1193,10 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl shadow-md transition-all"
+                  disabled={partialSubmitting}
+                  className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl shadow-md transition-all"
                 >
-                  تأكيد الاستلام الجزئي
+                  {partialSubmitting ? 'جاري التسجيل...' : 'تأكيد وإصدار التقرير'}
                 </button>
               </div>
             </form>

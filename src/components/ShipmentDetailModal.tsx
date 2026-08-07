@@ -257,11 +257,40 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               </div>
 
               {shipment.partialDetails && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-900 space-y-1">
-                  <p className="font-extrabold flex items-center gap-1">📦 تفاصيل الاستلام الجزئي:</p>
-                  <p>القطع المستلمة: <span className="font-bold">{shipment.partialDetails.acceptedItemsCount}</span> من <span className="font-bold">{shipment.packageDetails.itemsCount}</span></p>
-                  <p>المبلغ المحصل: <span className="font-bold text-emerald-700">{shipment.partialDetails.partialCodAmount} ج.م</span></p>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-900 space-y-2">
+                  <p className="font-extrabold flex items-center gap-1">📦 تقرير الاستلام الجزئي:</p>
+                  {shipment.partialDetails.reportId && (
+                    <p className="text-[10px] font-mono text-amber-700">رقم التقرير: {shipment.partialDetails.reportId}</p>
+                  )}
+                  <p>القطع المستلمة: <span className="font-bold">{shipment.partialDetails.acceptedItemsCount}</span> — المرتجعة: <span className="font-bold">{shipment.partialDetails.returnedItemsCount}</span></p>
+                  <p>المبلغ المحصل: <span className="font-bold text-emerald-700">{shipment.partialDetails.partialCodAmount} ج.م</span> — المتبقي: <span className="font-bold text-rose-700">{shipment.partialDetails.remainingCodAmount} ج.م</span></p>
+                  {shipment.partialDetails.reportedByCourierName && (
+                    <p className="text-[11px] text-slate-600">المندوب: {shipment.partialDetails.reportedByCourierName} — {new Date(shipment.partialDetails.reportedAt).toLocaleString('ar-EG')}</p>
+                  )}
+                  {shipment.partialDetails.itemBreakdown && shipment.partialDetails.itemBreakdown.length > 0 && (
+                    <div className="border-t border-amber-200 pt-2 space-y-1">
+                      <p className="font-bold text-[11px]">تفاصيل المنتجات:</p>
+                      {shipment.partialDetails.itemBreakdown.map((item) => (
+                        <div key={item.itemId} className="flex justify-between text-[11px] bg-white/60 px-2 py-1 rounded">
+                          <span>{item.itemName}: {item.acceptedQuantity}/{item.orderedQuantity}</span>
+                          <span className="font-bold">{item.acceptedValue} ج.م</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {shipment.partialDetails.notes && <p className="text-[11px] text-slate-600">ملاحظات: {shipment.partialDetails.notes}</p>}
+                </div>
+              )}
+
+              {shipment.orderItems && shipment.orderItems.length > 0 && !shipment.partialDetails && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-2.5 text-xs text-indigo-900 space-y-1">
+                  <p className="font-extrabold">🛍 منتجات الأوردر ({shipment.orderItems.length}):</p>
+                  {shipment.orderItems.map((item) => (
+                    <div key={item.id} className="flex justify-between text-[11px]">
+                      <span>{item.name} {item.sku ? `(${item.sku})` : ''} × {item.quantity}</span>
+                      <span className="font-bold">{(item.quantity * item.unitPrice).toLocaleString()} ج.م</span>
+                    </div>
+                  ))}
                 </div>
               )}
 

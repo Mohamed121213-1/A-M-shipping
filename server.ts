@@ -2,6 +2,8 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
+import { computePartialDeliveryReport, resolveOrderItems } from "./src/lib/partialDeliveryService.ts";
+import type { Shipment } from "./src/types.ts";
 
 const app = express();
 const PORT = 3000;
@@ -189,6 +191,103 @@ app.post("/api/ai-risk-check", async (req, res) => {
 
     const result = JSON.parse(response.text || "{}");
     return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Partial Delivery — Validate & Generate Report API
+app.post("/api/shipments/partial-delivery/validate", (req, res) => {
+  try {
+    const { shipment, acceptedQuantities, partialCodOverride, notes, returnReasons, courierId, courierName } = req.body;
+
+    if (!shipment || !shipment.id) {
+      return res.status(400).json({ error: "بيانات الشحنة مطلوبة" });
+    }
+    if (!acceptedQuantities || typeof acceptedQuantities !== "object") {
+      return res.status(400).json({ error: "يجب تحديد الكميات المستلمة لكل منتج" });
+    }
+    if (!courierId || !courierName) {
+      return res.status(400).json({ error: "بيانات المندوب مطلوبة" });
+    }
+
+    const result = computePartialDeliveryReport(shipment as Shipment, {
+      shipmentId: shipment.id,
+      courierId,
+      courierName,
+      acceptedQuantities,
+      partialCodOverride,
+      notes,
+      returnReasons,
+    });
+
+    if (!result.valid) {
+      return res.status(422).json({ valid: false, errors: result.errors });
+    }
+
+    return res.json({ valid: true, report: result.report });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Partial Delivery — Submit Report API (validates + returns structured report for client to persist)
+app.post("/api/shipments/partial-delivery/report", (req, res) => {
+  try {
+    const { shipment, acceptedQuantities, partialCodOverride, notes, returnReasons, courierId, courierName } = req.body;
+
+    if (!shipment || !shipment.id) {
+      return res.status(400).json({ error: "بيانات الشحنة مطلوبة" });
+    }
+    if (!acceptedQuantities || typeof acceptedQuantities !== "object") {
+      return res.status(400).json({ error: "يجب تحديد الكميات المستلمة لكل منتج" });
+    }
+    if (!courierId || !courierName) {
+      return res.status(400).json({ error: "بيانات المندوب مطلوبة" });
+    }
+
+    if (shipment.status !== "out_for_delivery") {
+      return res.status(422).json({
+        error: "لا يمكن تسجيل استلام جزئي إلا للشحنات الخارجة للتسليم",
+        currentStatus: shipment.status,
+      });
+    }
+
+    const result = computePartialDeliveryReport(shipment as Shipment, {
+      shipmentId: shipment.id,
+      courierId,
+      courierName,
+      acceptedQuantities,
+      partialCodOverride,
+      notes,
+      returnReasons,
+    });
+
+    if (!result.valid) {
+      return res.status(422).json({ valid: false, errors: result.errors });
+    }
+
+    return res.json({
+      success: true,
+      status: "partial_delivery",
+      report: result.report,
+      orderItems: resolveOrderItems(shipment as Shipment),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Get order items for a shipment (helper for courier UI)
+app.post("/api/shipments/order-items", (req, res) => {
+  try {
+    const { shipment } = req.body;
+    if (!shipment) {
+      return res.status(400).json({ error: "بيانات الشحنة مطلوبة" });
+    }
+    const items = resolveOrderItems(shipment as Shipment);
+    const totalValue = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+    return res.json({ items, totalQuantity: items.reduce((s, i) => s + i.quantity, 0), totalValue });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
