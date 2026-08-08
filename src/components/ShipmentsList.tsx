@@ -528,17 +528,6 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
               <Plus className="w-4 h-4" />
               إنشاء شحنة جديدة
             </button>
-
-            {onClearAllData && shipments.length > 0 && currentRole === 'admin' && (
-              <button
-                onClick={onClearAllData}
-                title="مسح كافة البيانات الشحنات"
-                className="bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-600 font-bold text-xs px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 border border-slate-200 hover:border-red-200 cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4 text-slate-500 hover:text-red-600" />
-                <span className="hidden sm:inline">مسح البيانات</span>
-              </button>
-            )}
           </div>
         </div>
 

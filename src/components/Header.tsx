@@ -487,20 +487,6 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
           </div>
-
-          {/* Clear Data Button (Admin Only) */}
-          {onClearData && (currentUser?.role === 'admin' || currentRole === 'admin') && (
-            <div className="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1">
-              <button
-                onClick={onClearData}
-                title="مسح كافة البيانات الشحنات والمحفظة"
-                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden lg:inline text-[11px] font-bold">مسح البيانات</span>
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </header>

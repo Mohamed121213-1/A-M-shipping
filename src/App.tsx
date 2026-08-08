@@ -735,39 +735,6 @@ export default function App() {
         },
       ];
 
-      // Dynamically calculate updated wallet values from all shipments
-      const calcPendingCod = nextShipments
-        .filter((ship) => !ship.isCourierSettled && (ship.status === 'delivered' || ship.status === 'partial_delivery' || ((ship.status === 'refused' || ship.status === 'returned') && ship.refusedDetails?.shippingFeePaid)))
-        .reduce((sum, ship) => {
-          if (ship.status === 'partial_delivery') {
-            return sum + (ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount);
-          }
-          if ((ship.status === 'refused' || ship.status === 'returned') && ship.refusedDetails?.shippingFeePaid) {
-            return sum + (ship.refusedDetails.amountCollected || ship.financials.shippingFee);
-          }
-          return sum + ship.financials.codAmount;
-        }, 0);
-
-      const calcTotalEarnedPayout = nextShipments.reduce((sum, ship) => {
-        if (ship.status === 'delivered') {
-          return sum + (ship.financials.netPayout ?? (ship.financials.codAmount - ship.financials.shippingFee));
-        }
-        if (ship.status === 'partial_delivery') {
-          const collected = ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount;
-          return sum + (ship.financials.netPayout ?? Math.max(0, collected - ship.financials.shippingFee));
-        }
-        if ((ship.status === 'refused' || ship.status === 'returned') && (ship.refusedDetails?.shippingFeePaid === false || ship.financials.netPayout < 0)) {
-          return sum - ship.financials.shippingFee;
-        }
-        return sum;
-      }, 0);
-
-      updatedWallet = {
-        ...updatedWallet,
-        pendingCod: calcPendingCod,
-        availableBalance: Math.max(0, calcTotalEarnedPayout - updatedWallet.totalPaidOut),
-      };
-
       return {
         ...s,
         ...effectiveExtra,
@@ -776,6 +743,39 @@ export default function App() {
         timeline: updatedTimeline,
       };
     });
+
+    // Dynamically calculate updated wallet values from all shipments
+    const calcPendingCod = nextShipments
+      .filter((ship) => !ship.isCourierSettled && (ship.status === 'delivered' || ship.status === 'partial_delivery' || ((ship.status === 'refused' || ship.status === 'returned') && ship.refusedDetails?.shippingFeePaid)))
+      .reduce((sum, ship) => {
+        if (ship.status === 'partial_delivery') {
+          return sum + (ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount);
+        }
+        if ((ship.status === 'refused' || ship.status === 'returned') && ship.refusedDetails?.shippingFeePaid) {
+          return sum + (ship.refusedDetails.amountCollected || ship.financials.shippingFee);
+        }
+        return sum + ship.financials.codAmount;
+      }, 0);
+
+    const calcTotalEarnedPayout = nextShipments.reduce((sum, ship) => {
+      if (ship.status === 'delivered') {
+        return sum + (ship.financials.netPayout ?? (ship.financials.codAmount - ship.financials.shippingFee));
+      }
+      if (ship.status === 'partial_delivery') {
+        const collected = ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount;
+        return sum + (ship.financials.netPayout ?? Math.max(0, collected - ship.financials.shippingFee));
+      }
+      if ((ship.status === 'refused' || ship.status === 'returned') && (ship.refusedDetails?.shippingFeePaid === false || ship.financials.netPayout < 0)) {
+        return sum - ship.financials.shippingFee;
+      }
+      return sum;
+    }, 0);
+
+    updatedWallet = {
+      ...wallet,
+      pendingCod: calcPendingCod,
+      availableBalance: Math.max(0, calcTotalEarnedPayout - wallet.totalPaidOut),
+    };
 
     setShipments(nextShipments);
     setWallet(updatedWallet);
