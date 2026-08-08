@@ -48,44 +48,6 @@ export interface SenderInfo {
   pickupAddress: string;
 }
 
-/** منتج/قطعة داخل أوردر الشحن */
-export interface ShipmentOrderItem {
-  id: string;
-  name: string;
-  sku?: string;
-  quantity: number;
-  unitPrice: number;       // سعر الوحدة (ج.م)
-  notes?: string;
-}
-
-/** سجل استلام جزئي لمنتج واحد */
-export interface PartialDeliveryItemRecord {
-  itemId: string;
-  itemName: string;
-  orderedQuantity: number;
-  acceptedQuantity: number;
-  returnedQuantity: number;
-  unitPrice: number;
-  acceptedValue: number;   // acceptedQuantity * unitPrice
-  returnedValue: number;   // returnedQuantity * unitPrice
-  returnReason?: string;
-}
-
-/** تقرير الاستلام الجزئي الكامل */
-export interface PartialDeliveryReport {
-  reportId: string;
-  reportedAt: string;
-  reportedByCourierId: string;
-  reportedByCourierName: string;
-  acceptedItemsCount: number;
-  returnedItemsCount: number;
-  partialCodAmount: number;
-  remainingCodAmount: number;
-  originalCodAmount: number;
-  itemBreakdown: PartialDeliveryItemRecord[];
-  notes?: string;
-}
-
 export interface PackageDetails {
   description: string;
   itemsCount: number;
@@ -158,13 +120,19 @@ export interface Shipment {
   sender: SenderInfo;
   recipient: AddressInfo;
   packageDetails: PackageDetails;
-  orderItems?: ShipmentOrderItem[];  // قائمة المنتجات التفصيلية داخل الأوردر
   financials: FinancialDetails;
   assignedHub: string;
   assignedCourier?: CourierInfo;
   timeline: TimelineEvent[];
   proofOfDelivery?: ProofOfDelivery;
-  partialDetails?: PartialDeliveryReport;
+  partialDetails?: {
+    acceptedItemsCount: number;
+    returnedItemsCount?: number;
+    partialCodAmount: number;
+    remainingCodAmount?: number;
+    originalCodAmount?: number;
+    notes?: string;
+  };
   refusedDetails?: {
     shippingFeePaid: boolean;
     amountCollected: number;

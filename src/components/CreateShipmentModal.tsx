@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { Shipment, GovernorateRate, AddressInfo, PackageDetails, DeliveryType, HubInfo, AppUserRole, UserSession, ShipmentOrderItem } from '../types';
+import { Shipment, GovernorateRate, AddressInfo, PackageDetails, DeliveryType, HubInfo, AppUserRole, UserSession } from '../types';
 import { EGYPT_GOVERNORATES, BOSTA_HUBS } from '../data/mockData';
 import { 
   X, Sparkles, MapPin, Package, DollarSign, User, Phone, AlertCircle, CheckCircle, 
@@ -153,46 +153,6 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   const [isFragile, setIsFragile] = useState<boolean>(false);
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('standard');
 
-  // Order Items (line-level products)
-  const [orderItems, setOrderItems] = useState<ShipmentOrderItem[]>([
-    { id: `item-${Date.now()}`, name: 'طرد ملابس واكسسوارات', quantity: 1, unitPrice: 1200 },
-  ]);
-  const [useDetailedItems, setUseDetailedItems] = useState(true);
-
-  const syncTotalsFromItems = (items: ShipmentOrderItem[]) => {
-    const totalQty = items.reduce((s, i) => s + i.quantity, 0);
-    const totalValue = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-    setItemsCount(Math.max(1, totalQty));
-    setCodAmount(totalValue);
-    if (items.length === 1) setDescription(items[0].name);
-    else if (items.length > 1) setDescription(items.map((i) => i.name).join(' + '));
-  };
-
-  const addOrderItem = () => {
-    const newItem: ShipmentOrderItem = {
-      id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-      name: '',
-      quantity: 1,
-      unitPrice: 0,
-    };
-    const next = [...orderItems, newItem];
-    setOrderItems(next);
-    syncTotalsFromItems(next);
-  };
-
-  const removeOrderItem = (id: string) => {
-    if (orderItems.length <= 1) return;
-    const next = orderItems.filter((i) => i.id !== id);
-    setOrderItems(next);
-    syncTotalsFromItems(next);
-  };
-
-  const updateOrderItem = (id: string, field: keyof ShipmentOrderItem, value: string | number) => {
-    const next = orderItems.map((i) => (i.id === id ? { ...i, [field]: value } : i));
-    setOrderItems(next);
-    if (useDetailedItems) syncTotalsFromItems(next);
-  };
-
   // Financials
   const [codAmount, setCodAmount] = useState<number>(1200);
 
@@ -310,12 +270,11 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       },
       packageDetails: {
         description,
-        itemsCount: useDetailedItems ? orderItems.reduce((s, i) => s + i.quantity, 0) : itemsCount,
+        itemsCount,
         weightKg,
         allowOpening,
         isFragile,
       },
-      orderItems: useDetailedItems ? orderItems.filter((i) => i.name.trim()) : undefined,
       financials: {
         codAmount,
         shippingFee: calculatedShippingFee,
@@ -1070,8 +1029,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                     min={1}
                     value={itemsCount}
                     onChange={(e) => setItemsCount(parseInt(e.target.value) || 1)}
-                    disabled={useDetailedItems}
-                    className={`w-full text-xs p-2.5 border border-slate-200 rounded-lg ${useDetailedItems ? 'bg-slate-100 text-slate-500' : 'bg-slate-50'}`}
+                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
                   />
                 </div>
 
@@ -1109,96 +1067,6 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                   </label>
                 </div>
               </div>
-            </div>
-
-            {/* Order Items — Detailed Product List */}
-            <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-extrabold text-indigo-900 flex items-center gap-1.5">
-                  <Package className="w-4 h-4 text-indigo-600" />
-                  منتجات الأوردر (للاستلام الجزئي)
-                </h4>
-                <label className="flex items-center gap-2 cursor-pointer text-[11px] font-bold text-indigo-800">
-                  <input
-                    type="checkbox"
-                    checked={useDetailedItems}
-                    onChange={(e) => setUseDetailedItems(e.target.checked)}
-                    className="w-4 h-4 text-indigo-600 rounded"
-                  />
-                  تفصيل المنتجات
-                </label>
-              </div>
-
-              {useDetailedItems && (
-                <div className="space-y-2">
-                  {orderItems.map((item, idx) => (
-                    <div key={item.id} className="grid grid-cols-12 gap-2 items-end bg-white p-2.5 rounded-lg border border-indigo-100">
-                      <div className="col-span-5">
-                        <label className="block text-[10px] font-bold text-slate-500 mb-0.5">اسم المنتج #{idx + 1}</label>
-                        <input
-                          type="text"
-                          value={item.name}
-                          onChange={(e) => updateOrderItem(item.id, 'name', e.target.value)}
-                          placeholder="فستان زارا مقاس M"
-                          className="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-lg"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="block text-[10px] font-bold text-slate-500 mb-0.5">SKU</label>
-                        <input
-                          type="text"
-                          value={item.sku || ''}
-                          onChange={(e) => updateOrderItem(item.id, 'sku', e.target.value)}
-                          placeholder="SKU-001"
-                          className="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-lg"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="block text-[10px] font-bold text-slate-500 mb-0.5">الكمية</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => updateOrderItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
-                          className="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="block text-[10px] font-bold text-slate-500 mb-0.5">السعر (ج.م)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          value={item.unitPrice}
-                          onChange={(e) => updateOrderItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                          className="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
-                        />
-                      </div>
-                      <div className="col-span-1 flex justify-center">
-                        <button
-                          type="button"
-                          onClick={() => removeOrderItem(item.id)}
-                          disabled={orderItems.length <= 1}
-                          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg disabled:opacity-30"
-                          title="حذف المنتج"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={addOrderItem}
-                    className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 hover:text-indigo-900 px-2 py-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    إضافة منتج آخر
-                  </button>
-                  <p className="text-[10px] text-indigo-600 font-medium">
-                    إجمالي: {orderItems.reduce((s, i) => s + i.quantity, 0)} قطعة — {orderItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0).toLocaleString()} ج.م
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Financials & Rate Calculation Preview */}

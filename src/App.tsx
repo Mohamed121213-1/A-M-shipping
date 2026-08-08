@@ -735,24 +735,38 @@ export default function App() {
         },
       ];
 
-      // Adjust wallet if delivered, partial_delivery, or refused
-      if ((newStatus === 'delivered' || newStatus === 'partial_delivery') && (s.status !== 'delivered' && s.status !== 'partial_delivery')) {
-        const collectedAmt = effectiveExtra?.partialDetails?.partialCodAmount ?? effectiveExtra?.financials?.codAmount ?? s.financials.codAmount;
-        const netPayoutAmt = effectiveExtra?.financials?.netPayout ?? s.financials.netPayout ?? Math.max(0, collectedAmt - s.financials.shippingFee);
-        updatedWallet = {
-          ...updatedWallet,
-          pendingCod: updatedWallet.pendingCod + collectedAmt,
-          availableBalance: updatedWallet.availableBalance + netPayoutAmt,
-        };
-      } else if ((newStatus === 'refused' || newStatus === 'returned') && s.status !== 'refused' && s.status !== 'returned') {
-        const isShippingPaid = effectiveExtra?.refusedDetails?.shippingFeePaid ?? s.refusedDetails?.shippingFeePaid;
-        if (isShippingPaid === false) {
-          updatedWallet = {
-            ...updatedWallet,
-            availableBalance: Math.max(0, updatedWallet.availableBalance - s.financials.shippingFee),
-          };
+      // Dynamically calculate updated wallet values from all shipments
+      const calcPendingCod = nextShipments
+        .filter((ship) => !ship.isCourierSettled && (ship.status === 'delivered' || ship.status === 'partial_delivery' || ((ship.status === 'refused' || ship.status === 'returned') && ship.refusedDetails?.shippingFeePaid)))
+        .reduce((sum, ship) => {
+          if (ship.status === 'partial_delivery') {
+            return sum + (ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount);
+          }
+          if ((ship.status === 'refused' || ship.status === 'returned') && ship.refusedDetails?.shippingFeePaid) {
+            return sum + (ship.refusedDetails.amountCollected || ship.financials.shippingFee);
+          }
+          return sum + ship.financials.codAmount;
+        }, 0);
+
+      const calcTotalEarnedPayout = nextShipments.reduce((sum, ship) => {
+        if (ship.status === 'delivered') {
+          return sum + (ship.financials.netPayout ?? (ship.financials.codAmount - ship.financials.shippingFee));
         }
-      }
+        if (ship.status === 'partial_delivery') {
+          const collected = ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount;
+          return sum + (ship.financials.netPayout ?? Math.max(0, collected - ship.financials.shippingFee));
+        }
+        if ((ship.status === 'refused' || ship.status === 'returned') && (ship.refusedDetails?.shippingFeePaid === false || ship.financials.netPayout < 0)) {
+          return sum - ship.financials.shippingFee;
+        }
+        return sum;
+      }, 0);
+
+      updatedWallet = {
+        ...updatedWallet,
+        pendingCod: calcPendingCod,
+        availableBalance: Math.max(0, calcTotalEarnedPayout - updatedWallet.totalPaidOut),
+      };
 
       return {
         ...s,
@@ -764,9 +778,7 @@ export default function App() {
     });
 
     setShipments(nextShipments);
-    if (updatedWallet !== wallet) {
-      setWallet(updatedWallet);
-    }
+    setWallet(updatedWallet);
 
     try {
       localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));

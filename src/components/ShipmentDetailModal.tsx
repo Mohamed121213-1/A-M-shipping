@@ -30,6 +30,14 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   const [refusePaidOption, setRefusePaidOption] = useState<'paid' | 'unpaid'>('paid');
   const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
 
+  // Partial Delivery inputs
+  const [partialAcceptedCount, setPartialAcceptedCount] = useState<number>(
+    shipment.partialDetails?.acceptedItemsCount || 1
+  );
+  const [partialCodCollected, setPartialCodCollected] = useState<number>(
+    shipment.partialDetails?.partialCodAmount || Math.round(shipment.financials.codAmount / 2)
+  );
+
   // AI Risk Check state
   const [isAiRiskChecking, setIsAiRiskChecking] = useState(false);
   const [aiRiskResult, setAiRiskResult] = useState<{ riskScore?: number; riskLevel?: string; recommendations?: string[] } | null>(null);
@@ -53,6 +61,29 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
           shippingFeePaid: isPaid,
           amountCollected,
           reason: statusNote || (isPaid ? 'دفع الشحن ورجع' : 'لم يدفع شحن'),
+        },
+      };
+    } else if (selectedStatus === 'partial_delivery') {
+      const totalItems = shipment.packageDetails?.itemsCount || 1;
+      const totalOriginalCod = shipment.partialDetails?.originalCodAmount || shipment.financials.codAmount;
+      const accepted = Math.min(totalItems, Math.max(1, partialAcceptedCount));
+      const returnedItems = Math.max(0, totalItems - accepted);
+      const collectedAmt = Math.min(totalOriginalCod, Math.max(0, partialCodCollected));
+      const remainingCod = Math.max(0, totalOriginalCod - collectedAmt);
+
+      extraUpdates = {
+        financials: {
+          ...shipment.financials,
+          codAmount: collectedAmt,
+          netPayout: Math.max(0, collectedAmt - shipment.financials.shippingFee),
+        },
+        partialDetails: {
+          acceptedItemsCount: accepted,
+          returnedItemsCount: returnedItems,
+          partialCodAmount: collectedAmt,
+          remainingCodAmount: remainingCod,
+          originalCodAmount: totalOriginalCod,
+          notes: statusNote || 'استلام جزئي من العميل وترحيل المتبقي للمرتجع',
         },
       };
     }
@@ -257,40 +288,11 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               </div>
 
               {shipment.partialDetails && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-900 space-y-2">
-                  <p className="font-extrabold flex items-center gap-1">📦 تقرير الاستلام الجزئي:</p>
-                  {shipment.partialDetails.reportId && (
-                    <p className="text-[10px] font-mono text-amber-700">رقم التقرير: {shipment.partialDetails.reportId}</p>
-                  )}
-                  <p>القطع المستلمة: <span className="font-bold">{shipment.partialDetails.acceptedItemsCount}</span> — المرتجعة: <span className="font-bold">{shipment.partialDetails.returnedItemsCount}</span></p>
-                  <p>المبلغ المحصل: <span className="font-bold text-emerald-700">{shipment.partialDetails.partialCodAmount} ج.م</span> — المتبقي: <span className="font-bold text-rose-700">{shipment.partialDetails.remainingCodAmount} ج.م</span></p>
-                  {shipment.partialDetails.reportedByCourierName && (
-                    <p className="text-[11px] text-slate-600">المندوب: {shipment.partialDetails.reportedByCourierName} — {new Date(shipment.partialDetails.reportedAt).toLocaleString('ar-EG')}</p>
-                  )}
-                  {shipment.partialDetails.itemBreakdown && shipment.partialDetails.itemBreakdown.length > 0 && (
-                    <div className="border-t border-amber-200 pt-2 space-y-1">
-                      <p className="font-bold text-[11px]">تفاصيل المنتجات:</p>
-                      {shipment.partialDetails.itemBreakdown.map((item) => (
-                        <div key={item.itemId} className="flex justify-between text-[11px] bg-white/60 px-2 py-1 rounded">
-                          <span>{item.itemName}: {item.acceptedQuantity}/{item.orderedQuantity}</span>
-                          <span className="font-bold">{item.acceptedValue} ج.م</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-900 space-y-1">
+                  <p className="font-extrabold flex items-center gap-1">📦 تفاصيل الاستلام الجزئي:</p>
+                  <p>القطع المستلمة: <span className="font-bold">{shipment.partialDetails.acceptedItemsCount}</span> من <span className="font-bold">{shipment.packageDetails.itemsCount}</span></p>
+                  <p>المبلغ المحصل: <span className="font-bold text-emerald-700">{shipment.partialDetails.partialCodAmount} ج.م</span></p>
                   {shipment.partialDetails.notes && <p className="text-[11px] text-slate-600">ملاحظات: {shipment.partialDetails.notes}</p>}
-                </div>
-              )}
-
-              {shipment.orderItems && shipment.orderItems.length > 0 && !shipment.partialDetails && (
-                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-2.5 text-xs text-indigo-900 space-y-1">
-                  <p className="font-extrabold">🛍 منتجات الأوردر ({shipment.orderItems.length}):</p>
-                  {shipment.orderItems.map((item) => (
-                    <div key={item.id} className="flex justify-between text-[11px]">
-                      <span>{item.name} {item.sku ? `(${item.sku})` : ''} × {item.quantity}</span>
-                      <span className="font-bold">{(item.quantity * item.unitPrice).toLocaleString()} ج.م</span>
-                    </div>
-                  ))}
                 </div>
               )}
 
@@ -414,6 +416,52 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                     <option value="paid">دفع الشحن ورجع (مستحقات التاجر 0 ج.م)</option>
                     <option value="unpaid">لم يدفع شحن (خصم {shipment.financials.shippingFee} ج.م شحن من التاجر)</option>
                   </select>
+                </div>
+              ) : selectedStatus === 'partial_delivery' ? (
+                <div className="col-span-2 space-y-2 bg-amber-950/80 border border-amber-700/80 p-3 rounded-xl text-amber-100">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-amber-200 mb-1">
+                        عدد القطع المقبولة/المستلمة (من أصل {shipment.packageDetails?.itemsCount || 1}):
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={shipment.packageDetails?.itemsCount || 1}
+                        value={partialAcceptedCount}
+                        onChange={(e) => setPartialAcceptedCount(Number(e.target.value))}
+                        className="w-full p-1.5 bg-slate-900 border border-amber-600 rounded-lg text-white font-extrabold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-amber-200 mb-1">
+                        المبلغ المحصل للقطع المقبولة (ج.م):
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={shipment.partialDetails?.originalCodAmount || shipment.financials.codAmount}
+                        value={partialCodCollected}
+                        onChange={(e) => setPartialCodCollected(Number(e.target.value))}
+                        className="w-full p-1.5 bg-slate-900 border border-amber-600 rounded-lg text-emerald-400 font-extrabold"
+                      />
+                    </div>
+                  </div>
+                  <div className="text-[11px] font-bold text-amber-200 flex flex-wrap items-center justify-between pt-1 border-t border-amber-800/80">
+                    <span>
+                      ↩️ القطع المرتجعة: <strong className="text-white">{Math.max(0, (shipment.packageDetails?.itemsCount || 1) - partialAcceptedCount)} قطعة</strong>
+                    </span>
+                    <span>
+                      💰 باقي المبلغ المترحل للمرتجع: <strong className="text-white">{Math.max(0, (shipment.partialDetails?.originalCodAmount || shipment.financials.codAmount) - partialCodCollected).toLocaleString()} ج.م</strong>
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="سبب/ملاحظات الارتجاع الجزئي..."
+                    value={statusNote}
+                    onChange={(e) => setStatusNote(e.target.value)}
+                    className="w-full text-xs p-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  />
                 </div>
               ) : (
                 <div>
