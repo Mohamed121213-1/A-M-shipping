@@ -52,7 +52,21 @@ class SyncEngine {
       }
     }
 
-    // 2. Initialize Supabase Realtime Broadcast Channel for cross-device & cross-account syncing
+    // 2. Initialize Server-Side API Sync (cross-device & cross-browser synchronization)
+    if (typeof window !== 'undefined') {
+      this.fetchPersistedStateFromServer();
+      
+      // Poll server state every 2.5 seconds to guarantee multi-device updates
+      setInterval(() => {
+        this.fetchPersistedStateFromServer();
+      }, 2500);
+
+      // Re-check state immediately on window focus or online status change
+      window.addEventListener('focus', () => this.fetchPersistedStateFromServer());
+      window.addEventListener('online', () => this.fetchPersistedStateFromServer());
+    }
+
+    // 3. Initialize Supabase Realtime Broadcast Channel for cross-device & cross-account syncing
     if (isSupabaseConfigured) {
       try {
         this.realtimeChannel = supabase.channel('bosta_global_realtime');
@@ -70,15 +84,11 @@ class SyncEngine {
           .subscribe((status: string) => {
             if (status === 'SUBSCRIBED') {
               console.log('⚡ Connected to Global Cross-Device Sync Service');
-              // Request current state from other active sessions
               this.requestStateSync();
             }
           });
 
-        // Try initial fetch from Supabase database table if available
         this.fetchPersistedStateFromSupabase();
-
-        // Periodically poll Supabase DB every 3 seconds to guarantee updates reach Admin
         setInterval(() => {
           this.fetchPersistedStateFromSupabase();
         }, 3000);
@@ -87,7 +97,7 @@ class SyncEngine {
       }
     }
 
-    // 3. Fallback Storage event listener for cross-tab sync
+    // 4. Fallback Storage event listener for cross-tab sync
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', (e) => {
         if (e.key && e.key.startsWith('bosta_')) {
@@ -134,6 +144,49 @@ class SyncEngine {
           }
         }
       });
+    }
+  }
+
+  private async fetchPersistedStateFromServer() {
+    if (typeof window === 'undefined') return;
+    try {
+      const res = await fetch('/api/sync/state');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.state && data.timestamp) {
+        const remoteTime = Number(data.timestamp) || 0;
+        if (remoteTime > this.latestTimestamp && data.state.senderId !== this.instanceId) {
+          this.handleIncomingUpdate({
+            ...data.state,
+            timestamp: remoteTime,
+            senderId: data.state.senderId || 'server_sync',
+          });
+        } else if (this.latestTimestamp > remoteTime && this.latestStateCache) {
+          // Local client has newer state than server, push to server
+          this.postStateToServer(this.latestStateCache, this.latestTimestamp);
+        }
+      } else if (data && !data.state && this.latestStateCache) {
+        // Server empty, push client state
+        this.postStateToServer(this.latestStateCache, this.latestTimestamp);
+      }
+    } catch (e) {
+      // Network/Server offline, silently continue
+    }
+  }
+
+  private async postStateToServer(state: SyncedAppState, timestamp: number) {
+    try {
+      await fetch('/api/sync/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          state,
+          timestamp,
+          senderId: this.instanceId,
+        }),
+      });
+    } catch (e) {
+      console.warn('Error posting state to server:', e);
     }
   }
 
@@ -254,7 +307,10 @@ class SyncEngine {
 
     this.latestStateCache = payload;
 
-    // 1. Broadcast to local tabs/windows
+    // 1. Post state to Server-Side API for multi-device sync
+    this.postStateToServer(payload, now);
+
+    // 2. Broadcast to local tabs/windows
     if (this.localChannel) {
       try {
         this.localChannel.postMessage(payload);

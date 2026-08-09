@@ -135,7 +135,9 @@ export interface Shipment {
   };
   refusedDetails?: {
     shippingFeePaid: boolean;
+    partialShippingFeePaid?: boolean;
     amountCollected: number;
+    merchantDeductedAmount?: number;
     reason: string;
   };
   noResponseDetails?: {

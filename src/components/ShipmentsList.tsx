@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { Shipment, ShipmentStatus, CourierInfo, AppUserRole, UserSession } from '../types';
 import { EGYPT_GOVERNORATES } from '../data/mockData';
 import { exportShipmentsToExcel } from '../utils/excelExport';
@@ -282,15 +283,29 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
         );
       case 'refused':
       case 'returned':
-        if (s.refusedDetails?.shippingFeePaid === true) {
+        if (s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) > 0 && (s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee)) {
+          const collected = s.refusedDetails?.amountCollected || 0;
+          const deducted = s.refusedDetails?.merchantDeductedAmount ?? Math.max(0, s.financials.shippingFee - collected);
           return (
             <div className="space-y-1">
               <span className="bg-amber-100 text-amber-950 border border-amber-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
                 <RotateCcw className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                <span>🚚 دفع جزء من الشحن ({collected} ج.م)</span>
+              </span>
+              <span className="block text-[10px] text-amber-900 font-bold">
+                خصم المتبقي ({deducted} ج.م) من التاجر
+              </span>
+            </div>
+          );
+        } else if (s.refusedDetails?.shippingFeePaid === true) {
+          return (
+            <div className="space-y-1">
+              <span className="bg-emerald-100 text-emerald-950 border border-emerald-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+                <RotateCcw className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                 <span>🚚 دفع الشحن ورجع (مرتجع)</span>
               </span>
               <span className="block text-[10px] text-emerald-800 font-bold">
-                تم تحصيل الشحن ({s.refusedDetails.amountCollected || s.financials.shippingFee} ج.م)
+                تحصيل كامل الشحن ({s.refusedDetails.amountCollected || s.financials.shippingFee} ج.م)
               </span>
             </div>
           );
@@ -348,49 +363,81 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between">
+        <motion.div 
+          whileHover={{ y: -3, scale: 1.01 }}
+          transition={{ duration: 0.2 }}
+          className="bg-gradient-to-br from-white to-slate-50/80 border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-red-200 transition-all relative overflow-hidden group"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-red-500/5 rounded-full blur-xl group-hover:bg-red-500/10 transition-colors pointer-events-none" />
+          <div className="flex items-center justify-between relative z-10">
             <span className="text-xs font-bold text-slate-500">إجمالي الشحنات</span>
-            <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Package className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-slate-900 mt-2">{totalCount}</p>
-          <p className="text-[11px] text-slate-500 mt-1">شحنة مسجلة في النظام</p>
-        </div>
+          <p className="text-2xl font-black text-slate-900 mt-2 relative z-10">{totalCount}</p>
+          <p className="text-[11px] text-slate-500 mt-1 relative z-10 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+            شحنة مسجلة في النظام
+          </p>
+        </motion.div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between">
+        <motion.div 
+          whileHover={{ y: -3, scale: 1.01 }}
+          transition={{ duration: 0.2 }}
+          className="bg-gradient-to-br from-white to-slate-50/80 border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-amber-200 transition-all relative overflow-hidden group"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-colors pointer-events-none" />
+          <div className="flex items-center justify-between relative z-10">
             <span className="text-xs font-bold text-slate-500">قيد التسليم اليوم</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Truck className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-amber-600 mt-2">{activeCount}</p>
-          <p className="text-[11px] text-slate-500 mt-1">طرد مع المندوبين/المستودعات</p>
-        </div>
+          <p className="text-2xl font-black text-amber-600 mt-2 relative z-10">{activeCount}</p>
+          <p className="text-[11px] text-slate-500 mt-1 relative z-10 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+            طرد مع المندوبين/المستودعات
+          </p>
+        </motion.div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between">
+        <motion.div 
+          whileHover={{ y: -3, scale: 1.01 }}
+          transition={{ duration: 0.2 }}
+          className="bg-gradient-to-br from-white to-slate-50/80 border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all relative overflow-hidden group"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl group-hover:bg-emerald-500/10 transition-colors pointer-events-none" />
+          <div className="flex items-center justify-between relative z-10">
             <span className="text-xs font-bold text-slate-500">إجمالي تحصيل COD</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center group-hover:scale-110 transition-transform">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-emerald-600 mt-2">{totalCodCollected.toLocaleString()} ج.م</p>
-          <p className="text-[11px] text-slate-500 mt-1">مبالغ تم استلامها كاش</p>
-        </div>
+          <p className="text-2xl font-black text-emerald-600 mt-2 relative z-10">{totalCodCollected.toLocaleString()} ج.م</p>
+          <p className="text-[11px] text-slate-500 mt-1 relative z-10 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            مبالغ تم استلامها كاش
+          </p>
+        </motion.div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs hover:border-slate-300 transition-all">
-          <div className="flex items-center justify-between">
+        <motion.div 
+          whileHover={{ y: -3, scale: 1.01 }}
+          transition={{ duration: 0.2 }}
+          className="bg-gradient-to-br from-white to-slate-50/80 border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-blue-200 transition-all relative overflow-hidden group"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-xl group-hover:bg-blue-500/10 transition-colors pointer-events-none" />
+          <div className="flex items-center justify-between relative z-10">
             <span className="text-xs font-bold text-slate-500">نسبة نجاح التسليم</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center group-hover:scale-110 transition-transform">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-blue-600 mt-2">{successRate}%</p>
-          <p className="text-[11px] text-slate-500 mt-1">معدل الإنجاز العالي</p>
-        </div>
+          <p className="text-2xl font-black text-blue-600 mt-2 relative z-10">{successRate}%</p>
+          <p className="text-[11px] text-slate-500 mt-1 relative z-10 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+            معدل الإنجاز العالي
+          </p>
+        </motion.div>
       </div>
 
       {/* Pending Approval Banner - Admin Only */}

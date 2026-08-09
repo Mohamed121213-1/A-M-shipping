@@ -27,7 +27,10 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   const [statusNote, setStatusNote] = useState('');
   const [selectedCourierId, setSelectedCourierId] = useState(shipment.assignedCourier?.id || '');
   const [selectedStatus, setSelectedStatus] = useState<ShipmentStatus>(shipment.status);
-  const [refusePaidOption, setRefusePaidOption] = useState<'paid' | 'unpaid'>('paid');
+  const [refusePaidOption, setRefusePaidOption] = useState<'paid' | 'partial' | 'unpaid'>('paid');
+  const [refusePartialShippingAmount, setRefusePartialShippingAmount] = useState<number>(
+    shipment.refusedDetails?.amountCollected || Math.round(shipment.financials.shippingFee / 2)
+  );
   const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
 
   // Partial Delivery inputs
@@ -47,9 +50,17 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
     let extraUpdates: Partial<Shipment> = {};
     
     if (selectedStatus === 'returned' || selectedStatus === 'refused') {
-      const isPaid = refusePaidOption === 'paid';
-      const amountCollected = isPaid ? shipment.financials.shippingFee : 0;
-      const netPayout = isPaid ? 0 : -shipment.financials.shippingFee;
+      let amountCollected = 0;
+      if (refusePaidOption === 'paid') {
+        amountCollected = shipment.financials.shippingFee;
+      } else if (refusePaidOption === 'partial') {
+        amountCollected = Math.min(shipment.financials.shippingFee, Math.max(0, refusePartialShippingAmount));
+      } else {
+        amountCollected = 0;
+      }
+
+      const merchantDeduction = Math.max(0, shipment.financials.shippingFee - amountCollected);
+      const netPayout = -merchantDeduction;
 
       extraUpdates = {
         financials: {
@@ -58,9 +69,11 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
           netPayout,
         },
         refusedDetails: {
-          shippingFeePaid: isPaid,
+          shippingFeePaid: amountCollected >= shipment.financials.shippingFee,
+          partialShippingFeePaid: amountCollected > 0 && amountCollected < shipment.financials.shippingFee,
           amountCollected,
-          reason: statusNote || (isPaid ? 'دفع الشحن ورجع' : 'لم يدفع شحن'),
+          merchantDeductedAmount: merchantDeduction,
+          reason: statusNote || (amountCollected >= shipment.financials.shippingFee ? 'دفع كامل الشحن ورجع' : (amountCollected > 0 ? `دفع جزء من الشحن (${amountCollected} ج.م)` : 'لم يدفع شحن')),
         },
       };
     } else if (selectedStatus === 'partial_delivery') {
@@ -297,22 +310,31 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               )}
 
               {shipment.refusedDetails && (
-                <div className={`border rounded-lg p-2.5 text-xs space-y-1 ${
+                <div className={`border rounded-lg p-2.5 text-xs space-y-1.5 ${
                   shipment.refusedDetails.shippingFeePaid
-                    ? 'bg-amber-50 border-amber-200 text-amber-900'
-                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                    : shipment.refusedDetails.partialShippingFeePaid || ((shipment.refusedDetails.amountCollected || 0) > 0)
+                    ? 'bg-amber-50 border-amber-200 text-amber-950'
+                    : 'bg-rose-50 border-rose-200 text-rose-950'
                 }`}>
                   <p className="font-extrabold flex items-center justify-between">
-                    <span>🚫 تفاصيل رفض الاستلام:</span>
+                    <span>🚫 تفاصيل رفض الاستلام / الإرجاع:</span>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                       shipment.refusedDetails.shippingFeePaid
                         ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : shipment.refusedDetails.partialShippingFeePaid || ((shipment.refusedDetails.amountCollected || 0) > 0)
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
                         : 'bg-rose-100 text-rose-800 border border-rose-300'
                     }`}>
-                      {shipment.refusedDetails.shippingFeePaid ? 'دفع الشحن ورجع' : 'لم يدفع شحن'}
+                      {shipment.refusedDetails.shippingFeePaid
+                        ? 'دفع كامل الشحن ورجع'
+                        : (shipment.refusedDetails.partialShippingFeePaid || ((shipment.refusedDetails.amountCollected || 0) > 0))
+                        ? `دفع جزء من الشحن (${shipment.refusedDetails.amountCollected} ج.م)`
+                        : 'لم يدفع شحن'}
                     </span>
                   </p>
-                  <p>المبلغ المحصل من العميل (بحساب عهدة المندوب): <span className="font-bold">{shipment.refusedDetails.amountCollected} ج.م</span></p>
+                  <p>المبلغ المحصل من العميل (عهدة المندوب): <span className="font-bold">{shipment.refusedDetails.amountCollected} ج.م</span></p>
+                  <p>خصم مصاريف الشحن المقتطعة من التاجر: <span className="font-bold text-rose-700">{shipment.refusedDetails.merchantDeductedAmount ?? Math.max(0, shipment.financials.shippingFee - shipment.refusedDetails.amountCollected)} ج.م</span></p>
                   {shipment.refusedDetails.reason && <p className="text-[11px] opacity-80">السبب: {shipment.refusedDetails.reason}</p>}
                 </div>
               )}
@@ -407,15 +429,50 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               </div>
 
               {(selectedStatus === 'returned' || selectedStatus === 'refused') ? (
-                <div>
-                  <select
-                    value={refusePaidOption}
-                    onChange={(e) => setRefusePaidOption(e.target.value as 'paid' | 'unpaid')}
-                    className="w-full text-xs p-2 bg-amber-950 border border-amber-700 rounded-lg text-amber-200 font-extrabold"
-                  >
-                    <option value="paid">دفع الشحن ورجع (مستحقات التاجر 0 ج.م)</option>
-                    <option value="unpaid">لم يدفع شحن (خصم {shipment.financials.shippingFee} ج.م شحن من التاجر)</option>
-                  </select>
+                <div className="col-span-2 space-y-2 bg-slate-800 p-3 rounded-xl border border-slate-700">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                        خيار تحصيل مصاريف الشحن:
+                      </label>
+                      <select
+                        value={refusePaidOption}
+                        onChange={(e) => setRefusePaidOption(e.target.value as 'paid' | 'partial' | 'unpaid')}
+                        className="w-full text-xs p-2 bg-slate-900 border border-slate-700 rounded-lg text-amber-200 font-extrabold"
+                      >
+                        <option value="paid">دفع كامل الشحن ({shipment.financials.shippingFee} ج.م)</option>
+                        <option value="partial">دفع جزء من الشحن (تحديد المبلغ)</option>
+                        <option value="unpaid">لم يدفع شحن (خصم {shipment.financials.shippingFee} ج.م من التاجر)</option>
+                      </select>
+                    </div>
+
+                    {refusePaidOption === 'partial' && (
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-300 mb-1">
+                          المبلغ المحصل من العميل (ج.م):
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={shipment.financials.shippingFee}
+                          value={refusePartialShippingAmount}
+                          onChange={(e) => setRefusePartialShippingAmount(Number(e.target.value) || 0)}
+                          className="w-full text-xs p-2 bg-slate-900 border border-amber-500 rounded-lg text-emerald-400 font-extrabold"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-[11px] font-bold text-amber-200 flex flex-wrap items-center justify-between pt-1 border-t border-slate-700">
+                    {refusePaidOption === 'paid' && <span>المحصل: {shipment.financials.shippingFee} ج.م | خصم التاجر: 0 ج.م</span>}
+                    {refusePaidOption === 'partial' && (
+                      <span>
+                        المحصل: {Math.min(shipment.financials.shippingFee, Math.max(0, refusePartialShippingAmount))} ج.م |
+                        خصم التاجر: {Math.max(0, shipment.financials.shippingFee - Math.min(shipment.financials.shippingFee, Math.max(0, refusePartialShippingAmount)))} ج.م
+                      </span>
+                    )}
+                    {refusePaidOption === 'unpaid' && <span>المحصل: 0 ج.م | خصم التاجر: {shipment.financials.shippingFee} ج.م (كامل الشحن)</span>}
+                  </div>
                 </div>
               ) : selectedStatus === 'partial_delivery' ? (
                 <div className="col-span-2 space-y-2 bg-amber-950/80 border border-amber-700/80 p-3 rounded-xl text-amber-100">

@@ -404,10 +404,15 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                         استلام جزئي (مرتجع {returnedItems} من {totalItems} قطعة)
                       </span>
                     );
-                  } else if (s.status === 'refused') {
+                  } else if (s.status === 'refused' || s.status === 'returned') {
+                    const collected = s.refusedDetails?.amountCollected || 0;
                     statusBadge = (
                       <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg text-[10px] font-black">
-                        {s.refusedDetails?.shippingFeePaid ? 'مرفوض (دفع الشحن)' : 'مرفوض من العميل'}
+                        {s.refusedDetails?.shippingFeePaid
+                          ? 'مرفوض (دفع كامل الشحن)'
+                          : s.refusedDetails?.partialShippingFeePaid || collected > 0
+                          ? `مرفوض (دفع جزء من الشحن ${collected} ج.م)`
+                          : 'مرفوض من العميل (خصم الشحن من التاجر)'}
                       </span>
                     );
                   } else if (s.status === 'failed_attempt') {

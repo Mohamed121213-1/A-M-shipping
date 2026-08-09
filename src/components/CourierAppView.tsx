@@ -77,6 +77,8 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   const [isDeliverModalOpen, setIsDeliverModalOpen] = useState(false);
   const [isFailModalOpen, setIsFailModalOpen] = useState(false);
   const [isRefuseModalOpen, setIsRefuseModalOpen] = useState(false);
+  const [refuseFeeOption, setRefuseFeeOption] = useState<'full' | 'partial' | 'none'>('full');
+  const [refusePartialAmount, setRefusePartialAmount] = useState<number>(0);
   const [refuseShippingFeePaid, setRefuseShippingFeePaid] = useState<boolean>(true);
   const [isPartialModalOpen, setIsPartialModalOpen] = useState(false);
   const [whatsappShipment, setWhatsappShipment] = useState<Shipment | null>(null);
@@ -236,20 +238,36 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     e.preventDefault();
     if (!selectedShipment) return;
 
-    const amountCollected = refuseShippingFeePaid ? selectedShipment.financials.shippingFee : 0;
+    const totalShippingFee = selectedShipment.financials.shippingFee;
+    let amountCollected = 0;
+
+    if (refuseFeeOption === 'full') {
+      amountCollected = totalShippingFee;
+    } else if (refuseFeeOption === 'partial') {
+      amountCollected = Math.min(totalShippingFee, Math.max(0, refusePartialAmount));
+    } else {
+      amountCollected = 0;
+    }
+
+    const merchantDeduction = Math.max(0, totalShippingFee - amountCollected);
+    const calculatedNetPayout = -merchantDeduction;
+
     const refusedDetails = {
-      shippingFeePaid: refuseShippingFeePaid,
+      shippingFeePaid: amountCollected >= totalShippingFee,
+      partialShippingFeePaid: amountCollected > 0 && amountCollected < totalShippingFee,
       amountCollected,
+      merchantDeductedAmount: merchantDeduction,
       reason: refuseReason,
     };
 
-    const statusNote = refuseShippingFeePaid
-      ? `مرتجع بواسطة ${activeCourier.name} (دفع الشحن ورجع - تم تحصيل ${amountCollected} ج.م مصاريف شحن - مستحقات التاجر 0 ج.م): ${refuseReason}`
-      : `مرتجع بواسطة ${activeCourier.name} (لم يدفع شحن - خصم مصاريف الشحن ${selectedShipment.financials.shippingFee} ج.م من التاجر): ${refuseReason}`;
-
-    const calculatedNetPayout = refuseShippingFeePaid
-      ? 0
-      : -selectedShipment.financials.shippingFee; // خصم الشحن من التاجر
+    let statusNote = '';
+    if (amountCollected >= totalShippingFee) {
+      statusNote = `مرتجع بواسطة ${activeCourier.name} (دفع كامل الشحن ${amountCollected} ج.م - الخصم من التاجر 0 ج.م): ${refuseReason}`;
+    } else if (amountCollected > 0) {
+      statusNote = `مرتجع بواسطة ${activeCourier.name} (دفع جزء من الشحن - تحصيل ${amountCollected} ج.م من العميل - خصم المتبقي ${merchantDeduction} ج.م من التاجر): ${refuseReason}`;
+    } else {
+      statusNote = `مرتجع بواسطة ${activeCourier.name} (لم يدفع شحن - خصم كامل الشحن ${totalShippingFee} ج.م من التاجر): ${refuseReason}`;
+    }
 
     const extraUpdates: Partial<Shipment> = {
       financials: {
@@ -261,7 +279,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
       assignedCourier: selectedShipment.assignedCourier || activeCourier,
     };
 
-    // تعيين حالة الأوردر إلى مرتجع (returned) كما طلب المستخدم
+    // تعيين حالة الأوردر إلى مرتجع (returned)
     onUpdateStatus(selectedShipment.id, 'returned', statusNote, extraUpdates);
 
     setIsRefuseModalOpen(false);
@@ -918,54 +936,123 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
         </div>
       )}
 
-      {/* Refused Delivery Modal */}
+      {/* Refused / Return Delivery Modal */}
       {isRefuseModalOpen && selectedShipment && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 space-y-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <h4 className="font-extrabold text-base text-rose-400 flex items-center gap-2">
               <XCircle className="w-5 h-5 text-rose-500" />
-              تسجيل رفض الاستلام من العميل
+              تسجيل إرجاع الأوردر وتحديد تحصيل الشحن
             </h4>
 
             <div className="bg-rose-950/40 border border-rose-800/60 p-3 rounded-xl space-y-1 text-xs text-rose-200">
               <p>المستلم: <span className="font-bold text-white">{selectedShipment.recipient.name}</span></p>
               <p>رقم البوليصة: <span className="font-mono font-bold text-white">#{selectedShipment.trackingNumber}</span></p>
-              <p>قيمة الشحن المستحقة: <span className="font-extrabold text-amber-300">{selectedShipment.financials.shippingFee} ج.م</span></p>
+              <p>إجمالي مصاريف الشحن الأصلية: <span className="font-extrabold text-amber-300">{selectedShipment.financials.shippingFee} ج.م</span></p>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">حالة دفع الشحن عند الرفض:</label>
-              <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-300">اختر حالة تحصيل مصاريف الشحن عند الإرجاع:</label>
+              
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setRefuseShippingFeePaid(true)}
-                  className={`p-2.5 rounded-xl border text-xs font-black transition-all flex flex-col items-center gap-1 text-center cursor-pointer ${
-                    refuseShippingFeePaid
-                      ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-xs ring-1 ring-emerald-500'
+                  onClick={() => {
+                    setRefuseFeeOption('full');
+                    setRefuseShippingFeePaid(true);
+                  }}
+                  className={`p-2.5 rounded-xl border text-xs font-black transition-all flex flex-col items-center justify-center gap-1 text-center cursor-pointer ${
+                    refuseFeeOption === 'full'
+                      ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow-sm ring-2 ring-emerald-500/40'
                       : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:bg-slate-800'
                   }`}
                 >
-                  <span className="text-[11px]">دفع الشحن ورجع</span>
-                  <span className="text-[10px] opacity-80">تحصيل {selectedShipment.financials.shippingFee} ج.م</span>
+                  <span className="text-[11px]">دفع كامل الشحن</span>
+                  <span className="text-[10px] opacity-80">{selectedShipment.financials.shippingFee} ج.م</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setRefuseShippingFeePaid(false)}
-                  className={`p-2.5 rounded-xl border text-xs font-black transition-all flex flex-col items-center gap-1 text-center cursor-pointer ${
-                    !refuseShippingFeePaid
-                      ? 'bg-rose-950/80 border-rose-500 text-rose-300 shadow-xs ring-1 ring-rose-500'
+                  onClick={() => {
+                    setRefuseFeeOption('partial');
+                    setRefuseShippingFeePaid(false);
+                    if (refusePartialAmount === 0) {
+                      setRefusePartialAmount(Math.round(selectedShipment.financials.shippingFee / 2));
+                    }
+                  }}
+                  className={`p-2.5 rounded-xl border text-xs font-black transition-all flex flex-col items-center justify-center gap-1 text-center cursor-pointer ${
+                    refuseFeeOption === 'partial'
+                      ? 'bg-amber-950/90 border-amber-500 text-amber-300 shadow-sm ring-2 ring-amber-500/40'
                       : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:bg-slate-800'
                   }`}
                 >
-                  <span className="text-[11px]">لم يدفع شحن ورجع</span>
+                  <span className="text-[11px]">دفع جزء من الشحن</span>
+                  <span className="text-[10px] opacity-80">تحديد مبلغ</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRefuseFeeOption('none');
+                    setRefuseShippingFeePaid(false);
+                  }}
+                  className={`p-2.5 rounded-xl border text-xs font-black transition-all flex flex-col items-center justify-center gap-1 text-center cursor-pointer ${
+                    refuseFeeOption === 'none'
+                      ? 'bg-rose-950/90 border-rose-500 text-rose-300 shadow-sm ring-2 ring-rose-500/40'
+                      : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="text-[11px]">لم يدفع شحن</span>
                   <span className="text-[10px] opacity-80">تحصيل 0 ج.م</span>
                 </button>
               </div>
+
+              {/* If Partial Shipping Fee selected -> Show amount input field */}
+              {refuseFeeOption === 'partial' && (
+                <div className="bg-amber-950/50 border border-amber-600/60 p-3 rounded-xl space-y-2 mt-2">
+                  <label className="block text-xs font-bold text-amber-200">
+                    حدد المبلغ المحصل من العميل (ج.م):
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      max={selectedShipment.financials.shippingFee}
+                      value={refusePartialAmount}
+                      onChange={(e) => setRefusePartialAmount(Number(e.target.value) || 0)}
+                      className="w-full text-base font-black p-2 bg-slate-900 border border-amber-500 rounded-lg text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                    <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">ج.م</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2 text-center text-[11px] font-bold pt-1 border-t border-amber-800/60">
+                    <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-700">
+                      <span className="block text-[10px] text-emerald-400">تحصيل المندوب من العميل:</span>
+                      <span className="text-emerald-300 font-extrabold">{Math.min(selectedShipment.financials.shippingFee, Math.max(0, refusePartialAmount))} ج.م</span>
+                    </div>
+                    <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-700">
+                      <span className="block text-[10px] text-rose-400">تخصم من محفظة التاجر:</span>
+                      <span className="text-rose-300 font-extrabold">{Math.max(0, selectedShipment.financials.shippingFee - Math.min(selectedShipment.financials.shippingFee, Math.max(0, refusePartialAmount)))} ج.م</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {refuseFeeOption === 'full' && (
+                <p className="text-[11px] text-emerald-400 font-bold bg-emerald-950/40 p-2 rounded-lg border border-emerald-800/50">
+                  ✓ سيتم تحصيل {selectedShipment.financials.shippingFee} ج.م من العميل وتصفير أي خصم على التاجر.
+                </p>
+              )}
+
+              {refuseFeeOption === 'none' && (
+                <p className="text-[11px] text-rose-400 font-bold bg-rose-950/40 p-2 rounded-lg border border-rose-800/50">
+                  ⚠️ سيتم تحصيل 0 ج.م من العميل وخصم كامل مصاريف الشحن ({selectedShipment.financials.shippingFee} ج.م) من محفظة التاجر.
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">سبب رفض الاستلام:</label>
+              <label className="block text-xs font-bold text-slate-300 mb-1">سبب رفض الاستلام / الإرجاع:</label>
               <select
                 value={refuseReason}
                 onChange={(e) => setRefuseReason(e.target.value)}
@@ -979,18 +1066,20 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
               </select>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
               <button
+                type="button"
                 onClick={() => setIsRefuseModalOpen(false)}
-                className="px-3 py-1.5 text-xs font-bold text-slate-400"
+                className="px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-white"
               >
                 إلغاء
               </button>
               <button
+                type="button"
                 onClick={handleConfirmRefused}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-xl"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-black text-xs px-5 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
               >
-                تأكيد رفض الاستلام
+                تأكيد المرتجع والخصم
               </button>
             </div>
           </div>

@@ -34,6 +34,58 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", service: "Bosta Logistics API", timestamp: new Date().toISOString() });
 });
 
+// Server-side State Persistence & Multi-Device Sync Engine
+import fs from "fs";
+const DATA_DIR = path.join(process.cwd(), "data");
+const STATE_FILE = path.join(DATA_DIR, "app_state.json");
+
+if (!fs.existsSync(DATA_DIR)) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (e) {}
+}
+
+let serverAppState: any = null;
+let serverLastUpdated = 0;
+
+if (fs.existsSync(STATE_FILE)) {
+  try {
+    const raw = fs.readFileSync(STATE_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    serverAppState = parsed.state || null;
+    serverLastUpdated = parsed.timestamp || 0;
+  } catch (e) {
+    console.warn("Failed to read app_state.json:", e);
+  }
+}
+
+app.get("/api/sync/state", (req, res) => {
+  res.json({
+    state: serverAppState,
+    timestamp: serverLastUpdated,
+  });
+});
+
+app.post("/api/sync/state", (req, res) => {
+  try {
+    const { state, timestamp, senderId } = req.body || {};
+    const incomingTime = Number(timestamp) || Date.now();
+
+    if (incomingTime >= serverLastUpdated && state) {
+      serverLastUpdated = incomingTime;
+      serverAppState = { ...state, timestamp: incomingTime, senderId };
+
+      fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: incomingTime }), (err) => {
+        if (err) console.warn("Error persisting server state:", err);
+      });
+    }
+
+    return res.json({ success: true, timestamp: serverLastUpdated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // AI Smart Address & Image OCR Data Extractor API
 app.post("/api/parse-address", async (req, res) => {
   try {

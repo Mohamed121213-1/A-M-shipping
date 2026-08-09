@@ -116,12 +116,12 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
   // All collected shipments (for merchant ledger)
   const collectedShipments = shipments.filter(
-    (s) => s.status === 'delivered' || s.status === 'partial_delivery' || ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid)
+    (s) => s.status === 'delivered' || s.status === 'partial_delivery' || ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid))
   );
 
   // Unsettled collected shipments for courier custody
   const unsettledCollectedShipments = shipments.filter(
-    (s) => !s.isCourierSettled && (s.status === 'delivered' || s.status === 'partial_delivery' || ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid))
+    (s) => !s.isCourierSettled && (s.status === 'delivered' || s.status === 'partial_delivery' || ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid)))
   );
 
   // Combine passed couriers + system Users with role 'courier' + any couriers assigned on shipments
@@ -179,8 +179,8 @@ export const WalletView: React.FC<WalletViewProps> = ({
     });
 
     const totalCollected = courierCollected.reduce((sum, s) => {
-      if ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid) {
-        return sum + (s.refusedDetails.amountCollected || s.financials.shippingFee);
+      if ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid)) {
+        return sum + (s.refusedDetails?.amountCollected ?? (s.refusedDetails?.shippingFeePaid ? s.financials.shippingFee : 0));
       }
       if (s.status === 'partial_delivery') {
         return sum + (s.partialDetails?.partialCodAmount ?? s.financials.codAmount);
@@ -683,9 +683,11 @@ export const WalletView: React.FC<WalletViewProps> = ({
                           <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-amber-300">
                             استلام جزئي ({s.financials.codAmount} ج.م)
                           </span>
-                        ) : (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid ? (
+                        ) : (s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid) ? (
                           <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-amber-300">
-                            دفع الشحن ورجع ({s.refusedDetails?.amountCollected || s.financials.shippingFee} ج.م)
+                            {s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee)
+                              ? `دفع جزء من الشحن (${s.refusedDetails?.amountCollected} ج.م)`
+                              : `دفع الشحن ورجع (${s.refusedDetails?.amountCollected || s.financials.shippingFee} ج.م)`}
                           </span>
                         ) : (
                           <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-emerald-200">

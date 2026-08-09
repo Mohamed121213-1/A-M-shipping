@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Header } from './components/Header';
 import { ShipmentsList } from './components/ShipmentsList';
 import { CreateShipmentModal } from './components/CreateShipmentModal';
@@ -239,9 +240,13 @@ export default function App() {
     localStorage.setItem('bosta_courier_notifications', JSON.stringify(courierNotifications));
   }, [courierNotifications]);
 
+  // Track whether state update originated from remote sync to prevent echo loops
+  const isIncomingSyncRef = React.useRef(false);
+
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
     const unsubscribe = syncEngine.subscribe((incoming) => {
+      isIncomingSyncRef.current = true;
       if (incoming.shipments && Array.isArray(incoming.shipments)) {
         setShipments(incoming.shipments);
       }
@@ -266,6 +271,9 @@ export default function App() {
       if (incoming.companyTransactions && Array.isArray(incoming.companyTransactions)) {
         setCompanyTransactions(incoming.companyTransactions);
       }
+      setTimeout(() => {
+        isIncomingSyncRef.current = false;
+      }, 150);
     });
 
     return () => {
@@ -295,6 +303,13 @@ export default function App() {
       companyTransactions: overrideState?.companyTransactions || companyTransactions,
     });
   };
+
+  // Automatically broadcast local mutations across all connected devices
+  useEffect(() => {
+    if (!isIncomingSyncRef.current) {
+      broadcastDataChange();
+    }
+  }, [shipments, wallet, users, couriers, hubs, governorates, courierNotifications, companyTransactions]);
 
   // Handlers perform explicit broadcasts on local mutations; no automatic re-broadcast loop on incoming state
 
@@ -676,30 +691,37 @@ export default function App() {
 
       let effectiveExtra = { ...extraUpdates };
 
-      // For returned or refused orders: Calculate merchant payout based on whether shipping was paid
+      // For returned or refused orders: Calculate merchant payout based on amount collected vs total shipping fee
       if (newStatus === 'returned' || newStatus === 'refused') {
         const currentFinancials = effectiveExtra.financials || s.financials;
-        const isShippingPaid = effectiveExtra.refusedDetails?.shippingFeePaid ?? s.refusedDetails?.shippingFeePaid;
+        const refusedDetails = effectiveExtra.refusedDetails || s.refusedDetails;
 
-        let calculatedNetPayout = 0;
-        if (isShippingPaid === false) {
-          // لم يدفع شحن: خصم مصاريف الشحن من التاجر
-          calculatedNetPayout = -currentFinancials.shippingFee;
-        } else if (isShippingPaid === true) {
-          // دفع شحن ورجع: مستحقات التاجر تساوي 0
-          calculatedNetPayout = 0;
-        } else if (effectiveExtra.financials?.netPayout !== undefined) {
-          calculatedNetPayout = effectiveExtra.financials.netPayout;
+        let collectedShipping = 0;
+        if (refusedDetails?.amountCollected !== undefined) {
+          collectedShipping = Number(refusedDetails.amountCollected) || 0;
+        } else if (refusedDetails?.shippingFeePaid === true) {
+          collectedShipping = currentFinancials.shippingFee;
         } else {
-          calculatedNetPayout = 0;
+          collectedShipping = 0;
         }
+
+        const totalShippingFee = currentFinancials.shippingFee;
+        const merchantDeduction = Math.max(0, totalShippingFee - collectedShipping);
+        const calculatedNetPayout = -merchantDeduction;
 
         effectiveExtra = {
           ...effectiveExtra,
           financials: {
             ...currentFinancials,
-            codAmount: isShippingPaid === true ? currentFinancials.shippingFee : (isShippingPaid === false ? 0 : (effectiveExtra.financials?.codAmount ?? currentFinancials.codAmount)),
+            codAmount: collectedShipping,
             netPayout: calculatedNetPayout,
+          },
+          refusedDetails: {
+            shippingFeePaid: collectedShipping >= totalShippingFee,
+            partialShippingFeePaid: collectedShipping > 0 && collectedShipping < totalShippingFee,
+            amountCollected: collectedShipping,
+            merchantDeductedAmount: merchantDeduction,
+            reason: refusedDetails?.reason || 'رفض الاستلام / مرتجع',
           },
         };
       }
@@ -746,13 +768,17 @@ export default function App() {
 
     // Dynamically calculate updated wallet values from all shipments
     const calcPendingCod = nextShipments
-      .filter((ship) => !ship.isCourierSettled && (ship.status === 'delivered' || ship.status === 'partial_delivery' || ((ship.status === 'refused' || ship.status === 'returned') && ship.refusedDetails?.shippingFeePaid)))
+      .filter((ship) => !ship.isCourierSettled && (
+        ship.status === 'delivered' ||
+        ship.status === 'partial_delivery' ||
+        ((ship.status === 'refused' || ship.status === 'returned') && ((ship.refusedDetails?.amountCollected || 0) > 0 || ship.refusedDetails?.shippingFeePaid))
+      ))
       .reduce((sum, ship) => {
         if (ship.status === 'partial_delivery') {
           return sum + (ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount);
         }
-        if ((ship.status === 'refused' || ship.status === 'returned') && ship.refusedDetails?.shippingFeePaid) {
-          return sum + (ship.refusedDetails.amountCollected || ship.financials.shippingFee);
+        if (ship.status === 'refused' || ship.status === 'returned') {
+          return sum + (ship.refusedDetails?.amountCollected ?? (ship.refusedDetails?.shippingFeePaid ? ship.financials.shippingFee : 0));
         }
         return sum + ship.financials.codAmount;
       }, 0);
@@ -765,8 +791,16 @@ export default function App() {
         const collected = ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount;
         return sum + (ship.financials.netPayout ?? Math.max(0, collected - ship.financials.shippingFee));
       }
-      if ((ship.status === 'refused' || ship.status === 'returned') && (ship.refusedDetails?.shippingFeePaid === false || ship.financials.netPayout < 0)) {
-        return sum - ship.financials.shippingFee;
+      if (ship.status === 'refused' || ship.status === 'returned') {
+        if (ship.financials.netPayout !== undefined) {
+          return sum + ship.financials.netPayout;
+        }
+        if (ship.refusedDetails?.merchantDeductedAmount !== undefined) {
+          return sum - ship.refusedDetails.merchantDeductedAmount;
+        }
+        if (ship.refusedDetails?.shippingFeePaid === false) {
+          return sum - ship.financials.shippingFee;
+        }
       }
       return sum;
     }, 0);
@@ -1064,8 +1098,8 @@ export default function App() {
           collectedForThisShipment = s.financials.codAmount;
         } else if (s.status === 'partial_delivery') {
           collectedForThisShipment = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
-        } else if ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid) {
-          collectedForThisShipment = s.refusedDetails.amountCollected || s.financials.shippingFee;
+        } else if ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid)) {
+          collectedForThisShipment = s.refusedDetails?.amountCollected ?? (s.refusedDetails?.shippingFeePaid ? s.financials.shippingFee : 0);
         }
 
         totalCollected += collectedForThisShipment;
@@ -1502,143 +1536,25 @@ export default function App() {
 
       {/* Main Content View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
-        {!currentUser ? (
-          <LoginView
-            onLoginSuccess={handleLoginSuccess}
-            onGuestTrack={handleGuestTrackFromLogin}
-            currentRole={currentRole}
-            systemUsers={users}
-            onRegisterPendingUser={handleAddUser}
-          />
-        ) : currentUser.role === 'courier' ? (
-          <CourierAppView
-            shipments={userShipments}
-            onUpdateStatus={handleUpdateStatus}
-            onReportNoResponse={handleReportNoResponse}
-            notifications={courierNotifications}
-            selectedCourierId={activeCourierIdInApp}
-            targetShipmentId={activeTargetShipmentId}
-            onMarkNotificationRead={handleMarkNotificationRead}
-            currentUser={currentUser}
-            couriers={couriers}
-          />
-        ) : currentUser.role === 'merchant' ? (
-          <>
-            {(activeTab === 'shipments' || activeTab === 'login' || activeTab === 'admin_panel' || activeTab === 'courier_app') && (
-              <ShipmentsList
-                shipments={userShipments}
-                onOpenDetailModal={(s) => setSelectedDetailShipment(s)}
-                onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
-                onOpenCreateModal={() => setIsCreateModalOpen(true)}
-                onUpdateStatus={handleUpdateStatus}
-                onDeleteShipment={handleDeleteShipment}
-                onDeleteMultipleShipments={handleDeleteMultipleShipments}
-                onMerchantRespondNoResponse={handleMerchantRespondNoResponse}
-                onAssignCourier={handleAssignCourier}
-                onClearAllData={handleClearAllData}
-                onApproveShipment={handleApproveShipment}
-                onApproveAllPending={handleApproveAllPending}
-                currentRole="merchant"
-                couriers={couriers}
-                systemUsers={users}
-              />
-            )}
-
-            {activeTab === 'wallet' && (
-              <WalletView
-                wallet={userWallet}
-                shipments={userShipments}
-                onRequestPayout={handleRequestPayout}
-                couriers={couriers}
-                systemUsers={users}
-                currentUser={currentUser}
-                onUpdateWallet={handleUpdateWallet}
-              />
-            )}
-
-            {activeTab === 'returns' && (
-              <ReturnsAccountingView shipments={userShipments} systemUsers={users} currentUser={currentUser} />
-            )}
-
-            {activeTab === 'company_treasury' && (
-              <CompanyTreasuryView
-                transactions={companyTransactions}
-                onAddTransaction={handleAddCompanyTransaction}
-                onUpdateTransaction={handleUpdateCompanyTransaction}
-                onDeleteTransaction={handleDeleteCompanyTransaction}
-                currentUser={currentUser}
-                couriers={couriers}
-              />
-            )}
-
-            {activeTab === 'analytics' && <AnalyticsView shipments={userShipments} />}
-
-            {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
-
-            {activeTab === 'tracking' && (
-              <PublicTrackingView shipments={userShipments} initialTrackingNumber={publicSearchTrackNum} />
-            )}
-          </>
-        ) : (
-          <>
-            {activeTab === 'login' && (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab + (currentUser?.id || 'guest')}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+          >
+            {!currentUser ? (
               <LoginView
                 onLoginSuccess={handleLoginSuccess}
                 onGuestTrack={handleGuestTrackFromLogin}
                 currentRole={currentRole}
                 systemUsers={users}
+                onRegisterPendingUser={handleAddUser}
               />
-            )}
-
-            {activeTab === 'shipments' && (
-              <ShipmentsList
-                shipments={shipments}
-                onOpenDetailModal={(s) => setSelectedDetailShipment(s)}
-                onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
-                onOpenCreateModal={() => setIsCreateModalOpen(true)}
-                onUpdateStatus={handleUpdateStatus}
-                onDeleteShipment={handleDeleteShipment}
-                onDeleteMultipleShipments={handleDeleteMultipleShipments}
-                onMerchantRespondNoResponse={handleMerchantRespondNoResponse}
-                onAssignCourier={handleAssignCourier}
-                onClearAllData={handleClearAllData}
-                onApproveShipment={handleApproveShipment}
-                onApproveAllPending={handleApproveAllPending}
-                currentRole={currentRole}
-                couriers={couriers}
-                systemUsers={users}
-              />
-            )}
-
-            {activeTab === 'admin_panel' && (
-              <AdminPanelView
-                users={users}
-                onAddUser={handleAddUser}
-                onUpdateUser={handleUpdateUser}
-                onDeleteUser={handleDeleteUser}
-                couriers={couriers}
-                onAddCourier={handleAddCourier}
-                onUpdateCourier={handleUpdateCourier}
-                onDeleteCourier={handleDeleteCourier}
-                hubs={hubs}
-                onAddHub={handleAddHub}
-                onUpdateHub={handleUpdateHub}
-                onDeleteHub={handleDeleteHub}
-                governorates={governorates}
-                onUpdateGovernorateRate={handleUpdateGovernorateRate}
-                wallet={wallet}
-                onUpdateWallet={handleUpdateWallet}
-                shipments={shipments}
-                onClearAllShipments={handleClearAllShipments}
-                onClearAllData={handleClearAllData}
-                onApproveShipment={handleApproveShipment}
-                onApproveAllPending={handleApproveAllPending}
-              />
-            )}
-
-            {activeTab === 'courier_app' && (
+            ) : currentUser.role === 'courier' ? (
               <CourierAppView
-                shipments={shipments}
+                shipments={userShipments}
                 onUpdateStatus={handleUpdateStatus}
                 onReportNoResponse={handleReportNoResponse}
                 notifications={courierNotifications}
@@ -1647,46 +1563,174 @@ export default function App() {
                 onMarkNotificationRead={handleMarkNotificationRead}
                 currentUser={currentUser}
                 couriers={couriers}
-                onSettleCourierCustody={handleSettleCourierCustody}
               />
+            ) : currentUser.role === 'merchant' ? (
+              <>
+                {(activeTab === 'shipments' || activeTab === 'login' || activeTab === 'admin_panel' || activeTab === 'courier_app') && (
+                  <ShipmentsList
+                    shipments={userShipments}
+                    onOpenDetailModal={(s) => setSelectedDetailShipment(s)}
+                    onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
+                    onOpenCreateModal={() => setIsCreateModalOpen(true)}
+                    onUpdateStatus={handleUpdateStatus}
+                    onDeleteShipment={handleDeleteShipment}
+                    onDeleteMultipleShipments={handleDeleteMultipleShipments}
+                    onMerchantRespondNoResponse={handleMerchantRespondNoResponse}
+                    onAssignCourier={handleAssignCourier}
+                    onClearAllData={handleClearAllData}
+                    onApproveShipment={handleApproveShipment}
+                    onApproveAllPending={handleApproveAllPending}
+                    currentRole="merchant"
+                    couriers={couriers}
+                    systemUsers={users}
+                  />
+                )}
+
+                {activeTab === 'wallet' && (
+                  <WalletView
+                    wallet={userWallet}
+                    shipments={userShipments}
+                    onRequestPayout={handleRequestPayout}
+                    couriers={couriers}
+                    systemUsers={users}
+                    currentUser={currentUser}
+                    onUpdateWallet={handleUpdateWallet}
+                  />
+                )}
+
+                {activeTab === 'returns' && (
+                  <ReturnsAccountingView shipments={userShipments} systemUsers={users} currentUser={currentUser} />
+                )}
+
+                {activeTab === 'company_treasury' && (
+                  <CompanyTreasuryView
+                    transactions={companyTransactions}
+                    onAddTransaction={handleAddCompanyTransaction}
+                    onUpdateTransaction={handleUpdateCompanyTransaction}
+                    onDeleteTransaction={handleDeleteCompanyTransaction}
+                    currentUser={currentUser}
+                    couriers={couriers}
+                  />
+                )}
+
+                {activeTab === 'analytics' && <AnalyticsView shipments={userShipments} />}
+
+                {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
+
+                {activeTab === 'tracking' && (
+                  <PublicTrackingView shipments={userShipments} initialTrackingNumber={publicSearchTrackNum} />
+                )}
+              </>
+            ) : (
+              <>
+                {activeTab === 'login' && (
+                  <LoginView
+                    onLoginSuccess={handleLoginSuccess}
+                    onGuestTrack={handleGuestTrackFromLogin}
+                    currentRole={currentRole}
+                    systemUsers={users}
+                  />
+                )}
+
+                {activeTab === 'shipments' && (
+                  <ShipmentsList
+                    shipments={shipments}
+                    onOpenDetailModal={(s) => setSelectedDetailShipment(s)}
+                    onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
+                    onOpenCreateModal={() => setIsCreateModalOpen(true)}
+                    onUpdateStatus={handleUpdateStatus}
+                    onDeleteShipment={handleDeleteShipment}
+                    onDeleteMultipleShipments={handleDeleteMultipleShipments}
+                    onMerchantRespondNoResponse={handleMerchantRespondNoResponse}
+                    onAssignCourier={handleAssignCourier}
+                    onClearAllData={handleClearAllData}
+                    onApproveShipment={handleApproveShipment}
+                    onApproveAllPending={handleApproveAllPending}
+                    currentRole={currentRole}
+                    couriers={couriers}
+                    systemUsers={users}
+                  />
+                )}
+
+                {activeTab === 'admin_panel' && (
+                  <AdminPanelView
+                    users={users}
+                    onAddUser={handleAddUser}
+                    onUpdateUser={handleUpdateUser}
+                    onDeleteUser={handleDeleteUser}
+                    couriers={couriers}
+                    onAddCourier={handleAddCourier}
+                    onUpdateCourier={handleUpdateCourier}
+                    onDeleteCourier={handleDeleteCourier}
+                    hubs={hubs}
+                    onAddHub={handleAddHub}
+                    onUpdateHub={handleUpdateHub}
+                    onDeleteHub={handleDeleteHub}
+                    governorates={governorates}
+                    onUpdateGovernorateRate={handleUpdateGovernorateRate}
+                    wallet={wallet}
+                    onUpdateWallet={handleUpdateWallet}
+                    shipments={shipments}
+                    onClearAllShipments={handleClearAllShipments}
+                    onClearAllData={handleClearAllData}
+                    onApproveShipment={handleApproveShipment}
+                    onApproveAllPending={handleApproveAllPending}
+                  />
+                )}
+
+                {activeTab === 'courier_app' && (
+                  <CourierAppView
+                    shipments={shipments}
+                    onUpdateStatus={handleUpdateStatus}
+                    onReportNoResponse={handleReportNoResponse}
+                    notifications={courierNotifications}
+                    selectedCourierId={activeCourierIdInApp}
+                    targetShipmentId={activeTargetShipmentId}
+                    onMarkNotificationRead={handleMarkNotificationRead}
+                    currentUser={currentUser}
+                    couriers={couriers}
+                    onSettleCourierCustody={handleSettleCourierCustody}
+                  />
+                )}
+
+                {activeTab === 'tracking' && (
+                  <PublicTrackingView shipments={shipments} initialTrackingNumber={publicSearchTrackNum} />
+                )}
+
+                {activeTab === 'wallet' && (
+                  <WalletView
+                    wallet={wallet}
+                    shipments={shipments}
+                    onRequestPayout={handleRequestPayout}
+                    couriers={couriers}
+                    systemUsers={users}
+                    onSettleCourierCustody={handleSettleCourierCustody}
+                    onUpdateWallet={handleUpdateWallet}
+                  />
+                )}
+
+                {activeTab === 'returns' && (
+                  <ReturnsAccountingView shipments={shipments} systemUsers={users} currentUser={currentUser} />
+                )}
+
+                {activeTab === 'company_treasury' && (
+                  <CompanyTreasuryView
+                    transactions={companyTransactions}
+                    onAddTransaction={handleAddCompanyTransaction}
+                    onUpdateTransaction={handleUpdateCompanyTransaction}
+                    onDeleteTransaction={handleDeleteCompanyTransaction}
+                    currentUser={currentUser}
+                    couriers={couriers}
+                  />
+                )}
+
+                {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
+
+                {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
+              </>
             )}
-
-            {activeTab === 'tracking' && (
-              <PublicTrackingView shipments={shipments} initialTrackingNumber={publicSearchTrackNum} />
-            )}
-
-            {activeTab === 'wallet' && (
-              <WalletView
-                wallet={wallet}
-                shipments={shipments}
-                onRequestPayout={handleRequestPayout}
-                couriers={couriers}
-                systemUsers={users}
-                onSettleCourierCustody={handleSettleCourierCustody}
-                onUpdateWallet={handleUpdateWallet}
-              />
-            )}
-
-            {activeTab === 'returns' && (
-              <ReturnsAccountingView shipments={shipments} systemUsers={users} currentUser={currentUser} />
-            )}
-
-            {activeTab === 'company_treasury' && (
-              <CompanyTreasuryView
-                transactions={companyTransactions}
-                onAddTransaction={handleAddCompanyTransaction}
-                onUpdateTransaction={handleUpdateCompanyTransaction}
-                onDeleteTransaction={handleDeleteCompanyTransaction}
-                currentUser={currentUser}
-                couriers={couriers}
-              />
-            )}
-
-            {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
-
-            {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
-          </>
-        )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Modals */}
