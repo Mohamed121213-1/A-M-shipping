@@ -156,14 +156,14 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     (s) =>
       s.status === 'delivered' ||
       s.status === 'partial_delivery' ||
-      ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid)
+      ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid))
   );
 
   const totalCodCollectedToday = courierShipments.reduce((sum, s) => {
     if (s.status === 'delivered') return sum + s.financials.codAmount;
     if (s.status === 'partial_delivery') return sum + (s.partialDetails?.partialCodAmount ?? s.financials.codAmount);
-    if ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid) {
-      return sum + (s.refusedDetails.amountCollected || s.financials.shippingFee);
+    if (s.status === 'refused' || s.status === 'returned') {
+      return sum + (s.refusedDetails?.amountCollected ?? (s.refusedDetails?.shippingFeePaid ? s.financials.shippingFee : 0));
     }
     return sum;
   }, 0);
@@ -176,7 +176,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     if (
       s.status === 'delivered' ||
       s.status === 'partial_delivery' ||
-      ((s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid)
+      ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid))
     ) {
       if (commType === 'percentage') {
         return sum + (s.financials.shippingFee * commVal) / 100;
@@ -685,7 +685,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                         <Receipt className="w-3.5 h-3.5 text-amber-400" /> تم الاستلام الجزئي (تحصيل {shipment.financials.codAmount} ج.م)
                       </div>
                     )}
-                    {shipment.status === 'refused' && (
+                    {(shipment.status === 'refused' || shipment.status === 'returned') && (
                       <div className="text-[11px] font-bold flex items-center justify-between p-2 rounded-xl border bg-rose-950/60 border-rose-800/60">
                         <div className="flex items-center gap-1 text-rose-300">
                           <XCircle className="w-3.5 h-3.5 text-rose-400" />
@@ -693,7 +693,11 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                         </div>
                         {shipment.refusedDetails?.shippingFeePaid ? (
                           <span className="bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
-                            دفع الشحن ورجع ({shipment.refusedDetails.amountCollected || shipment.financials.shippingFee} ج.م)
+                            دفع كامل الشحن ({shipment.refusedDetails.amountCollected || shipment.financials.shippingFee} ج.م بالعهدة)
+                          </span>
+                        ) : (shipment.refusedDetails?.partialShippingFeePaid || ((shipment.refusedDetails?.amountCollected || 0) > 0)) ? (
+                          <span className="bg-amber-950 text-amber-300 border border-amber-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
+                            دفع جزء من الشحن ({shipment.refusedDetails?.amountCollected} ج.م بالعهدة)
                           </span>
                         ) : (
                           <span className="bg-rose-900/90 text-rose-200 border border-rose-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
@@ -809,15 +813,17 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
               <div className="space-y-2">
                 {collectedCustodyShipments.map((s) => {
                   const collectedAmt =
-                    (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid
-                      ? (s.refusedDetails.amountCollected || s.financials.shippingFee)
+                    (s.status === 'refused' || s.status === 'returned')
+                      ? (s.refusedDetails?.amountCollected ?? (s.refusedDetails?.shippingFeePaid ? s.financials.shippingFee : 0))
                       : s.status === 'partial_delivery'
                       ? (s.partialDetails?.partialCodAmount ?? s.financials.codAmount)
                       : s.financials.codAmount;
 
                   const typeLabel =
-                    (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid
-                      ? 'دفع الشحن ورجع'
+                    (s.status === 'refused' || s.status === 'returned')
+                      ? (s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee)
+                          ? `دفع جزء من الشحن (${collectedAmt} ج.م)`
+                          : 'دفع الشحن ورجع')
                       : s.status === 'partial_delivery'
                       ? 'استلام جزئي'
                       : 'تسليم كامل';

@@ -333,7 +333,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
           const aptVal = getColValue(row, ['الشقة', 'الدور', 'apartment']);
           const notesVal = getColValue(row, ['ملاحظات التسليم', 'ملاحظات', 'تعليمات', 'notes']);
           const descVal = getColValue(row, ['وصف الطرد', 'الوصف', 'المحتويات', 'description', 'package']);
-          const countVal = parseInt(getColValue(row, ['عدد القطع', 'الكمية', 'items', 'count'], '1')) || 1;
+          const countVal = parseInt(getColValue(row, ['عدد القطع', 'عدد قطع', 'القطع', 'قطع', 'الكمية', 'عدد', 'items', 'count', 'pieces', 'qty', 'quantity'], '1')) || 1;
           const weightVal = parseFloat(getColValue(row, ['الوزن', 'وزن الطرد', 'weight'], '1.5')) || 1.5;
           const codVal = parseFloat(getColValue(row, ['مبلغ التحصيل', 'المبلغ', 'الكاش', 'تحصيل', 'cod', 'amount'], '0')) || 0;
           const customShippingVal = getColValue(row, ['سعر الشحن', 'قيمة الشحن', 'تكلفة الشحن', 'الشحن', 'سعر شحن', 'قيمة شحن', 'shipping_fee', 'shipping fee', 'shipping', 'freight'], '');
@@ -581,6 +581,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 
   // Calculations for Staging Summary Bar
   const totalStagedCod = stagedRows.reduce((sum, r) => sum + (r.codAmount || 0), 0);
+  const totalStagedPieces = stagedRows.reduce((sum, r) => sum + (r.itemsCount || 1), 0);
   const totalStagedShippingFees = stagedRows.reduce((sum, r) => {
     const govObj = governoratesList.find((g) => g.code === r.governorateCode) || governoratesList[0];
     const autoFee = Math.round(govObj.baseRate + Math.max(0, r.weightKg - 3) * govObj.additionalKgRate);
@@ -1252,6 +1253,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                       <th className="p-2.5 min-w-[120px]">المحافظة *</th>
                       <th className="p-2.5 min-w-[180px]">العنوان التفصيلي *</th>
                       <th className="p-2.5 min-w-[130px]">وصف الطرد</th>
+                      <th className="p-2.5 w-[75px]">عدد القطع</th>
                       <th className="p-2.5 w-[70px]">الوزن (كجم)</th>
                       <th className="p-2.5 min-w-[90px]">الكاش (COD)</th>
                       <th className="p-2.5 min-w-[125px]">سعر الشحن (ج.م) *</th>
@@ -1344,6 +1346,17 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                             />
                           </td>
 
+                          {/* Items Count */}
+                          <td className="p-1.5">
+                            <input
+                              type="number"
+                              min="1"
+                              value={row.itemsCount || 1}
+                              onChange={(e) => updateStagedRow(row.id, 'itemsCount', parseInt(e.target.value) || 1)}
+                              className="w-full text-xs p-1.5 rounded border border-slate-200 bg-slate-50 text-center font-mono font-bold focus:bg-white"
+                            />
+                          </td>
+
                           {/* Weight */}
                           <td className="p-1.5">
                             <input
@@ -1419,11 +1432,18 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
             {/* STAGING SUMMARY FOOTER BAR */}
             {stagedRows.length > 0 && (
               <div className="bg-slate-900 text-white p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full sm:w-auto text-center sm:text-right">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full sm:w-auto text-center sm:text-right">
                   <div>
                     <span className="text-[10px] text-slate-400 block">شحنات صالحة:</span>
                     <span className="text-sm font-extrabold text-emerald-400">
                       {validStagedCount} من {stagedRows.length}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">إجمالي القطع:</span>
+                    <span className="text-sm font-extrabold text-amber-300">
+                      {totalStagedPieces} قطعة
                     </span>
                   </div>
 
