@@ -41,6 +41,18 @@ export interface WhatsAppTemplateData {
 
 export const WHATSAPP_TEMPLATES = [
   {
+    id: 'tomorrow_delivery_location',
+    title: 'تنبيه وصول الغد + طلب اللوكيشن 📍',
+    getMessage: (data: WhatsAppTemplateData) =>
+      `أهلاً بك أ/ ${data.recipientName} 👋\nمعاك كابتن ${
+        data.courierName ? `${data.courierName}` : 'التوصيل'
+      } من شركة الشحن 🚚\nنود إفادتك بأن شحنتك رقم #${data.trackingNumber} ${
+        data.storeName ? `من (${data.storeName})` : ''
+      } ستكون معك للتسليم غداً بإذن الله 📦.\n💵 المطلوب عند الاستلام: ${
+        data.codAmount ?? 0
+      } ج.م.\n📍 يرجى إرسال موقعك (اللوكيشن) هنا عبر الواتساب لتأكيد العنوان وسرعة الوصول إليك.\nشكراً لك!`,
+  },
+  {
     id: 'out_for_delivery',
     title: 'تنبيه الشحنة مع المندوب 🚚',
     getMessage: (data: WhatsAppTemplateData) =>

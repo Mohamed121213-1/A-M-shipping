@@ -31,6 +31,7 @@ import {
   PhoneOff
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
+import { BatchWhatsAppModal } from './BatchWhatsAppModal';
 
 interface CourierAppViewProps {
   shipments: Shipment[];
@@ -82,6 +83,8 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   const [refuseShippingFeePaid, setRefuseShippingFeePaid] = useState<boolean>(true);
   const [isPartialModalOpen, setIsPartialModalOpen] = useState(false);
   const [whatsappShipment, setWhatsappShipment] = useState<Shipment | null>(null);
+  const [isBatchWhatsAppOpen, setIsBatchWhatsAppOpen] = useState(false);
+  const [editingShipmentId, setEditingShipmentId] = useState<string | null>(null);
 
   // No Response Modal state
   const [isNoResponseModalOpen, setIsNoResponseModalOpen] = useState(false);
@@ -95,6 +98,8 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   
   // Courier App Tab: 'shipments' or 'wallet'
   const [courierTab, setCourierTab] = useState<'shipments' | 'wallet'>('shipments');
+  // Shipment Sub-Tab: 'pending' (الرئيسية - لم تسجل حالتها) or 'handled' (تم تسجيل حالتها)
+  const [shipmentSubTab, setShipmentSubTab] = useState<'pending' | 'handled'>('pending');
   const [isHandoverSuccess, setIsHandoverSuccess] = useState(false);
   const [settledAmountState, setSettledAmountState] = useState<number>(0);
 
@@ -151,6 +156,15 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     const matchName = Boolean(s.assignedCourier.name && activeCourier.name && s.assignedCourier.name === activeCourier.name);
     return matchId || matchPhone || matchName;
   });
+
+  // Split shipments into:
+  // 1. Pending (الرئيسية - لم تُسجل لها حالة بعد)
+  // 2. Handled (صفحة منفصلة - تم تسجيل حالتها: تسليم، رفض، استلام جزئي، محاولة فاشلة)
+  const isHandledStatus = (status: ShipmentStatus) =>
+    ['delivered', 'partial_delivery', 'refused', 'failed_attempt', 'returned', 'cancelled'].includes(status);
+
+  const pendingShipments = courierShipments.filter((s) => !isHandledStatus(s.status));
+  const handledShipments = courierShipments.filter((s) => isHandledStatus(s.status));
 
   const collectedCustodyShipments = courierShipments.filter(
     (s) =>
@@ -490,21 +504,112 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
             </button>
           </div>
 
+          {/* Sub-Pages Switcher: Main Pending vs Recorded Status */}
+          <div className="p-4 pb-0">
+            <div className="grid grid-cols-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 gap-1.5 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setShipmentSubTab('pending')}
+                className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  shipmentSubTab === 'pending'
+                    ? 'bg-red-600 text-white shadow-lg ring-1 ring-red-400/50 scale-[1.01]'
+                    : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <Package className="w-4 h-4" />
+                <span>الرئيسية (لم يُسجل لها حالة)</span>
+                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                  shipmentSubTab === 'pending' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {pendingShipments.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShipmentSubTab('handled')}
+                className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  shipmentSubTab === 'handled'
+                    ? 'bg-emerald-600 text-white shadow-lg ring-1 ring-emerald-400/50 scale-[1.01]'
+                    : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>تم تسجيل حالتها</span>
+                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                  shipmentSubTab === 'handled' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {handledShipments.length}
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* Deliveries List */}
           <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-              <span>طلبات الشحنات الموكلة إليك اليوم:</span>
-              <span className="text-red-400 font-mono">{courierShipments.length} طرد</span>
-            </h4>
+            {/* Header section depending on active sub-tab */}
+            {shipmentSubTab === 'pending' ? (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-slate-800/80 p-3 rounded-2xl border border-slate-700">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <span>الشحنات المتبقية الموكلة إليك اليوم:</span>
+                  <span className="text-red-400 font-mono font-black">({pendingShipments.length} طرد)</span>
+                </h4>
 
-            {courierShipments.length === 0 ? (
-              <div className="text-center py-12 text-slate-500 text-xs">
-                لا توجد شحنات مسندة إليك حالياً.
+                {pendingShipments.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsBatchWhatsAppOpen(true)}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ring-1 ring-emerald-400/50 hover:scale-[1.01]"
+                  >
+                    <MessageSquare className="w-4 h-4 text-emerald-200" />
+                    <span>إرسال إشعار وصول الغد + طلب اللوكيشن للعملاء 📍</span>
+                  </button>
+                )}
               </div>
             ) : (
-              courierShipments.map((shipment) => {
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-emerald-950/50 p-3 rounded-2xl border border-emerald-800/80">
+                <h4 className="text-xs font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>سجل الشحنات التي تم تسجيل حالتها وتحديثها اليوم:</span>
+                  <span className="text-emerald-400 font-mono font-black">({handledShipments.length} طرد)</span>
+                </h4>
+              </div>
+            )}
+
+            {/* List Rendering logic */}
+            {(shipmentSubTab === 'pending' ? pendingShipments : handledShipments).length === 0 ? (
+              shipmentSubTab === 'pending' ? (
+                <div className="text-center py-12 px-4 bg-slate-800/40 rounded-2xl border border-slate-700/60 space-y-3">
+                  <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto animate-bounce" />
+                  <h5 className="font-extrabold text-sm text-white">🎉 ممتاز! لا توجد شحنات معلقة</h5>
+                  <p className="text-xs text-slate-400 max-w-xs mx-auto">
+                    لقد قمت بتحديث وحسم حالة جميع الشحنات الموكلة إليك اليوم.
+                  </p>
+                  {handledShipments.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShipmentSubTab('handled')}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-4 py-2.5 rounded-xl transition-all shadow-md cursor-pointer inline-flex items-center gap-2"
+                    >
+                      <span>عرض الشحنات المسجلة ({handledShipments.length})</span>
+                      <span>←</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12 px-4 bg-slate-800/40 rounded-2xl border border-slate-700/60 space-y-2">
+                  <Package className="w-10 h-10 text-slate-500 mx-auto" />
+                  <h5 className="font-extrabold text-sm text-slate-300">لا توجد شحنات مسجلة حالتها بعد</h5>
+                  <p className="text-xs text-slate-400 max-w-xs mx-auto">
+                    عند تسليم أي شحنة أو إثبات رفضها أو تسجيل محاولة فاشلة ستنتقل تلقائياً إلى هذه الصفحة.
+                  </p>
+                </div>
+              )
+            ) : (
+              (shipmentSubTab === 'pending' ? pendingShipments : handledShipments).map((shipment) => {
                 const isHighlighted = highlightedShipmentId === shipment.id;
                 const hasNotif = courierNotifs.some((n) => n.shipmentId === shipment.id);
+                const isEditingThis = editingShipmentId === shipment.id;
 
                 return (
                   <div
@@ -530,7 +635,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                     {/* Top row */}
                     <div className="flex items-center justify-between">
                       <span className="font-mono font-black text-xs text-red-400 bg-red-950/80 px-2 py-0.5 rounded border border-red-800">
-                        {shipment.trackingNumber}
+                        #{shipment.trackingNumber}
                       </span>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded text-white bg-slate-700">
                         {shipment.financials.codAmount.toLocaleString()} ج.م (كاش)
@@ -623,15 +728,16 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                       </div>
                     )}
 
-                    {/* Actions for active items */}
-                    {shipment.status === 'out_for_delivery' && (
+                    {/* Actions for active/editing items */}
+                    {(shipment.status === 'out_for_delivery' || isEditingThis) && (
                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700">
                         <button
                           onClick={() => {
                             setSelectedShipment(shipment);
                             setIsDeliverModalOpen(true);
+                            setEditingShipmentId(null);
                           }}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           تسليم كامل الكاش
@@ -643,8 +749,9 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                             setPartialCodCollected(shipment.financials.codAmount);
                             setPartialItemsAccepted(Math.max(1, shipment.packageDetails.itemsCount - 1));
                             setIsPartialModalOpen(true);
+                            setEditingShipmentId(null);
                           }}
-                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors"
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer"
                         >
                           <Receipt className="w-3.5 h-3.5" />
                           استلام جزئي
@@ -654,8 +761,9 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                           onClick={() => {
                             setSelectedShipment(shipment);
                             setIsFailModalOpen(true);
+                            setEditingShipmentId(null);
                           }}
-                          className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-700/50 font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 transition-colors"
+                          className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-700/50 font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 transition-colors cursor-pointer"
                         >
                           <XCircle className="w-3.5 h-3.5 text-amber-400" />
                           محاولة فاشلة
@@ -665,8 +773,9 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                           onClick={() => {
                             setSelectedShipment(shipment);
                             setIsRefuseModalOpen(true);
+                            setEditingShipmentId(null);
                           }}
-                          className="bg-rose-900/80 hover:bg-rose-800 text-rose-200 border border-rose-700/80 font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 transition-colors"
+                          className="bg-rose-900/80 hover:bg-rose-800 text-rose-200 border border-rose-700/80 font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 transition-colors cursor-pointer"
                         >
                           <XCircle className="w-3.5 h-3.5 text-rose-400" />
                           رفض الاستلام
@@ -674,41 +783,84 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                       </div>
                     )}
 
-                    {/* Status Indicator */}
+                    {/* Status Indicator & Option to re-edit */}
                     {shipment.status === 'delivered' && (
-                      <div className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> تم التسليم بنجاح وتحصيل كامل المبلغ
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-950/80 border border-emerald-700/80">
+                        <div className="text-[11px] text-emerald-300 font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> تم التسليم بنجاح وتحصيل كامل المبلغ ({shipment.financials.codAmount} ج.م)
+                        </div>
+                        {!isEditingThis && (
+                          <button
+                            onClick={() => setEditingShipmentId(shipment.id)}
+                            className="text-[10px] text-emerald-200 hover:text-white bg-emerald-900/80 px-2 py-0.5 rounded border border-emerald-700 cursor-pointer"
+                          >
+                            تعديل ✎
+                          </button>
+                        )}
                       </div>
                     )}
+
                     {shipment.status === 'partial_delivery' && (
-                      <div className="text-[11px] text-amber-300 font-bold flex items-center gap-1 bg-amber-950/60 p-2 rounded-xl border border-amber-800/60">
-                        <Receipt className="w-3.5 h-3.5 text-amber-400" /> تم الاستلام الجزئي (تحصيل {shipment.financials.codAmount} ج.م)
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-amber-950/60 border border-amber-800/60">
+                        <div className="text-[11px] text-amber-300 font-bold flex items-center gap-1">
+                          <Receipt className="w-3.5 h-3.5 text-amber-400" /> تم الاستلام الجزئي (تحصيل {shipment.partialDetails?.partialCodAmount ?? shipment.financials.codAmount} ج.م)
+                        </div>
+                        {!isEditingThis && (
+                          <button
+                            onClick={() => setEditingShipmentId(shipment.id)}
+                            className="text-[10px] text-amber-200 hover:text-white bg-amber-900/80 px-2 py-0.5 rounded border border-amber-700 cursor-pointer"
+                          >
+                            تعديل ✎
+                          </button>
+                        )}
                       </div>
                     )}
+
                     {(shipment.status === 'refused' || shipment.status === 'returned') && (
                       <div className="text-[11px] font-bold flex items-center justify-between p-2 rounded-xl border bg-rose-950/60 border-rose-800/60">
                         <div className="flex items-center gap-1 text-rose-300">
                           <XCircle className="w-3.5 h-3.5 text-rose-400" />
                           <span>رفض الاستلام من العميل</span>
                         </div>
-                        {shipment.refusedDetails?.shippingFeePaid ? (
-                          <span className="bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
-                            دفع كامل الشحن ({shipment.refusedDetails.amountCollected || shipment.financials.shippingFee} ج.م بالعهدة)
-                          </span>
-                        ) : (shipment.refusedDetails?.partialShippingFeePaid || ((shipment.refusedDetails?.amountCollected || 0) > 0)) ? (
-                          <span className="bg-amber-950 text-amber-300 border border-amber-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
-                            دفع جزء من الشحن ({shipment.refusedDetails?.amountCollected} ج.م بالعهدة)
-                          </span>
-                        ) : (
-                          <span className="bg-rose-900/90 text-rose-200 border border-rose-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
-                            لم يدفع شحن (0 ج.م)
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {shipment.refusedDetails?.shippingFeePaid ? (
+                            <span className="bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
+                              دفع كامل الشحن ({shipment.refusedDetails.amountCollected || shipment.financials.shippingFee} ج.م بالعهدة)
+                            </span>
+                          ) : (shipment.refusedDetails?.partialShippingFeePaid || ((shipment.refusedDetails?.amountCollected || 0) > 0)) ? (
+                            <span className="bg-amber-950 text-amber-300 border border-amber-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
+                              دفع جزء من الشحن ({shipment.refusedDetails?.amountCollected} ج.م بالعهدة)
+                            </span>
+                          ) : (
+                            <span className="bg-rose-900/90 text-rose-200 border border-rose-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
+                              لم يدفع شحن (0 ج.م)
+                            </span>
+                          )}
+                          {!isEditingThis && (
+                            <button
+                              onClick={() => setEditingShipmentId(shipment.id)}
+                              className="text-[10px] text-rose-200 hover:text-white bg-rose-900/80 px-2 py-0.5 rounded border border-rose-700 cursor-pointer"
+                            >
+                              تعديل ✎
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
+
                     {shipment.status === 'failed_attempt' && (
-                      <div className="text-[11px] text-amber-400 font-bold flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> محاولة تسليم غير ناجحة
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-amber-950/60 border border-amber-800/60">
+                        <div className="text-[11px] text-amber-400 font-bold flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" /> محاولة تسليم غير ناجحة
+                        </div>
+                        {!isEditingThis && (
+                          <button
+                            onClick={() => setEditingShipmentId(shipment.id)}
+                            className="text-[10px] text-amber-200 hover:text-white bg-amber-900/80 px-2 py-0.5 rounded border border-amber-700 cursor-pointer"
+                          >
+                            تعديل ✎
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1306,6 +1458,15 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Batch WhatsApp Tomorrow Delivery & Location Notifier Modal */}
+      {isBatchWhatsAppOpen && (
+        <BatchWhatsAppModal
+          shipments={courierShipments}
+          activeCourier={activeCourier}
+          onClose={() => setIsBatchWhatsAppOpen(false)}
+        />
       )}
     </div>
   );
