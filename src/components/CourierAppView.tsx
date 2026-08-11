@@ -28,10 +28,12 @@ import {
   Layers,
   ArrowDownRight,
   MessageSquare,
-  PhoneOff
+  PhoneOff,
+  BellRing
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 import { BatchWhatsAppModal } from './BatchWhatsAppModal';
+import { playNotificationSound, requestNotificationPermission, sendDeviceNotification } from '../utils/deviceNotifications';
 
 interface CourierAppViewProps {
   shipments: Shipment[];
@@ -367,7 +369,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
           {/* Notification Bell Icon */}
           <button
             onClick={() => setIsNotifPanelOpen(!isNotifPanelOpen)}
-            className="relative p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition-colors"
+            className="relative p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition-colors cursor-pointer"
             title="تنبيهات وإشعارات المندوب"
           >
             <Bell className="w-4 h-4 text-amber-400" />
@@ -376,6 +378,27 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                 {unreadCount}
               </span>
             )}
+          </button>
+
+          {/* Quick Device Notification Setup/Test Button for Couriers */}
+          <button
+            type="button"
+            onClick={() => {
+              requestNotificationPermission().then((res) => {
+                playNotificationSound();
+                if (res === 'granted') {
+                  sendDeviceNotification('🔔 تم تفعيل إشعارات المندوب!', {
+                    body: 'ستصلك جميع تنبيهات الشحنات والردود على هذا الجهاز.',
+                    sound: true,
+                  });
+                }
+              });
+            }}
+            className="p-2 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 rounded-xl border border-indigo-700/80 transition-all flex items-center gap-1 text-[10px] font-extrabold cursor-pointer hover:scale-105"
+            title="تفعيل/اختبار إشعارات الجهاز والمنبه الصوتي"
+          >
+            <BellRing className="w-3.5 h-3.5 text-indigo-300 animate-pulse" />
+            <span className="hidden sm:inline">إشعارات الجهاز</span>
           </button>
 
           {/* Courier Selector - only for admins or demo */}
