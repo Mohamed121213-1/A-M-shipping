@@ -21,6 +21,8 @@ import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, Cou
 import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES, INITIAL_USERS, INITIAL_COMPANY_TRANSACTIONS } from './data/mockData';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
+import { DeviceNotificationBanner } from './components/DeviceNotificationBanner';
+import { registerServiceWorker, sendDeviceNotification } from './utils/deviceNotifications';
 
 // Safe localStorage loader helper
 const loadLocalState = <T,>(key: string, defaultValue: T): T => {
@@ -199,6 +201,11 @@ export default function App() {
     setCompanyTransactions((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // Register Service Worker for Device Push Notifications
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
   // Auto-sync state updates to localStorage and broadcast to all connected devices/accounts
   useEffect(() => {
     localStorage.setItem('bosta_shipments', JSON.stringify(shipments));
@@ -266,6 +273,14 @@ export default function App() {
         setGovernorates(incoming.governorates);
       }
       if (incoming.notifications && Array.isArray(incoming.notifications)) {
+        const latestNotif = incoming.notifications[0];
+        if (latestNotif && !latestNotif.read) {
+          sendDeviceNotification(`💬 إشعار جديد (بوليصة #${latestNotif.trackingNumber})`, {
+            body: `العميل: ${latestNotif.recipientName} - ${latestNotif.governorate} (${latestNotif.city})`,
+            tag: latestNotif.id,
+            sound: true,
+          });
+        }
         setCourierNotifications(incoming.notifications);
       }
       if (incoming.companyTransactions && Array.isArray(incoming.companyTransactions)) {
@@ -938,6 +953,13 @@ export default function App() {
       nextNotifications = [newNotification, ...courierNotifications];
       setCourierNotifications(nextNotifications);
       setActiveCourierToast(newNotification);
+
+      // Trigger native device notification
+      sendDeviceNotification(`📦 شحنة جديدة مسندة إليك (#${shipmentData.trackingNumber})`, {
+        body: `العميل: ${shipmentData.recipient.name} - ${shipmentData.recipient.governorate} (${shipmentData.recipient.city})\nالمبلغ: ${shipmentData.financials.codAmount} ج.م`,
+        tag: `assign-${shipmentData.id}`,
+        sound: true,
+      });
     }
 
     broadcastDataChange({ shipments: nextShipments, notifications: nextNotifications });
@@ -1057,6 +1079,13 @@ export default function App() {
       nextNotifications = [newNotification, ...courierNotifications];
       setCourierNotifications(nextNotifications);
       setActiveCourierToast(newNotification);
+
+      // Trigger native device notification
+      sendDeviceNotification(`💬 رد جديد من التاجر (بوليصة #${targetTracking})`, {
+        body: `العميل: ${recipientName} (${gov} - ${city}) - المبلغ: ${cod} ج.م\nالرد: ${merchantNote || 'تم إضافة تعليمات جديدة'}`,
+        tag: `courier-notif-${shipmentId}`,
+        sound: true,
+      });
     }
 
     broadcastDataChange({ shipments: nextShipments, notifications: nextNotifications });
@@ -1482,6 +1511,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-red-50/30 text-slate-900 font-sans flex flex-col antialiased selection:bg-red-500 selection:text-white relative overflow-x-hidden" dir="rtl">
+      {/* Device Notification Activation Bar */}
+      <DeviceNotificationBanner />
+
       {/* Ambient background glows */}
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-red-500/5 rounded-full blur-3xl pointer-events-none -z-10" />
       <div className="absolute bottom-1/3 left-10 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none -z-10" />
