@@ -272,13 +272,13 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Action Controls & Navigation Tabs */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-3 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
           {/* Main Navigation Tabs */}
           {currentUser?.role === 'courier' ? (
-            <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/80">
+            <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80 max-w-full overflow-x-auto scrollbar-none whitespace-nowrap shrink-0">
               <button
                 onClick={() => handleNavClick('courier_app')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                   activeTab === 'courier_app'
                     ? 'bg-red-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -289,7 +289,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
               <button
                 onClick={() => handleNavClick('tracking')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                   activeTab === 'tracking'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -300,11 +300,11 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </nav>
           ) : currentRole !== 'public_tracker' && (
-            <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200/80">
+            <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80 max-w-full overflow-x-auto scrollbar-none whitespace-nowrap shrink-0">
               {!currentUser && (
                 <button
                   onClick={() => handleNavClick('login')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                     activeTab === 'login'
                       ? 'bg-red-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -317,7 +317,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               <button
                 onClick={() => handleNavClick('shipments')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                   activeTab === 'shipments'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -330,7 +330,7 @@ export const Header: React.FC<HeaderProps> = ({
               {(currentRole === 'merchant' || currentRole === 'admin') && (
                 <button
                   onClick={() => handleNavClick('wallet')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                     activeTab === 'wallet'
                       ? 'bg-white text-slate-900 shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -344,7 +344,7 @@ export const Header: React.FC<HeaderProps> = ({
               {(currentRole === 'merchant' || currentRole === 'admin') && (
                 <button
                   onClick={() => handleNavClick('returns')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                     activeTab === 'returns'
                       ? 'bg-red-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -358,7 +358,7 @@ export const Header: React.FC<HeaderProps> = ({
               {(currentRole === 'merchant' || currentRole === 'admin') && (
                 <button
                   onClick={() => handleNavClick('company_treasury')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                     activeTab === 'company_treasury'
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -372,7 +372,7 @@ export const Header: React.FC<HeaderProps> = ({
               {(currentRole === 'merchant' || currentRole === 'admin') && (
                 <button
                   onClick={() => handleNavClick('analytics')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                     activeTab === 'analytics'
                       ? 'bg-white text-slate-900 shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -386,7 +386,7 @@ export const Header: React.FC<HeaderProps> = ({
               {currentRole === 'admin' && (
                 <button
                   onClick={() => handleNavClick('admin_panel')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                     activeTab === 'admin_panel'
                       ? 'bg-amber-500 text-slate-950 shadow-xs'
                       : 'text-amber-700 hover:text-amber-900 bg-amber-50/80'
@@ -400,7 +400,7 @@ export const Header: React.FC<HeaderProps> = ({
               {currentRole === 'admin' && (
                 <button
                   onClick={() => handleNavClick('courier_app')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                     activeTab === 'courier_app'
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -413,7 +413,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               <button
                 onClick={() => handleNavClick('calculator')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                   activeTab === 'calculator'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -425,7 +425,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               <button
                 onClick={() => handleNavClick('tracking')}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                   activeTab === 'tracking'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'

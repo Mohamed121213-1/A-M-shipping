@@ -349,7 +349,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   };
 
   return (
-    <div className="max-w-md mx-auto bg-slate-900 text-slate-100 rounded-3xl border-4 border-slate-800 shadow-2xl overflow-hidden my-4 min-h-[760px] flex flex-col relative">
+    <div className="w-full max-w-md mx-auto bg-slate-900 text-slate-100 rounded-2xl sm:rounded-3xl border-2 sm:border-4 border-slate-800 shadow-2xl overflow-hidden my-2 sm:my-4 min-h-[700px] flex flex-col relative">
       {/* Mobile Top Bar */}
       <div className="bg-slate-950 p-4 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-3">

@@ -698,7 +698,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
       {/* Shipments Table */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-right text-xs">
+          <table className="w-full text-right text-xs min-w-[800px]">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold uppercase">
               <tr>
                 <th className="p-3 text-center">

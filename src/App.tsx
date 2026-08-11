@@ -275,10 +275,12 @@ export default function App() {
       if (incoming.notifications && Array.isArray(incoming.notifications)) {
         const latestNotif = incoming.notifications[0];
         if (latestNotif && !latestNotif.read) {
-          sendDeviceNotification(`💬 إشعار جديد (بوليصة #${latestNotif.trackingNumber})`, {
-            body: `العميل: ${latestNotif.recipientName} - ${latestNotif.governorate} (${latestNotif.city})`,
+          setActiveCourierToast(latestNotif);
+          sendDeviceNotification(latestNotif.statusTitle || `💬 إشعار جديد (بوليصة #${latestNotif.trackingNumber})`, {
+            body: latestNotif.statusNote || `العميل: ${latestNotif.recipientName} - ${latestNotif.governorate} (${latestNotif.city})`,
             tag: latestNotif.id,
             sound: true,
+            data: { shipmentId: latestNotif.shipmentId },
           });
         }
         setCourierNotifications(incoming.notifications);
@@ -1073,10 +1075,12 @@ export default function App() {
   const handleReportNoResponse = (shipmentId: string, courierNote?: string) => {
     const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
     let trackingNum = '';
+    let targetShipmentObj: Shipment | undefined;
 
     const nextShipments = shipments.map((s) => {
       if (s.id !== shipmentId) return s;
       trackingNum = s.trackingNumber;
+      targetShipmentObj = s;
 
       const updatedTimeline = [
         ...s.timeline,
@@ -1104,8 +1108,51 @@ export default function App() {
     });
 
     setShipments(nextShipments);
-    broadcastDataChange({ shipments: nextShipments });
-    showToast(`📞 تم إرسال تنبيه للتاجر أن العميل لا يرد على البوليصة ${trackingNum || shipmentId}!`);
+
+    let nextNotifications = courierNotifications;
+    if (targetShipmentObj) {
+      const newNotif: CourierNotification = {
+        id: `notif-${Date.now()}`,
+        courierId: targetShipmentObj.assignedCourier?.id || 'all',
+        courierName: targetShipmentObj.assignedCourier?.name || 'الكابتن',
+        merchantId: targetShipmentObj.sender.id,
+        merchantName: targetShipmentObj.sender.storeName,
+        shipmentId: targetShipmentObj.id,
+        trackingNumber: targetShipmentObj.trackingNumber,
+        recipientName: targetShipmentObj.recipient.name,
+        recipientPhone: targetShipmentObj.recipient.phone,
+        governorate: targetShipmentObj.recipient.governorate,
+        city: targetShipmentObj.recipient.city,
+        codAmount: targetShipmentObj.financials.codAmount,
+        createdAt: new Date().toISOString(),
+        timestamp: timeStr,
+        read: false,
+        type: 'status_failed_attempt',
+        statusTitle: `⚠️ تنبيه للتاجر: العميل لا يرد على المندوب (#${targetShipmentObj.trackingNumber})`,
+        statusNote: `الكابتن ${targetShipmentObj.assignedCourier?.name || 'المندوب'} يتواجد لدى العميل ${targetShipmentObj.recipient.name} (هاتف: ${targetShipmentObj.recipient.phone}) والعميل لا يجيب. يرجى التواصل مع العميل فوراً!\nملاحظة المندوب: "${courierNote || 'لا يرد على اتصال الكابتن'}"`,
+      };
+
+      nextNotifications = [newNotif, ...courierNotifications];
+      setCourierNotifications(nextNotifications);
+      setActiveCourierToast(newNotif);
+
+      sendDeviceNotification(`⚠️ تنبيه للتاجر: العميل لا يرد (#${targetShipmentObj.trackingNumber})`, {
+        body: `المتجر: ${targetShipmentObj.sender.storeName}\nالعميل: ${targetShipmentObj.recipient.name} (${targetShipmentObj.recipient.phone})\nالملاحظة: ${courierNote || 'لا يجيب على اتصال الكابتن'}`,
+        tag: `noresp-${targetShipmentObj.id}-${Date.now()}`,
+        sound: true,
+        data: { shipmentId: targetShipmentObj.id },
+      });
+    }
+
+    try {
+      localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
+      localStorage.setItem('bosta_courier_notifications', JSON.stringify(nextNotifications));
+    } catch (e) {
+      console.warn('Error saving shipments:', e);
+    }
+
+    broadcastDataChange({ shipments: nextShipments, notifications: nextNotifications });
+    showToast(`📞 تم إرسال تنبيه عاجل للتاجر بأن العميل لا يرد على البوليصة #${trackingNum || shipmentId}!`);
   };
 
   // Merchant Responds to "No Response" (رد / كلمه)
@@ -1177,6 +1224,9 @@ export default function App() {
         createdAt: new Date().toISOString(),
         timestamp: timeStr,
         read: false,
+        type: 'status_out_for_delivery',
+        statusTitle: `💬 رد جديد من التاجر للمندوب (#${targetTracking})`,
+        statusNote: `تواصل التاجر مع العميل وأفاد بالآتي للمندوب: "${merchantNote}"`,
       };
 
       nextNotifications = [newNotification, ...courierNotifications];
@@ -1188,6 +1238,7 @@ export default function App() {
         body: `العميل: ${recipientName} (${gov} - ${city}) - المبلغ: ${cod} ج.م\nالرد: ${merchantNote || 'تم إضافة تعليمات جديدة'}`,
         tag: `courier-notif-${shipmentId}`,
         sound: true,
+        data: { shipmentId: targetTracking },
       });
     }
 
@@ -1678,7 +1729,7 @@ export default function App() {
       )}
 
       {/* Main Content View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-2.5 sm:px-6 py-4 sm:py-6">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab + (currentUser?.id || 'guest')}
