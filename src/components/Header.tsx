@@ -60,7 +60,19 @@ export const Header: React.FC<HeaderProps> = ({
   const [searchInput, setSearchInput] = useState('');
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
-  const unreadNotifs = notifications.filter((n) => !n.read);
+  const userNotifications = notifications.filter((n) => {
+    if (!currentUser) return true;
+    if (currentUser.role === 'admin') return true;
+    if (currentUser.role === 'merchant') {
+      return !n.merchantId || n.merchantId === currentUser.id || n.merchantName === currentUser.name;
+    }
+    if (currentUser.role === 'courier') {
+      return !n.courierId || n.courierId === 'all' || n.courierId === currentUser.id;
+    }
+    return true;
+  });
+
+  const unreadNotifs = userNotifications.filter((n) => !n.read);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -447,7 +459,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
                     <div className="flex items-center gap-2">
                       <Bell className="w-4 h-4 text-amber-400" />
-                      <h4 className="font-extrabold text-xs text-white">إشعارات الشحنات الحية ({notifications.length})</h4>
+                      <h4 className="font-extrabold text-xs text-white">إشعارات الشحنات الحية ({userNotifications.length})</h4>
                     </div>
                     <button
                       onClick={() => setIsNotifOpen(false)}
@@ -458,12 +470,12 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
 
                   <div className="max-h-72 overflow-y-auto space-y-2">
-                    {notifications.length === 0 ? (
+                    {userNotifications.length === 0 ? (
                       <div className="text-center py-6 text-slate-500 text-xs">
                         لا توجد إشعارات مسجلة حالياً
                       </div>
                     ) : (
-                      notifications.slice(0, 15).map((n) => (
+                      userNotifications.slice(0, 15).map((n) => (
                         <div
                           key={n.id}
                           onClick={() => {

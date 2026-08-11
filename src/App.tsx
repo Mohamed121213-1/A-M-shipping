@@ -849,49 +849,66 @@ export default function App() {
 
     if (updatedShipment) {
       const nowTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      const noteText = note || '';
+      const noteLower = noteText.toLowerCase();
+
+      const isNoAnswer =
+        newStatus === 'failed_attempt' ||
+        noteLower.includes('مبيردش') ||
+        noteLower.includes('لا يرد') ||
+        noteLower.includes('عدم الرد') ||
+        noteLower.includes('تلفون مغلق') ||
+        noteLower.includes('مغلق') ||
+        noteLower.includes('لم يجيب') ||
+        noteLower.includes('مش بيرد');
+
       let statusEmoji = '📦';
       let statusTitleStr = `تحديث بوليصة #${updatedShipment.trackingNumber}`;
+      let statusNoteText = noteText;
 
-      if (newStatus === 'delivered') {
+      if (isNoAnswer) {
+        statusEmoji = '⚠️';
+        statusTitleStr = `⚠️ تنبيه عاجل للتاجر: العميل لا يرد على الاتصال (#${updatedShipment.trackingNumber})`;
+        statusNoteText = `الكابتن ${updatedShipment.assignedCourier?.name || 'المندوب'} يتواجد لدى العميل ${updatedShipment.recipient.name} (هاتف: ${updatedShipment.recipient.phone}) والعميل لا يجيب. يرجى التواصل مع العميل فوراً!${noteText ? `\nملاحظة المندوب: ${noteText}` : ''}`;
+      } else if (newStatus === 'delivered') {
         statusEmoji = '✅';
-        statusTitleStr = `تم تسليم الشحنة بنجاح (#${updatedShipment.trackingNumber})`;
+        statusTitleStr = `✅ تم تسليم الشحنة بنجاح (#${updatedShipment.trackingNumber})`;
+        statusNoteText = noteText || `تم تسليم الأوردر للعميل ${updatedShipment.recipient.name} وتحصيل مبلغ ${updatedShipment.financials.codAmount} ج.م بنجاح.`;
       } else if (newStatus === 'returned' || newStatus === 'refused') {
         statusEmoji = '❌';
-        statusTitleStr = `رفض استلام / مرتجع للتاجر (#${updatedShipment.trackingNumber})`;
+        statusTitleStr = `❌ رفض استلام / مرتجع للتاجر (#${updatedShipment.trackingNumber})`;
+        statusNoteText = noteText || `تم رفض استلام الأوردر من العميل ${updatedShipment.recipient.name}. السبب: ${updatedShipment.refusedDetails?.reason || 'عدم رغبة العميل'}.`;
       } else if (newStatus === 'partial_delivery') {
         statusEmoji = '📦';
-        statusTitleStr = `استلام جزئي للشحنة (#${updatedShipment.trackingNumber})`;
-      } else if (newStatus === 'failed_attempt') {
-        statusEmoji = '⚠️';
-        statusTitleStr = `محاولة تسليم غير ناجحة (#${updatedShipment.trackingNumber})`;
+        statusTitleStr = `📦 استلام جزئي للشحنة (#${updatedShipment.trackingNumber})`;
+        statusNoteText = noteText || `تم استلام جزء من الشحنة للعميل ${updatedShipment.recipient.name} وتحصيل ${updatedShipment.partialDetails?.partialCodAmount || updatedShipment.financials.codAmount} ج.م.`;
       } else if (newStatus === 'out_for_delivery') {
         statusEmoji = '🚚';
-        statusTitleStr = `خرجت للتسليم مع المندوب (#${updatedShipment.trackingNumber})`;
+        statusTitleStr = `🚚 خرجت للتسليم مع المندوب (#${updatedShipment.trackingNumber})`;
+        statusNoteText = noteText || `الشحنة الآن مع الكابتن ${updatedShipment.assignedCourier?.name || 'المندوب'} وفي طريقها للعميل ${updatedShipment.recipient.name}.`;
       } else if (newStatus === 'in_hub') {
         statusEmoji = '🏢';
         statusTitleStr = `وصلت المستودع الرئيسي (#${updatedShipment.trackingNumber})`;
+        statusNoteText = noteText || `وصلت الشحنة للمستودع الرئيسي.`;
       }
-
-      const statusNoteText = note || (
-        newStatus === 'delivered' ? 'تم التسليم بنجاح وتحصيل مبلغ الشحنة' :
-        newStatus === 'returned' ? 'تم رفض الاستلام وتسجيل الشحنة كمرتجع' :
-        `تم تغيير حالة الشحنة إلى ${newStatus}`
-      );
 
       const newNotif: CourierNotification = {
         id: `notif-${Date.now()}`,
         courierId: updatedShipment.assignedCourier?.id || 'all',
         courierName: updatedShipment.assignedCourier?.name || 'الكابتن',
+        merchantId: updatedShipment.sender.id,
+        merchantName: updatedShipment.sender.storeName,
         shipmentId: updatedShipment.id,
         trackingNumber: updatedShipment.trackingNumber,
         recipientName: updatedShipment.recipient.name,
+        recipientPhone: updatedShipment.recipient.phone,
         governorate: updatedShipment.recipient.governorate,
         city: updatedShipment.recipient.city,
         codAmount: updatedShipment.financials.codAmount,
         createdAt: new Date().toISOString(),
         timestamp: nowTime,
         read: false,
-        type: `status_${newStatus}` as any,
+        type: isNoAnswer ? 'status_failed_attempt' : (`status_${newStatus}` as any),
         statusTitle: statusTitleStr,
         statusNote: statusNoteText,
       };
@@ -900,11 +917,12 @@ export default function App() {
       setCourierNotifications(nextNotifications);
       setActiveCourierToast(newNotif);
 
-      // Trigger system device notification chime & floating banner
+      // Trigger native background device notification chime & floating banner
       sendDeviceNotification(`${statusEmoji} ${statusTitleStr}`, {
-        body: `العميل: ${updatedShipment.recipient.name} (${updatedShipment.recipient.governorate} - ${updatedShipment.recipient.city})\nالمبلغ: ${updatedShipment.financials.codAmount} ج.م\nالتفاصيل: ${statusNoteText}`,
+        body: `التاجر: ${updatedShipment.sender.storeName}\nالعميل: ${updatedShipment.recipient.name} (${updatedShipment.recipient.phone})\nالمحافظة: ${updatedShipment.recipient.governorate} - ${updatedShipment.recipient.city}\nالمبلغ: ${updatedShipment.financials.codAmount} ج.م\nالتفاصيل: ${statusNoteText}`,
         tag: `status-${updatedShipment.id}-${Date.now()}`,
         sound: true,
+        data: { shipmentId: updatedShipment.id },
       });
     }
 

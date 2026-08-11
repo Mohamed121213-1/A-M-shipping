@@ -212,6 +212,9 @@ export interface CourierNotification {
   type?: string;
   statusTitle?: string;
   statusNote?: string;
+  merchantId?: string;
+  merchantName?: string;
+  recipientPhone?: string;
 }
 
 export type CompanyTransactionType = 'income' | 'expense';

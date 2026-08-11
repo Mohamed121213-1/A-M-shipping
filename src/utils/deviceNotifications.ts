@@ -118,25 +118,28 @@ export const sendDeviceNotification = (
   try {
     const notificationIcon = icon || 'https://cdn-icons-png.flaticon.com/512/2822/2822408.png';
 
-    // If Service Worker ready, use SW showNotification
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    // 1. Try Service Worker registration showNotification first (Works best for Mobile / Android / Web PWA)
+    if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then((registration) => {
         registration.showNotification(title, {
           body,
           icon: notificationIcon,
           badge: notificationIcon,
           tag: tag || `notif-${Date.now()}`,
-          data,
+          data: data || {},
           dir: 'rtl',
           lang: 'ar',
-          vibrate: [150, 100, 200],
+          vibrate: [200, 100, 200],
+          requireInteraction: true,
+          renotify: true,
         } as any);
       }).catch(() => {
         fallbackNotification(title, { body, icon: notificationIcon, tag, data, onClick });
       });
-    } else {
-      fallbackNotification(title, { body, icon: notificationIcon, tag, data, onClick });
     }
+
+    // 2. Also trigger standard fallback Notification if available for immediate desktop OS popups
+    fallbackNotification(title, { body, icon: notificationIcon, tag, data, onClick });
   } catch (err) {
     console.error('Failed to trigger native device notification:', err);
   }
