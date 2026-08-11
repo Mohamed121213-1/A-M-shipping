@@ -30,38 +30,45 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
   }
 };
 
-// Web Audio API Beep Generator for Instant Notification Sound
+// Web Audio API Synthesizer generating a loud, clear, signature iPhone Tri-Tone alert chime
 export const playNotificationSound = () => {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
 
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const gain = ctx.createGain();
+    // Trigger vibration on mobile devices if supported
+    if ('vibrate' in navigator) {
+      navigator.vibrate([150, 100, 200]);
+    }
 
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc1.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+    // Classic Apple Tri-Tone Chime frequencies (C6, G6, E6)
+    const tones = [
+      { freq: 1046.5, start: 0, duration: 0.12 },    // C6
+      { freq: 1567.98, start: 0.1, duration: 0.12 }, // G6
+      { freq: 1318.51, start: 0.22, duration: 0.25 } // E6
+    ];
 
-    osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
-    osc2.frequency.exponentialRampToValueAtTime(1174.66, ctx.currentTime + 0.3); // D6
+    tones.forEach(({ freq, start, duration }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
 
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
 
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(ctx.destination);
+      // Fast attack, smooth exponential decay for a crisp bell chime
+      gain.gain.setValueAtTime(0, ctx.currentTime + start);
+      gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
 
-    osc1.start(ctx.currentTime);
-    osc2.start(ctx.currentTime + 0.15);
-    osc1.stop(ctx.currentTime + 0.35);
-    osc2.stop(ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + duration);
+    });
   } catch (e) {
-    // Ignore audio context autoplay restriction if unhandled
+    console.warn('Audio play restricted or unsupported context:', e);
   }
 };
 
@@ -74,7 +81,7 @@ interface SendNotificationOptions {
   onClick?: () => void;
 }
 
-// Send Native Device/Browser System Notification
+// Send Native Device/Browser System Notification + In-App Mobile Toast for iPhone iOS
 export const sendDeviceNotification = (
   title: string,
   options: SendNotificationOptions = {}
@@ -85,8 +92,22 @@ export const sendDeviceNotification = (
     playNotificationSound();
   }
 
+  // Always dispatch custom window event so in-app alert banner pops up on iOS/iPhone & Desktop
+  if (typeof window !== 'undefined') {
+    const customEvent = new CustomEvent('app-device-notification', {
+      detail: {
+        title,
+        body,
+        icon: icon || 'https://cdn-icons-png.flaticon.com/512/2822/2822408.png',
+        timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+        onClick,
+      },
+    });
+    window.dispatchEvent(customEvent);
+  }
+
   if (!isNotificationSupported()) {
-    console.log('Browser does not support notifications:', title, body);
+    console.log('Browser notification API unsupported natively on this device/iOS view:', title, body);
     return;
   }
 
@@ -95,7 +116,7 @@ export const sendDeviceNotification = (
   }
 
   try {
-    const notificationIcon = icon || 'https://cdn-icons-png.flaticon.com/512/2822/2822408.png'; // Truck icon
+    const notificationIcon = icon || 'https://cdn-icons-png.flaticon.com/512/2822/2822408.png';
 
     // If Service Worker ready, use SW showNotification
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
@@ -108,17 +129,16 @@ export const sendDeviceNotification = (
           data,
           dir: 'rtl',
           lang: 'ar',
-          vibrate: [200, 100, 200],
+          vibrate: [150, 100, 200],
         } as any);
       }).catch(() => {
-        // Fallback to standard Notification API
         fallbackNotification(title, { body, icon: notificationIcon, tag, data, onClick });
       });
     } else {
       fallbackNotification(title, { body, icon: notificationIcon, tag, data, onClick });
     }
   } catch (err) {
-    console.error('Failed to trigger device notification:', err);
+    console.error('Failed to trigger native device notification:', err);
   }
 };
 

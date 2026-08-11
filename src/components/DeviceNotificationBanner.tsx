@@ -13,6 +13,12 @@ export const DeviceNotificationBanner: React.FC = () => {
   const [isDismissed, setIsDismissed] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showTestToast, setShowTestToast] = useState(false);
+  const [activeInAppNotification, setActiveInAppNotification] = useState<{
+    title: string;
+    body?: string;
+    timestamp?: string;
+    icon?: string;
+  } | null>(null);
 
   const checkAndRefreshPermission = () => {
     setPermission(getNotificationPermission());
@@ -20,6 +26,29 @@ export const DeviceNotificationBanner: React.FC = () => {
 
   useEffect(() => {
     checkAndRefreshPermission();
+
+    // Listen for custom app device notification events (works on iPhone iOS, Mac, and all browsers)
+    const handleInAppNotif = (event: any) => {
+      const detail = event.detail;
+      if (detail) {
+        setActiveInAppNotification({
+          title: detail.title,
+          body: detail.body,
+          timestamp: detail.timestamp,
+          icon: detail.icon,
+        });
+
+        // Auto-hide after 6 seconds
+        setTimeout(() => {
+          setActiveInAppNotification((prev) => (prev?.title === detail.title ? null : prev));
+        }, 6000);
+      }
+    };
+
+    window.addEventListener('app-device-notification', handleInAppNotif);
+    return () => {
+      window.removeEventListener('app-device-notification', handleInAppNotif);
+    };
   }, []);
 
   const handleEnable = async () => {
@@ -139,6 +168,41 @@ export const DeviceNotificationBanner: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Active Floating In-App Notification Card (iOS / Chrome / Universal) */}
+      {activeInAppNotification && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md bg-slate-900/95 backdrop-blur-md border border-amber-500/60 text-white p-4 rounded-3xl shadow-2xl animate-in slide-in-from-top duration-300 ring-2 ring-amber-500/20">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-amber-500/20 border border-amber-500/40 rounded-2xl text-amber-400 shrink-0 mt-0.5">
+              <BellRing className="w-5 h-5 animate-bounce" />
+            </div>
+
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-extrabold text-xs text-amber-300 truncate">
+                  {activeInAppNotification.title}
+                </h4>
+                <span className="text-[10px] text-slate-400 font-mono bg-black/40 px-2 py-0.5 rounded-full">
+                  {activeInAppNotification.timestamp}
+                </span>
+              </div>
+
+              {activeInAppNotification.body && (
+                <p className="text-xs text-slate-200 font-medium whitespace-pre-line leading-relaxed">
+                  {activeInAppNotification.body}
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={() => setActiveInAppNotification(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Help Modal for Mac & iPhone Chrome / Safari Settings */}
       {showHelpModal && (
