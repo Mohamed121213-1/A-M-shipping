@@ -11,6 +11,7 @@ interface ShipmentDetailModalProps {
   onAssignCourier: (shipmentId: string, courier: CourierInfo) => void;
   onOpenPrintModal: (shipment: Shipment) => void;
   couriers?: CourierInfo[];
+  isHighlighted?: boolean;
 }
 
 export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
@@ -21,6 +22,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   onAssignCourier,
   onOpenPrintModal,
   couriers = [],
+  isHighlighted,
 }) => {
   if (!shipment) return null;
 
@@ -134,7 +136,22 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full border border-slate-200 overflow-hidden my-8">
+      <div className={`bg-white rounded-2xl shadow-2xl max-w-4xl w-full border overflow-hidden my-8 transition-all ${
+        isHighlighted ? 'border-amber-500 ring-4 ring-amber-400/60 shadow-amber-500/20' : 'border-slate-200'
+      }`}>
+        {/* Highlight Banner */}
+        {isHighlighted && (
+          <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 text-slate-950 font-black text-xs px-6 py-2.5 flex items-center justify-between shadow-inner animate-pulse">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 animate-spin text-slate-950" />
+              <span>🔍 تم تمييز وتظليل هذه الشحنة مباشرة بناءً على الإشعار المحدد!</span>
+            </div>
+            <span className="bg-slate-950/20 text-slate-950 px-2 py-0.5 rounded text-[10px] font-mono">
+              تظليل الإشعار
+            </span>
+          </div>
+        )}
+
         {/* Header */}
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -209,6 +209,9 @@ export interface CourierNotification {
   createdAt: string;
   timestamp: string;
   read: boolean;
+  type?: string;
+  statusTitle?: string;
+  statusNote?: string;
 }
 
 export type CompanyTransactionType = 'income' | 'expense';

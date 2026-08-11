@@ -547,10 +547,24 @@ export default function App() {
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Courier Notification System
+  // Courier & System Notification System
   const [activeCourierToast, setActiveCourierToast] = useState<CourierNotification | null>(null);
   const [activeCourierIdInApp, setActiveCourierIdInApp] = useState<string | undefined>(undefined);
   const [activeTargetShipmentId, setActiveTargetShipmentId] = useState<string | undefined>(undefined);
+  const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
+
+  const handleOpenShipmentFromNotification = (shipmentId: string) => {
+    const target = shipments.find((s) => s.id === shipmentId || s.trackingNumber === shipmentId);
+    if (target) {
+      setSelectedDetailShipment(target);
+      setHighlightedShipmentId(target.id);
+      showToast(`🔍 تم تحديد وتظليل بيانات الشحنة رقم #${target.trackingNumber}`);
+
+      setTimeout(() => {
+        setHighlightedShipmentId(null);
+      }, 7000);
+    }
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -829,6 +843,71 @@ export default function App() {
     setShipments(nextShipments);
     setWallet(updatedWallet);
 
+    // Generate Smart Status Notification for Admin, Merchant & Courier
+    const updatedShipment = nextShipments.find((s) => s.id === shipmentId);
+    let nextNotifications = courierNotifications;
+
+    if (updatedShipment) {
+      const nowTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      let statusEmoji = '📦';
+      let statusTitleStr = `تحديث بوليصة #${updatedShipment.trackingNumber}`;
+
+      if (newStatus === 'delivered') {
+        statusEmoji = '✅';
+        statusTitleStr = `تم تسليم الشحنة بنجاح (#${updatedShipment.trackingNumber})`;
+      } else if (newStatus === 'returned' || newStatus === 'refused') {
+        statusEmoji = '❌';
+        statusTitleStr = `رفض استلام / مرتجع للتاجر (#${updatedShipment.trackingNumber})`;
+      } else if (newStatus === 'partial_delivery') {
+        statusEmoji = '📦';
+        statusTitleStr = `استلام جزئي للشحنة (#${updatedShipment.trackingNumber})`;
+      } else if (newStatus === 'failed_attempt') {
+        statusEmoji = '⚠️';
+        statusTitleStr = `محاولة تسليم غير ناجحة (#${updatedShipment.trackingNumber})`;
+      } else if (newStatus === 'out_for_delivery') {
+        statusEmoji = '🚚';
+        statusTitleStr = `خرجت للتسليم مع المندوب (#${updatedShipment.trackingNumber})`;
+      } else if (newStatus === 'in_hub') {
+        statusEmoji = '🏢';
+        statusTitleStr = `وصلت المستودع الرئيسي (#${updatedShipment.trackingNumber})`;
+      }
+
+      const statusNoteText = note || (
+        newStatus === 'delivered' ? 'تم التسليم بنجاح وتحصيل مبلغ الشحنة' :
+        newStatus === 'returned' ? 'تم رفض الاستلام وتسجيل الشحنة كمرتجع' :
+        `تم تغيير حالة الشحنة إلى ${newStatus}`
+      );
+
+      const newNotif: CourierNotification = {
+        id: `notif-${Date.now()}`,
+        courierId: updatedShipment.assignedCourier?.id || 'all',
+        courierName: updatedShipment.assignedCourier?.name || 'الكابتن',
+        shipmentId: updatedShipment.id,
+        trackingNumber: updatedShipment.trackingNumber,
+        recipientName: updatedShipment.recipient.name,
+        governorate: updatedShipment.recipient.governorate,
+        city: updatedShipment.recipient.city,
+        codAmount: updatedShipment.financials.codAmount,
+        createdAt: new Date().toISOString(),
+        timestamp: nowTime,
+        read: false,
+        type: `status_${newStatus}` as any,
+        statusTitle: statusTitleStr,
+        statusNote: statusNoteText,
+      };
+
+      nextNotifications = [newNotif, ...courierNotifications];
+      setCourierNotifications(nextNotifications);
+      setActiveCourierToast(newNotif);
+
+      // Trigger system device notification chime & floating banner
+      sendDeviceNotification(`${statusEmoji} ${statusTitleStr}`, {
+        body: `العميل: ${updatedShipment.recipient.name} (${updatedShipment.recipient.governorate} - ${updatedShipment.recipient.city})\nالمبلغ: ${updatedShipment.financials.codAmount} ج.م\nالتفاصيل: ${statusNoteText}`,
+        tag: `status-${updatedShipment.id}-${Date.now()}`,
+        sound: true,
+      });
+    }
+
     try {
       localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
       if (updatedWallet) localStorage.setItem('bosta_wallet', JSON.stringify(updatedWallet));
@@ -837,7 +916,7 @@ export default function App() {
     }
 
     // Broadcast IMMEDIATELY to Admin and all connected instances
-    broadcastDataChange({ shipments: nextShipments, wallet: updatedWallet });
+    broadcastDataChange({ shipments: nextShipments, wallet: updatedWallet, notifications: nextNotifications });
 
     // Also update current active detail modal if open
     if (selectedDetailShipment && selectedDetailShipment.id === shipmentId) {
@@ -851,7 +930,13 @@ export default function App() {
       } : null));
     }
 
-    showToast(`تم تحديث حالة الشحنة إلى ${newStatus === 'returned' ? 'مرتجع' : newStatus}`);
+    showToast(`🔔 تم تسجيل إشعار حيوية وتحديث حالة الشحنة إلى ${
+      newStatus === 'delivered' ? 'تسليم ناجح' :
+      newStatus === 'returned' ? 'مرتجع للتاجر' :
+      newStatus === 'refused' ? 'رفض استلام' :
+      newStatus === 'failed_attempt' ? 'محاولة فاشلة' :
+      newStatus
+    }`);
   };
 
   // Delete Single Shipment Handler
@@ -1534,6 +1619,9 @@ export default function App() {
         notification={activeCourierToast}
         onClose={() => setActiveCourierToast(null)}
         onOpenCourierApp={handleOpenCourierAppFromToast}
+        onOpenShipmentDetail={(shipmentId) => {
+          handleOpenShipmentFromNotification(shipmentId);
+        }}
       />
 
       {/* Navigation Header - Rendered only when user is logged in */}
@@ -1563,6 +1651,11 @@ export default function App() {
           currentUser={currentUser}
           onOpenLogin={() => setActiveTab('login')}
           onLogout={handleLogout}
+          notifications={courierNotifications}
+          onNotificationClick={(shipmentId, notifId) => {
+            handleMarkNotificationRead(notifId);
+            handleOpenShipmentFromNotification(shipmentId);
+          }}
         />
       )}
 
@@ -1615,6 +1708,7 @@ export default function App() {
                     currentRole="merchant"
                     couriers={couriers}
                     systemUsers={users}
+                    highlightedShipmentId={highlightedShipmentId}
                   />
                 )}
 
@@ -1681,6 +1775,7 @@ export default function App() {
                     currentRole={currentRole}
                     couriers={couriers}
                     systemUsers={users}
+                    highlightedShipmentId={highlightedShipmentId}
                   />
                 )}
 
@@ -1788,6 +1883,7 @@ export default function App() {
           setSelectedDetailShipment(null);
           setSelectedPrintShipment(s);
         }}
+        isHighlighted={selectedDetailShipment?.id === highlightedShipmentId}
       />
 
       <WaybillPrintModal

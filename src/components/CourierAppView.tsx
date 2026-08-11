@@ -472,27 +472,34 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                   key={n.id}
                   onClick={() => {
                     setHighlightedShipmentId(n.shipmentId);
+                    const target = courierShipments.find((s) => s.id === n.shipmentId || s.trackingNumber === n.trackingNumber);
+                    if (target) setSelectedShipment(target);
                     if (onMarkNotificationRead) onMarkNotificationRead(n.id);
                     setIsNotifPanelOpen(false);
                     setCourierTab('shipments');
                   }}
-                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
                     !n.read
-                      ? 'bg-red-950/40 border-red-500/60 text-white'
-                      : 'bg-slate-800/80 border-slate-700/80 text-slate-300'
+                      ? 'bg-amber-950/40 border-amber-500/60 text-white shadow-md'
+                      : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:bg-slate-800'
                   }`}
                 >
                   <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-red-400 font-mono">#{n.trackingNumber}</span>
-                    <span className="text-[10px] text-slate-400">{n.timestamp}</span>
+                    <span className="text-amber-400 font-mono">#{n.trackingNumber}</span>
+                    <span className="text-[10px] text-slate-400 font-mono bg-black/30 px-1.5 py-0.5 rounded">{n.timestamp}</span>
                   </div>
-                  <p className="text-xs font-medium text-slate-200 mt-1">
-                    تم إسناد الشحنة لك تسليم العميل <span className="font-bold text-white">{n.recipientName}</span> ({n.governorate})
+                  <p className="text-xs font-extrabold text-slate-100 mt-1">
+                    {n.statusTitle || `تم إسناد الشحنة لك تسليم العميل ${n.recipientName}`}
                   </p>
+                  {n.statusNote && (
+                    <p className="text-[11px] text-amber-200 font-medium mt-1 bg-black/30 p-1.5 rounded-lg border border-slate-700/60">
+                      {n.statusNote}
+                    </p>
+                  )}
                   <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-800 text-[11px]">
                     <span className="text-emerald-400 font-bold">المطلوب: {n.codAmount.toLocaleString()} ج.م</span>
-                    <span className="text-slate-400 hover:text-red-400 flex items-center gap-1">
-                      عرض الشحنة ←
+                    <span className="text-amber-400 font-bold hover:underline flex items-center gap-1">
+                      عرض وتظليل الشحنة ←
                     </span>
                   </div>
                 </div>
@@ -637,16 +644,26 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                 return (
                   <div
                     key={shipment.id}
-                    className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                    className={`p-4 rounded-2xl border transition-all space-y-3 relative ${
                       isHighlighted
-                        ? 'bg-slate-800 border-2 border-red-500 ring-2 ring-red-500/30'
+                        ? 'bg-amber-950/90 border-2 border-amber-400 ring-4 ring-amber-400/60 animate-pulse shadow-2xl z-20 scale-[1.01]'
                         : shipment.status === 'delivered'
                         ? 'bg-emerald-950/40 border-emerald-500/40'
                         : shipment.status === 'failed_attempt'
                         ? 'bg-rose-950/40 border-rose-500/40'
-                        : 'bg-slate-800 border-slate-700 hover:border-red-500/50'
+                        : 'bg-slate-800 border-slate-700 hover:border-amber-500/50'
                     }`}
                   >
+                    {/* Highlight Badge */}
+                    {isHighlighted && (
+                      <div className="bg-amber-500 text-slate-950 font-black text-[11px] px-3 py-1 rounded-xl flex items-center justify-between shadow-md">
+                        <span className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                          <span>شحنة محددة من الإشعار 👁️</span>
+                        </span>
+                        <span className="bg-slate-950/20 px-1.5 py-0.5 rounded text-[9px] font-mono">تظليل نشط</span>
+                      </div>
+                    )}
                     {/* Notification Badge if freshly assigned */}
                     {hasNotif && (
                       <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-300 bg-amber-950/80 px-2.5 py-1 rounded-lg border border-amber-500/50 w-fit">

@@ -17,9 +17,12 @@ import {
   LogOut,
   User,
   ShieldCheck,
-  RotateCcw
+  RotateCcw,
+  X,
+  MapPin,
+  DollarSign
 } from 'lucide-react';
-import { AppUserRole, MerchantWallet, UserSession } from '../types';
+import { AppUserRole, MerchantWallet, UserSession, CourierNotification } from '../types';
 
 interface HeaderProps {
   currentRole: AppUserRole;
@@ -34,6 +37,8 @@ interface HeaderProps {
   currentUser?: UserSession | null;
   onOpenLogin?: () => void;
   onLogout?: () => void;
+  notifications?: CourierNotification[];
+  onNotificationClick?: (shipmentId: string, notifId: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -49,8 +54,13 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   onOpenLogin,
   onLogout,
+  notifications = [],
+  onNotificationClick,
 }) => {
   const [searchInput, setSearchInput] = useState('');
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  const unreadNotifs = notifications.filter((n) => !n.read);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -413,6 +423,86 @@ export const Header: React.FC<HeaderProps> = ({
                 تتبع شحنة
               </button>
             </nav>
+          )}
+
+          {/* Smart System Notifications Bell */}
+          {currentUser && (
+            <div className="relative">
+              <button
+                onClick={() => setIsNotifOpen(!isNotifOpen)}
+                className="relative p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
+                title="إشعارات وتحديثات الشحنات"
+              >
+                <Bell className="w-4 h-4 text-slate-700" />
+                {unreadNotifs.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white font-black text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-bounce shadow-md">
+                    {unreadNotifs.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Notifications Dropdown */}
+              {isNotifOpen && (
+                <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-80 sm:w-96 bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-800 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-amber-400" />
+                      <h4 className="font-extrabold text-xs text-white">إشعارات الشحنات الحية ({notifications.length})</h4>
+                    </div>
+                    <button
+                      onClick={() => setIsNotifOpen(false)}
+                      className="text-slate-400 hover:text-white p-1 rounded-lg"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto space-y-2">
+                    {notifications.length === 0 ? (
+                      <div className="text-center py-6 text-slate-500 text-xs">
+                        لا توجد إشعارات مسجلة حالياً
+                      </div>
+                    ) : (
+                      notifications.slice(0, 15).map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => {
+                            if (onNotificationClick) {
+                              onNotificationClick(n.shipmentId, n.id);
+                            }
+                            setIsNotifOpen(false);
+                          }}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                            !n.read
+                              ? 'bg-amber-950/40 border-amber-500/60 text-white shadow-md'
+                              : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs font-bold mb-1">
+                            <span className="text-amber-400 font-mono">#{n.trackingNumber}</span>
+                            <span className="text-[10px] text-slate-400 font-mono bg-black/30 px-1.5 py-0.5 rounded">{n.timestamp}</span>
+                          </div>
+                          <p className="text-xs font-bold text-slate-100">
+                            {n.statusTitle || `تحديث بوليصة #${n.trackingNumber}`}
+                          </p>
+                          {n.statusNote && (
+                            <p className="text-[11px] text-amber-200/90 font-medium mt-1 bg-black/30 p-1.5 rounded-lg border border-slate-700/50">
+                              {n.statusNote}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-800 text-[10px] text-slate-400">
+                            <span>العميل: {n.recipientName} ({n.governorate})</span>
+                            <span className="text-amber-400 font-extrabold flex items-center gap-0.5">
+                              عرض وتظليل الشحنة ←
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Quick Wallet Pill for Merchant */}

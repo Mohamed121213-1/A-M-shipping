@@ -47,6 +47,7 @@ interface ShipmentsListProps {
   currentRole?: AppUserRole;
   couriers?: CourierInfo[];
   systemUsers?: UserSession[];
+  highlightedShipmentId?: string | null;
 }
 
 export const ShipmentsList: React.FC<ShipmentsListProps> = ({
@@ -66,6 +67,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   currentRole,
   couriers = [],
   systemUsers = [],
+  highlightedShipmentId,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('active_main');
@@ -752,8 +754,17 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredShipments.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
+                filteredShipments.map((s) => {
+                  const isHighlighted = s.id === highlightedShipmentId;
+                  return (
+                    <tr
+                      key={s.id}
+                      className={`transition-all ${
+                        isHighlighted
+                          ? 'bg-amber-100/90 border-y-2 border-amber-500 ring-4 ring-amber-400/60 animate-pulse font-bold shadow-lg scale-[1.002] z-10'
+                          : 'hover:bg-slate-50/80'
+                      }`}
+                    >
                     <td className="p-3 text-center">
                       <input
                         type="checkbox"
@@ -943,7 +954,8 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                       </div>
                     </td>
                   </tr>
-                ))
+                );
+              })
               )}
             </tbody>
           </table>
