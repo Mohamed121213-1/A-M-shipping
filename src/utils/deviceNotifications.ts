@@ -1,6 +1,62 @@
+import { CourierNotification, UserSession } from '../types';
+
 // Device Notification Utility using Browser Notification API & Web Audio Synthesizer
 
 export type NotificationPermissionState = 'granted' | 'denied' | 'default' | 'unsupported';
+
+// Helper to determine if a notification is relevant for the currently logged-in user
+export const isNotificationRelevantForUser = (
+  notif: CourierNotification,
+  user: UserSession | null,
+  activeCourierId?: string
+): boolean => {
+  if (!user) return false;
+
+  // 1. Admin NEVER receives routine courier/merchant operational popup notifications or sound chimes
+  if (user.role === 'admin') {
+    return false;
+  }
+
+  // 2. Courier receives notifications targeted to them or 'all'
+  if (user.role === 'courier') {
+    const courierIdToMatch = activeCourierId || user.id;
+    if (notif.courierId && (notif.courierId === courierIdToMatch || notif.courierId === 'all')) {
+      return true;
+    }
+    return false;
+  }
+
+  // 3. Merchant receives notifications for their store/shipments
+  if (user.role === 'merchant') {
+    if (notif.merchantId && notif.merchantId === user.id) return true;
+    if (notif.merchantName && (user.storeName && notif.merchantName === user.storeName)) return true;
+    if (notif.type === 'status_failed_attempt' || notif.type === 'no_response') return true;
+    return true;
+  }
+
+  return false;
+};
+
+// Smart Relative Time Formatter in Arabic (Facebook style: "الآن", "منذ 3 دقائق", "منذ ساعة")
+export const formatRelativeTimeAr = (timestampStr?: string): string => {
+  if (!timestampStr) return 'الآن';
+  const date = new Date(timestampStr);
+  if (isNaN(date.getTime())) {
+    return timestampStr; // Return plain formatted time string if not ISO
+  }
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 30) return 'الآن';
+  if (diffInSeconds < 60) return `منذ ${diffInSeconds} ثانية`;
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `منذ ${diffInMinutes} دقيقة`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `منذ ${diffInHours} ساعة`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 30) return `منذ ${diffInDays} يوم`;
+  return date.toLocaleDateString('ar-EG');
+};
 
 export const isNotificationSupported = (): boolean => {
   return typeof window !== 'undefined' && 'Notification' in window;
@@ -81,12 +137,33 @@ interface SendNotificationOptions {
   onClick?: () => void;
 }
 
-// Send Native Device/Browser System Notification + In-App Mobile Toast for iPhone iOS
+// Set to keep track of recently triggered notification tags/hashes (deduplication window: 4 seconds)
+const recentNotificationCache = new Map<string, number>();
+
+// Send Native Device/Browser System Notification + In-App Mobile Toast for iPhone iOS & Background PWA
 export const sendDeviceNotification = (
   title: string,
   options: SendNotificationOptions = {}
 ) => {
   const { sound = true, onClick, body, icon, tag, data } = options;
+
+  // Deduplication check: key by tag or title+body to prevent duplicate alerts
+  const dedupeKey = tag || `${title}::${body || ''}`;
+  const now = Date.now();
+  const lastSent = recentNotificationCache.get(dedupeKey);
+
+  if (lastSent && now - lastSent < 4000) {
+    console.log('Skipping duplicate notification trigger within 4s window:', dedupeKey);
+    return;
+  }
+  recentNotificationCache.set(dedupeKey, now);
+
+  // Clean up old cache entries
+  for (const [key, timestamp] of recentNotificationCache.entries()) {
+    if (now - timestamp > 10000) {
+      recentNotificationCache.delete(key);
+    }
+  }
 
   if (sound) {
     playNotificationSound();
@@ -117,29 +194,32 @@ export const sendDeviceNotification = (
 
   try {
     const notificationIcon = icon || 'https://cdn-icons-png.flaticon.com/512/2822/2822408.png';
+    const notifTag = tag || `notif-${Date.now()}`;
 
-    // 1. Try Service Worker registration showNotification first (Works best for Mobile / Android / Web PWA)
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((registration) => {
-        registration.showNotification(title, {
-          body,
-          icon: notificationIcon,
-          badge: notificationIcon,
-          tag: tag || `notif-${Date.now()}`,
-          data: data || {},
-          dir: 'rtl',
-          lang: 'ar',
-          vibrate: [200, 100, 200],
-          requireInteraction: true,
-          renotify: true,
-        } as any);
-      }).catch(() => {
-        fallbackNotification(title, { body, icon: notificationIcon, tag, data, onClick });
-      });
+    // Prefer Service Worker registration showNotification for background/mobile/desktop support
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready
+        .then((registration) => {
+          registration.showNotification(title, {
+            body,
+            icon: notificationIcon,
+            badge: notificationIcon,
+            tag: notifTag,
+            data: data || {},
+            dir: 'rtl',
+            lang: 'ar',
+            vibrate: [200, 100, 200],
+            requireInteraction: false,
+            renotify: false,
+          } as any);
+        })
+        .catch(() => {
+          fallbackNotification(title, { body, icon: notificationIcon, tag: notifTag, data, onClick });
+        });
+    } else {
+      // Fallback only if no active Service Worker controller
+      fallbackNotification(title, { body, icon: notificationIcon, tag: notifTag, data, onClick });
     }
-
-    // 2. Also trigger standard fallback Notification if available for immediate desktop OS popups
-    fallbackNotification(title, { body, icon: notificationIcon, tag, data, onClick });
   } catch (err) {
     console.error('Failed to trigger native device notification:', err);
   }

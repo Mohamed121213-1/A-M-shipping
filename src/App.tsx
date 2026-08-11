@@ -19,10 +19,11 @@ import { syncEngine } from './lib/syncEngine';
 
 import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate, CompanyTransaction } from './types';
 import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES, INITIAL_USERS, INITIAL_COMPANY_TRANSACTIONS } from './data/mockData';
+import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet } from './utils/sanitizeData';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
 import { DeviceNotificationBanner } from './components/DeviceNotificationBanner';
-import { registerServiceWorker, sendDeviceNotification } from './utils/deviceNotifications';
+import { registerServiceWorker, sendDeviceNotification, isNotificationRelevantForUser } from './utils/deviceNotifications';
 
 // Safe localStorage loader helper
 const loadLocalState = <T,>(key: string, defaultValue: T): T => {
@@ -40,33 +41,23 @@ const loadLocalState = <T,>(key: string, defaultValue: T): T => {
 export default function App() {
   const [shipments, setShipments] = useState<Shipment[]>(() => {
     const saved = loadLocalState<Shipment[]>('bosta_shipments', []);
-    const mockIds = new Set(['BST-804101', 'BST-804102', 'BST-804103', 'BST-804104', 'BST-804105', 'BST-804106']);
-    return saved.filter((s) => s && !mockIds.has(s.id) && !mockIds.has(s.trackingNumber));
+    return sanitizeShipments(saved);
   });
 
   const [wallet, setWallet] = useState<MerchantWallet>(() => {
     const saved = loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET);
-    return {
-      ...saved,
-      pendingCod: saved.pendingCod === 6800 ? 0 : (saved.pendingCod ?? 0),
-    };
+    return sanitizeWallet(saved);
   });
 
   // Dynamic system entities customizable by Admin
   const [users, setUsers] = useState<UserSession[]>(() => {
     const saved = loadLocalState<UserSession[]>('bosta_users', []);
-    return saved && saved.length > 0 ? saved : INITIAL_USERS;
+    return sanitizeUsers(saved);
   });
 
   const [couriers, setCouriers] = useState<CourierInfo[]>(() => {
     const saved = loadLocalState<CourierInfo[]>('bosta_couriers', []);
-    if (saved && saved.length > 0) {
-      return saved.map((c, idx) => ({
-        ...c,
-        id: c.id || `cour-${Date.now()}-${idx}`,
-      }));
-    }
-    return BOSTA_COURIERS;
+    return sanitizeCouriers(saved);
   });
 
   const [hubs, setHubs] = useState<HubInfo[]>(() =>
@@ -169,7 +160,7 @@ export default function App() {
   // Company Treasury / Account State
   const [companyTransactions, setCompanyTransactions] = useState<CompanyTransaction[]>(() => {
     const saved = loadLocalState<CompanyTransaction[]>('bosta_company_txns', []);
-    return saved && saved.length > 0 ? saved : INITIAL_COMPANY_TRANSACTIONS;
+    return sanitizeCompanyTxns(saved);
   });
 
   // Courier Notification System State
@@ -249,6 +240,8 @@ export default function App() {
 
   // Track whether state update originated from remote sync to prevent echo loops
   const isIncomingSyncRef = React.useRef(false);
+  // Set of notification IDs already notified locally to avoid duplicate popups
+  const notifiedNotifIdsRef = React.useRef<Set<string>>(new Set());
 
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
@@ -274,14 +267,18 @@ export default function App() {
       }
       if (incoming.notifications && Array.isArray(incoming.notifications)) {
         const latestNotif = incoming.notifications[0];
-        if (latestNotif && !latestNotif.read) {
-          setActiveCourierToast(latestNotif);
-          sendDeviceNotification(latestNotif.statusTitle || `💬 إشعار جديد (بوليصة #${latestNotif.trackingNumber})`, {
-            body: latestNotif.statusNote || `العميل: ${latestNotif.recipientName} - ${latestNotif.governorate} (${latestNotif.city})`,
-            tag: latestNotif.id,
-            sound: true,
-            data: { shipmentId: latestNotif.shipmentId },
-          });
+        if (latestNotif && !latestNotif.read && !notifiedNotifIdsRef.current.has(latestNotif.id)) {
+          notifiedNotifIdsRef.current.add(latestNotif.id);
+          // Only show popup toast and trigger sound chime if relevant to current user role (Admin will NOT receive courier noise)
+          if (isNotificationRelevantForUser(latestNotif, currentUser, activeCourierIdInApp)) {
+            setActiveCourierToast(latestNotif);
+            sendDeviceNotification(latestNotif.statusTitle || `💬 إشعار جديد (بوليصة #${latestNotif.trackingNumber})`, {
+              body: latestNotif.statusNote || `العميل: ${latestNotif.recipientName} - ${latestNotif.governorate} (${latestNotif.city})`,
+              tag: latestNotif.id,
+              sound: true,
+              data: { shipmentId: latestNotif.shipmentId },
+            });
+          }
         }
         setCourierNotifications(incoming.notifications);
       }
@@ -917,15 +914,17 @@ export default function App() {
 
       nextNotifications = [newNotif, ...courierNotifications];
       setCourierNotifications(nextNotifications);
-      setActiveCourierToast(newNotif);
+      notifiedNotifIdsRef.current.add(newNotif.id);
 
-      // Trigger native background device notification chime & floating banner
-      sendDeviceNotification(`${statusEmoji} ${statusTitleStr}`, {
-        body: `التاجر: ${updatedShipment.sender.storeName}\nالعميل: ${updatedShipment.recipient.name} (${updatedShipment.recipient.phone})\nالمحافظة: ${updatedShipment.recipient.governorate} - ${updatedShipment.recipient.city}\nالمبلغ: ${updatedShipment.financials.codAmount} ج.م\nالتفاصيل: ${statusNoteText}`,
-        tag: `status-${updatedShipment.id}-${Date.now()}`,
-        sound: true,
-        data: { shipmentId: updatedShipment.id },
-      });
+      if (isNotificationRelevantForUser(newNotif, currentUser, activeCourierIdInApp)) {
+        setActiveCourierToast(newNotif);
+        sendDeviceNotification(`${statusEmoji} ${statusTitleStr}`, {
+          body: `التاجر: ${updatedShipment.sender.storeName}\nالعميل: ${updatedShipment.recipient.name} (${updatedShipment.recipient.phone})\nالمحافظة: ${updatedShipment.recipient.governorate} - ${updatedShipment.recipient.city}\nالمبلغ: ${updatedShipment.financials.codAmount} ج.م\nالتفاصيل: ${statusNoteText}`,
+          tag: newNotif.id,
+          sound: true,
+          data: { shipmentId: updatedShipment.id },
+        });
+      }
     }
 
     try {
@@ -1057,14 +1056,16 @@ export default function App() {
 
       nextNotifications = [newNotification, ...courierNotifications];
       setCourierNotifications(nextNotifications);
-      setActiveCourierToast(newNotification);
+      notifiedNotifIdsRef.current.add(newNotification.id);
 
-      // Trigger native device notification
-      sendDeviceNotification(`📦 شحنة جديدة مسندة إليك (#${shipmentData.trackingNumber})`, {
-        body: `العميل: ${shipmentData.recipient.name} - ${shipmentData.recipient.governorate} (${shipmentData.recipient.city})\nالمبلغ: ${shipmentData.financials.codAmount} ج.م`,
-        tag: `assign-${shipmentData.id}`,
-        sound: true,
-      });
+      if (isNotificationRelevantForUser(newNotification, currentUser, activeCourierIdInApp)) {
+        setActiveCourierToast(newNotification);
+        sendDeviceNotification(`📦 شحنة جديدة مسندة إليك (#${shipmentData.trackingNumber})`, {
+          body: `العميل: ${shipmentData.recipient.name} - ${shipmentData.recipient.governorate} (${shipmentData.recipient.city})\nالمبلغ: ${shipmentData.financials.codAmount} ج.م`,
+          tag: newNotification.id,
+          sound: true,
+        });
+      }
     }
 
     broadcastDataChange({ shipments: nextShipments, notifications: nextNotifications });
@@ -1134,14 +1135,17 @@ export default function App() {
 
       nextNotifications = [newNotif, ...courierNotifications];
       setCourierNotifications(nextNotifications);
-      setActiveCourierToast(newNotif);
+      notifiedNotifIdsRef.current.add(newNotif.id);
 
-      sendDeviceNotification(`⚠️ تنبيه للتاجر: العميل لا يرد (#${targetShipmentObj.trackingNumber})`, {
-        body: `المتجر: ${targetShipmentObj.sender.storeName}\nالعميل: ${targetShipmentObj.recipient.name} (${targetShipmentObj.recipient.phone})\nالملاحظة: ${courierNote || 'لا يجيب على اتصال الكابتن'}`,
-        tag: `noresp-${targetShipmentObj.id}-${Date.now()}`,
-        sound: true,
-        data: { shipmentId: targetShipmentObj.id },
-      });
+      if (isNotificationRelevantForUser(newNotif, currentUser, activeCourierIdInApp)) {
+        setActiveCourierToast(newNotif);
+        sendDeviceNotification(`⚠️ تنبيه للتاجر: العميل لا يرد (#${targetShipmentObj.trackingNumber})`, {
+          body: `المتجر: ${targetShipmentObj.sender.storeName}\nالعميل: ${targetShipmentObj.recipient.name} (${targetShipmentObj.recipient.phone})\nالملاحظة: ${courierNote || 'لا يجيب على اتصال الكابتن'}`,
+          tag: newNotif.id,
+          sound: true,
+          data: { shipmentId: targetShipmentObj.id },
+        });
+      }
     }
 
     try {
@@ -1231,15 +1235,17 @@ export default function App() {
 
       nextNotifications = [newNotification, ...courierNotifications];
       setCourierNotifications(nextNotifications);
-      setActiveCourierToast(newNotification);
+      notifiedNotifIdsRef.current.add(newNotification.id);
 
-      // Trigger native device notification
-      sendDeviceNotification(`💬 رد جديد من التاجر (بوليصة #${targetTracking})`, {
-        body: `العميل: ${recipientName} (${gov} - ${city}) - المبلغ: ${cod} ج.م\nالرد: ${merchantNote || 'تم إضافة تعليمات جديدة'}`,
-        tag: `courier-notif-${shipmentId}`,
-        sound: true,
-        data: { shipmentId: targetTracking },
-      });
+      if (isNotificationRelevantForUser(newNotification, currentUser, activeCourierIdInApp)) {
+        setActiveCourierToast(newNotification);
+        sendDeviceNotification(`💬 رد جديد من التاجر (بوليصة #${targetTracking})`, {
+          body: `العميل: ${recipientName} (${gov} - ${city}) - المبلغ: ${cod} ج.م\nالرد: ${merchantNote || 'تم إضافة تعليمات جديدة'}`,
+          tag: newNotification.id,
+          sound: true,
+          data: { shipmentId: targetTracking },
+        });
+      }
     }
 
     broadcastDataChange({ shipments: nextShipments, notifications: nextNotifications });

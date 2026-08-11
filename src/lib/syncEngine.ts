@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { Shipment, MerchantWallet, UserSession, CourierInfo, HubInfo, GovernorateRate, CourierNotification, CompanyTransaction } from '../types';
+import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet } from '../utils/sanitizeData';
 
 export interface SyncedAppState {
   shipments?: Shipment[];
@@ -114,22 +115,21 @@ class SyncEngine {
             const notificationsRaw = localStorage.getItem('bosta_courier_notifications');
             const txnsRaw = localStorage.getItem('bosta_company_txns');
 
-            const mockIds = new Set(['BST-804101', 'BST-804102', 'BST-804103', 'BST-804104', 'BST-804105', 'BST-804106']);
-
-            let shipments: Shipment[] | undefined = shipmentsRaw ? JSON.parse(shipmentsRaw) : undefined;
-            if (shipments && Array.isArray(shipments)) {
-              shipments = shipments.filter((s) => s && !mockIds.has(s.id) && !mockIds.has(s.trackingNumber));
-            }
+            let shipments: Shipment[] | undefined = shipmentsRaw ? sanitizeShipments(JSON.parse(shipmentsRaw)) : undefined;
+            let users: UserSession[] | undefined = usersRaw ? sanitizeUsers(JSON.parse(usersRaw)) : undefined;
+            let couriers: CourierInfo[] | undefined = couriersRaw ? sanitizeCouriers(JSON.parse(couriersRaw)) : undefined;
+            let wallet: MerchantWallet | undefined = walletRaw ? sanitizeWallet(JSON.parse(walletRaw)) : undefined;
+            let companyTransactions: CompanyTransaction[] | undefined = txnsRaw ? sanitizeCompanyTxns(JSON.parse(txnsRaw)) : undefined;
 
             const incomingState: SyncedAppState = {
               shipments,
-              wallet: walletRaw ? JSON.parse(walletRaw) : undefined,
-              users: usersRaw ? JSON.parse(usersRaw) : undefined,
-              couriers: couriersRaw ? JSON.parse(couriersRaw) : undefined,
+              wallet,
+              users,
+              couriers,
               hubs: hubsRaw ? JSON.parse(hubsRaw) : undefined,
               governorates: governoratesRaw ? JSON.parse(governoratesRaw) : undefined,
               notifications: notificationsRaw ? JSON.parse(notificationsRaw) : undefined,
-              companyTransactions: txnsRaw ? JSON.parse(txnsRaw) : undefined,
+              companyTransactions,
               timestamp: timeNum,
               senderId: 'storage_sync',
             };
@@ -203,11 +203,12 @@ class SyncEngine {
     const isFromOtherSender = Boolean(data.senderId && data.senderId !== this.instanceId);
     if (!isFromOtherSender) return;
 
-    // Filter out old mock shipments if present in incoming state payload
-    if (data.shipments && Array.isArray(data.shipments)) {
-      const mockIds = new Set(['BST-804101', 'BST-804102', 'BST-804103', 'BST-804104', 'BST-804105', 'BST-804106']);
-      data.shipments = data.shipments.filter((s) => s && !mockIds.has(s.id) && !mockIds.has(s.trackingNumber));
-    }
+    // Sanitize state entities to purge dummy accounts and mock data
+    if (data.shipments) data.shipments = sanitizeShipments(data.shipments);
+    if (data.users) data.users = sanitizeUsers(data.users);
+    if (data.couriers) data.couriers = sanitizeCouriers(data.couriers);
+    if (data.wallet) data.wallet = sanitizeWallet(data.wallet);
+    if (data.companyTransactions) data.companyTransactions = sanitizeCompanyTxns(data.companyTransactions);
 
     const incomingTime = data.timestamp || 0;
 

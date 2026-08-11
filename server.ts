@@ -45,6 +45,70 @@ if (!fs.existsSync(DATA_DIR)) {
   } catch (e) {}
 }
 
+function sanitizeServerState(rawState: any) {
+  if (!rawState) return rawState;
+  const dummyUserIds = new Set(['USR-ADMIN-1', 'USR-MERCH-1', 'c1', 'USR-HUB-1']);
+  const dummyUserEmails = new Set(['admin@am-shipping.eg', 'merchant@am-shipping.eg', 'ahmed@am-shipping.eg', 'hub.cairo@am-shipping.eg']);
+  const dummyCourierIds = new Set(['c1', 'c2', 'c3']);
+  const dummyTxnIds = new Set(['TXN-1001', 'TXN-1002', 'TXN-1003', 'TXN-1004']);
+  const dummyShipmentIds = new Set(['BST-804101', 'BST-804102', 'BST-804103', 'BST-804104', 'BST-804105', 'BST-804106']);
+
+  if (Array.isArray(rawState.users)) {
+    rawState.users = rawState.users.filter((u: any) => {
+      if (!u) return false;
+      if (dummyUserIds.has(u.id)) return false;
+      if (u.email && dummyUserEmails.has(u.email.toLowerCase())) return false;
+      if (['المدير العام', 'متجر التاجر المسجل', 'كابتن / أحمد محمود', 'مدير مستودع القاهرة'].includes(u.name)) return false;
+      return true;
+    });
+    const hasAdmin = rawState.users.some((u: any) => u.role === 'admin' || u.email === 'mohamedsalah565657@icloud.com');
+    if (!hasAdmin) {
+      rawState.users.unshift({
+        id: 'USR-ADMIN-2',
+        name: 'محمد صلاح (أدمن الرئيسية)',
+        email: 'mohamedsalah565657@icloud.com',
+        phone: '01000000001',
+        role: 'admin',
+        avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF+%D8%B5%D9%84%D8%A7%D8%AD&background=dc2626&color=ffffff',
+        isConfirmed: true,
+      });
+    }
+  }
+
+  if (Array.isArray(rawState.couriers)) {
+    rawState.couriers = rawState.couriers.filter((c: any) => {
+      if (!c) return false;
+      if (dummyCourierIds.has(c.id)) return false;
+      if (['كابتن / أحمد محمود', 'كابتن / محمود السيد', 'كابتن / إبراهيم حسن'].includes(c.name)) return false;
+      return true;
+    });
+  }
+
+  if (Array.isArray(rawState.companyTransactions)) {
+    rawState.companyTransactions = rawState.companyTransactions.filter((t: any) => {
+      if (!t) return false;
+      if (dummyTxnIds.has(t.id)) return false;
+      return true;
+    });
+  }
+
+  if (Array.isArray(rawState.shipments)) {
+    rawState.shipments = rawState.shipments.filter((s: any) => {
+      if (!s) return false;
+      if (dummyShipmentIds.has(s.id) || dummyShipmentIds.has(s.trackingNumber)) return false;
+      return true;
+    });
+  }
+
+  if (rawState.wallet) {
+    if (rawState.wallet.availableBalance === 14250) rawState.wallet.availableBalance = 0;
+    if (rawState.wallet.totalPaidOut === 98500) rawState.wallet.totalPaidOut = 0;
+    if (rawState.wallet.pendingCod === 6800) rawState.wallet.pendingCod = 0;
+  }
+
+  return rawState;
+}
+
 let serverAppState: any = null;
 let serverLastUpdated = 0;
 
@@ -52,7 +116,7 @@ if (fs.existsSync(STATE_FILE)) {
   try {
     const raw = fs.readFileSync(STATE_FILE, "utf-8");
     const parsed = JSON.parse(raw);
-    serverAppState = parsed.state || null;
+    serverAppState = sanitizeServerState(parsed.state || null);
     serverLastUpdated = parsed.timestamp || 0;
   } catch (e) {
     console.warn("Failed to read app_state.json:", e);
@@ -73,7 +137,7 @@ app.post("/api/sync/state", (req, res) => {
 
     if (incomingTime >= serverLastUpdated && state) {
       serverLastUpdated = incomingTime;
-      serverAppState = { ...state, timestamp: incomingTime, senderId };
+      serverAppState = sanitizeServerState({ ...state, timestamp: incomingTime, senderId });
 
       fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: incomingTime }), (err) => {
         if (err) console.warn("Error persisting server state:", err);
