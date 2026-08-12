@@ -24,7 +24,7 @@ import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
 import { DeviceNotificationBanner } from './components/DeviceNotificationBanner';
-import { registerServiceWorker, sendDeviceNotification, isNotificationRelevantForUser, markNotificationAsNotified, hasNotificationBeenNotified, isNotificationFresh } from './utils/deviceNotifications';
+import { registerServiceWorker, subscribeUserToWebPush, sendDeviceNotification, isNotificationRelevantForUser, markNotificationAsNotified, hasNotificationBeenNotified, isNotificationFresh } from './utils/deviceNotifications';
 
 // Safe localStorage loader helper
 const loadLocalState = <T,>(key: string, defaultValue: T): T => {
@@ -247,10 +247,11 @@ export default function App() {
     setCompanyTransactions((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Register Service Worker for Device Push Notifications
+  // Register Service Worker & Server Web Push for Device Push Notifications
   useEffect(() => {
-    registerServiceWorker();
-  }, []);
+    registerServiceWorker(currentUser, activeCourierIdInApp);
+    subscribeUserToWebPush(currentUser, activeCourierIdInApp);
+  }, [currentUser, activeCourierIdInApp]);
 
   // Auto-sync state updates to localStorage and broadcast to all connected devices/accounts
   useEffect(() => {

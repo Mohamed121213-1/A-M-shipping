@@ -143,17 +143,83 @@ export const getNotificationPermission = (): NotificationPermissionState => {
   return Notification.permission as NotificationPermissionState;
 };
 
+// Helper to convert base64 VAPID key to Uint8Array
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+// Subscribe user device to server-side remote Web Push (works when app/browser is completely closed)
+export const subscribeUserToWebPush = async (
+  user?: UserSession | null,
+  activeCourierId?: string
+) => {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return;
+  }
+
+  if (Notification.permission !== 'granted') {
+    return;
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+
+    // Fetch VAPID public key from Express server
+    const res = await fetch('/api/push/vapid-public-key');
+    if (!res.ok) return;
+    const { publicKey } = await res.json();
+    if (!publicKey) return;
+
+    const applicationServerKey = urlBase64ToUint8Array(publicKey);
+
+    let subscription = await reg.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey,
+      });
+    }
+
+    // Register Push Subscription on Express server
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription,
+        userId: user?.id,
+        role: user?.role,
+        courierId: activeCourierId || (user?.role === 'courier' ? user.id : undefined),
+      }),
+    });
+    console.log('✅ Registered device for remote Web Push notifications (works even when closed)');
+  } catch (err) {
+    console.warn('Web Push subscription skipped or failed:', err);
+  }
+};
+
 // Request Notification Permission from Browser/Device
-export const requestNotificationPermission = async (): Promise<NotificationPermissionState> => {
+export const requestNotificationPermission = async (
+  user?: UserSession | null,
+  activeCourierId?: string
+): Promise<NotificationPermissionState> => {
   if (!isNotificationSupported()) return 'unsupported';
 
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
       sendDeviceNotification('تم تفعيل الإشعارات بنجاح! 🔔', {
-        body: 'ستصلك التنبيهات المباشرة للشحنات والردود على هذا الجهاز.',
+        body: 'ستصلك التنبيهات المباشرة للشحنات والردود على هذا الجهاز حتى أثناء إغلاق الموقع.',
         tag: 'welcome-notification',
       });
+      // Register device for Web Push automatically
+      subscribeUserToWebPush(user, activeCourierId);
     }
     return permission as NotificationPermissionState;
   } catch (err) {
@@ -328,13 +394,16 @@ function fallbackNotification(
 }
 
 // Register Service Worker for PWA / Mobile Web Push support
-export const registerServiceWorker = () => {
+export const registerServiceWorker = (user?: UserSession | null, activeCourierId?: string) => {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     const register = () => {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {
           console.log('ServiceWorker registered with scope:', reg.scope);
+          if (Notification.permission === 'granted') {
+            subscribeUserToWebPush(user, activeCourierId);
+          }
         })
         .catch((err) => {
           console.log('ServiceWorker registration skipped or failed:', err);

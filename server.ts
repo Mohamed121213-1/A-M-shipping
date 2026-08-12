@@ -36,10 +36,103 @@ app.get("/api/health", (req, res) => {
 
 // Server-side State Persistence & Multi-Device Sync Engine
 import fs from "fs";
+import webpush from "web-push";
+
 const DATA_DIR = path.join(process.cwd(), "data");
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 const STATE_FILE = path.join(DATA_DIR, "app_state.json");
 const LATEST_BACKUP_FILE = path.join(BACKUPS_DIR, "latest_backup.json");
+const VAPID_KEYS_FILE = path.join(DATA_DIR, "vapid_keys.json");
+const PUSH_SUBS_FILE = path.join(DATA_DIR, "push_subscriptions.json");
+
+// Web Push VAPID Key Initialization
+let vapidKeys: { publicKey: string; privateKey: string };
+if (fs.existsSync(VAPID_KEYS_FILE)) {
+  try {
+    vapidKeys = JSON.parse(fs.readFileSync(VAPID_KEYS_FILE, "utf-8"));
+  } catch (e) {
+    vapidKeys = webpush.generateVAPIDKeys();
+    fs.writeFileSync(VAPID_KEYS_FILE, JSON.stringify(vapidKeys));
+  }
+} else {
+  vapidKeys = webpush.generateVAPIDKeys();
+  fs.writeFileSync(VAPID_KEYS_FILE, JSON.stringify(vapidKeys));
+}
+
+try {
+  webpush.setVapidDetails(
+    "mailto:support@bosta-shipping.eg",
+    vapidKeys.publicKey,
+    vapidKeys.privateKey
+  );
+} catch (e) {
+  console.warn("Error setting VAPID details:", e);
+}
+
+let pushSubscriptions: Array<{
+  subscription: any;
+  userId?: string;
+  role?: string;
+  courierId?: string;
+  updatedAt: string;
+}> = [];
+
+if (fs.existsSync(PUSH_SUBS_FILE)) {
+  try {
+    pushSubscriptions = JSON.parse(fs.readFileSync(PUSH_SUBS_FILE, "utf-8"));
+  } catch (e) {
+    pushSubscriptions = [];
+  }
+}
+
+function savePushSubscriptions() {
+  try {
+    fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(pushSubscriptions, null, 2));
+  } catch (e) {
+    console.warn("Failed to save push subscriptions:", e);
+  }
+}
+
+// Broadcast Remote Web Push to closed/background devices
+async function sendWebPushToSubscribers(payload: {
+  title: string;
+  body: string;
+  tag?: string;
+  data?: any;
+  targetCourierId?: string;
+}) {
+  if (!pushSubscriptions || pushSubscriptions.length === 0) return;
+
+  const notificationPayload = JSON.stringify({
+    title: payload.title,
+    body: payload.body,
+    tag: payload.tag || `push-${Date.now()}`,
+    data: payload.data || {},
+  });
+
+  const deadEndpoints: string[] = [];
+
+  for (const subItem of pushSubscriptions) {
+    if (payload.targetCourierId && subItem.courierId && subItem.courierId !== payload.targetCourierId && subItem.courierId !== 'all') {
+      continue;
+    }
+
+    try {
+      await webpush.sendNotification(subItem.subscription, notificationPayload);
+    } catch (err: any) {
+      if (err?.statusCode === 410 || err?.statusCode === 404) {
+        deadEndpoints.push(subItem.subscription?.endpoint);
+      }
+    }
+  }
+
+  if (deadEndpoints.length > 0) {
+    pushSubscriptions = pushSubscriptions.filter(
+      (s) => !deadEndpoints.includes(s.subscription?.endpoint)
+    );
+    savePushSubscriptions();
+  }
+}
 
 if (!fs.existsSync(DATA_DIR)) {
   try {
@@ -172,6 +265,37 @@ if ((!serverAppState || Object.keys(serverAppState).length === 0) && fs.existsSy
   }
 }
 
+// Web Push Registration Endpoints
+app.get("/api/push/vapid-public-key", (req, res) => {
+  res.json({ publicKey: vapidKeys.publicKey });
+});
+
+app.post("/api/push/subscribe", (req, res) => {
+  try {
+    const { subscription, userId, role, courierId } = req.body || {};
+    if (!subscription || !subscription.endpoint) {
+      return res.status(400).json({ error: "بيانات اشتراك الإشعارات غير صحيحة" });
+    }
+
+    pushSubscriptions = pushSubscriptions.filter(
+      (s) => s.subscription?.endpoint !== subscription.endpoint
+    );
+
+    pushSubscriptions.push({
+      subscription,
+      userId,
+      role,
+      courierId,
+      updatedAt: new Date().toISOString(),
+    });
+
+    savePushSubscriptions();
+    return res.json({ success: true, count: pushSubscriptions.length });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/sync/state", (req, res) => {
   res.json({
     state: serverAppState,
@@ -188,10 +312,27 @@ app.post("/api/sync/state", (req, res) => {
       return res.status(400).json({ error: "بيانات الإرسال فارغة" });
     }
 
-    // CRITICAL PROTECTION AGAINST ACCIDENTAL DATA WIPES:
-    // If incoming state contains empty arrays (e.g. shipments: [] or users: []),
-    // but current server state HAS valid data, do NOT overwrite non-empty server arrays
-    // unless 'isExplicitClear' flag is set!
+    // Detect new notifications to send remote push to closed devices
+    if (Array.isArray(state.notifications) && state.notifications.length > 0) {
+      const previousNotifIds = new Set(
+        Array.isArray(serverAppState?.notifications)
+          ? serverAppState.notifications.map((n: any) => n.id)
+          : []
+      );
+
+      const newNotifs = state.notifications.filter((n: any) => n && n.id && !previousNotifIds.has(n.id));
+
+      for (const notif of newNotifs) {
+        sendWebPushToSubscribers({
+          title: notif.statusTitle || `💬 إشعار شحنة جديد (#${notif.trackingNumber || ''})`,
+          body: notif.message || `تم تحديث حالة الشحنة رقم ${notif.trackingNumber}`,
+          tag: notif.id,
+          data: { shipmentId: notif.shipmentId, url: '/' },
+          targetCourierId: notif.courierId,
+        }).catch((e) => console.warn('Remote push send error:', e));
+      }
+    }
+
     let mergedState = { ...state };
 
     if (!isExplicitClear && serverAppState) {
