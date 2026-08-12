@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shipment, ShipmentStatus, CourierInfo } from '../types';
+import { Shipment, ShipmentStatus, CourierInfo, AppUserRole } from '../types';
 import { X, CheckCircle2, Clock, MapPin, Truck, AlertTriangle, ShieldCheck, Sparkles, Printer, User, Phone, Package, DollarSign, ArrowRight, KeyRound, MessageSquare, Trash2 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
@@ -12,6 +12,7 @@ interface ShipmentDetailModalProps {
   onOpenPrintModal: (shipment: Shipment) => void;
   couriers?: CourierInfo[];
   isHighlighted?: boolean;
+  currentRole?: AppUserRole;
 }
 
 export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
@@ -23,6 +24,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   onOpenPrintModal,
   couriers = [],
   isHighlighted,
+  currentRole = 'merchant',
 }) => {
   if (!shipment) return null;
 
@@ -184,7 +186,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               <Printer className="w-4 h-4 text-red-400" />
               طباعة البوليصة
             </button>
-            {onDeleteShipment && (
+            {onDeleteShipment && (currentRole === 'admin' || shipment.status === 'pending_approval' || shipment.status === 'created') && (
               <button
                 onClick={() => {
                   if (window.confirm(`هل أنت تأكد من حذف هذا الأوردر (${shipment.trackingNumber}) نهائياً؟`)) {
@@ -214,24 +216,30 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                 </div>
                 <div>
                   <h4 className="font-extrabold text-amber-950 text-sm">
-                    هذا الأوردر تم إضافته بواسطة التاجر وهو بانتظار موافقة الأدمن!
+                    {currentRole === 'admin'
+                      ? 'هذا الأوردر تم إضافته بواسطة التاجر وهو بانتظار موافقة الأدمن!'
+                      : 'الأوردر قيد المراجعة والاعتماد بواسطة إدارة الشحن'}
                   </h4>
                   <p className="text-xs text-amber-800 mt-0.5">
-                    قم بمراجعة العنوان والمبلغ التفصيلي ثم انقر على تأكيد اعتماد الأوردر للبدء في إجراءات الشحن والتسليم.
+                    {currentRole === 'admin'
+                      ? 'قم بمراجعة العنوان والمبلغ التفصيلي ثم انقر على تأكيد اعتماد الأوردر للبدء في إجراءات الشحن والتسليم.'
+                      : 'سيتم مراجعة بيانات الشحنة من إدارة النظام وتعيين المندوب للبدء في عملية الاستلام والتوصيل مباشرة.'}
                   </p>
                 </div>
               </div>
 
-              <button
-                onClick={() => {
-                  onUpdateStatus(shipment.id, 'created', 'تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام');
-                  onClose();
-                }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                تأكيد وموافقة الأوردر
-              </button>
+              {currentRole === 'admin' && (
+                <button
+                  onClick={() => {
+                    onUpdateStatus(shipment.id, 'created', 'تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام');
+                    onClose();
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  تأكيد وموافقة الأوردر
+                </button>
+              )}
             </div>
           )}
 
@@ -357,24 +365,38 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               )}
 
               {/* Courier Selector */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">تعيين المندوب المسؤول:</label>
-                <select
-                  value={selectedCourierId}
-                  onChange={handleCourierAssign}
-                  className="w-full text-xs p-2 bg-slate-100 border border-slate-200 rounded-lg font-bold text-slate-800 focus:bg-white"
-                >
-                  <option value="">-- اختر المندوب --</option>
-                  {couriers.map((c, idx) => {
-                    const optValue = c.id || c.phone || `cour-opt-${idx}`;
-                    return (
-                      <option key={optValue} value={optValue}>
-                        {c.name} ({c.assignedHub || 'المستودع الرئيسي'})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
+              {currentRole === 'admin' || currentRole === 'hub_manager' ? (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">تعيين المندوب المسؤول:</label>
+                  <select
+                    value={selectedCourierId}
+                    onChange={handleCourierAssign}
+                    className="w-full text-xs p-2 bg-slate-100 border border-slate-200 rounded-lg font-bold text-slate-800 focus:bg-white"
+                  >
+                    <option value="">-- اختر المندوب --</option>
+                    {couriers.map((c, idx) => {
+                      const optValue = c.id || c.phone || `cour-opt-${idx}`;
+                      return (
+                        <option key={optValue} value={optValue}>
+                          {c.name} ({c.assignedHub || 'المستودع الرئيسي'})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-lg">
+                  <span className="block text-[10px] text-slate-500 font-bold mb-0.5">المندوب المخصص للتسليم:</span>
+                  {shipment.assignedCourier ? (
+                    <span className="text-xs font-black text-slate-900 flex items-center gap-1">
+                      <Truck className="w-3.5 h-3.5 text-red-600" />
+                      {shipment.assignedCourier.name} ({shipment.assignedCourier.phone || 'مسند'})
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold text-slate-500">⏳ جاري تعيين المندوب من قبل إدارة الشحن</span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -416,8 +438,9 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
             )}
           </div>
 
-          {/* Fast Status Updater Control */}
-          <form onSubmit={handleStatusChangeSubmit} className="bg-slate-900 text-white p-4 rounded-xl space-y-3">
+          {/* Fast Status Updater Control (Admin, Hub Manager, Courier only) */}
+          {(currentRole === 'admin' || currentRole === 'courier' || currentRole === 'hub_manager') && (
+            <form onSubmit={handleStatusChangeSubmit} className="bg-slate-900 text-white p-4 rounded-xl space-y-3">
             <h5 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-red-400" />
               تحديث حالة الشحنة فوراً
@@ -559,7 +582,8 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               </div>
             </div>
           </form>
-        </div>
+        )}
+      </div>
       </div>
 
       {/* WhatsApp Modal */}

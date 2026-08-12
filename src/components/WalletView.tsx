@@ -46,7 +46,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
   onSettleCourierCustody,
   onUpdateWallet,
 }) => {
-  const isAdmin = !currentUser || currentUser.role === 'admin';
+  const isAdmin = currentUser ? currentUser.role === 'admin' : false;
   const [activeSubTab, setActiveSubTab] = useState<'merchant' | 'returns' | 'couriers'>('merchant');
   const [payoutAmount, setPayoutAmount] = useState<number>(wallet.availableBalance);
   const [payoutMethod, setPayoutMethod] = useState<'instapay' | 'vodafone' | 'bank'>('instapay');

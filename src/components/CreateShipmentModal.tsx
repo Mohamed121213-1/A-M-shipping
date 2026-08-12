@@ -792,9 +792,14 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                     type="text"
                     required
                     value={merchantStoreName}
+                    readOnly={currentRole === 'merchant' || currentUser?.role === 'merchant'}
                     onChange={(e) => setMerchantStoreName(e.target.value)}
                     placeholder="مثال: متجر الأناقة"
-                    className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500/20 font-bold"
+                    className={`w-full text-xs p-2.5 border rounded-lg font-bold ${
+                      currentRole === 'merchant' || currentUser?.role === 'merchant'
+                        ? 'bg-slate-100 border-slate-200 text-slate-700'
+                        : 'bg-white border border-slate-200 focus:ring-2 focus:ring-red-500/20'
+                    }`}
                   />
                 </div>
                 <div>
@@ -803,9 +808,14 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                     type="tel"
                     required
                     value={merchantPhone}
+                    readOnly={currentRole === 'merchant' || currentUser?.role === 'merchant'}
                     onChange={(e) => setMerchantPhone(e.target.value)}
                     placeholder="01012345678"
-                    className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500/20 font-mono"
+                    className={`w-full text-xs p-2.5 border rounded-lg font-mono ${
+                      currentRole === 'merchant' || currentUser?.role === 'merchant'
+                        ? 'bg-slate-100 border-slate-200 text-slate-700'
+                        : 'bg-white border border-slate-200 focus:ring-2 focus:ring-red-500/20'
+                    }`}
                   />
                 </div>
               </div>
@@ -1096,8 +1106,13 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                   <input
                     type="number"
                     value={calculatedShippingFee}
+                    readOnly={currentRole === 'merchant'}
                     onChange={(e) => setCustomShippingFee(parseFloat(e.target.value) || 0)}
-                    className="w-full text-sm font-extrabold text-slate-900 p-2 bg-white rounded-lg focus:ring-2 focus:ring-red-400"
+                    className={`w-full text-sm font-extrabold text-slate-900 p-2 rounded-lg ${
+                      currentRole === 'merchant'
+                        ? 'bg-slate-200 text-slate-800 cursor-not-allowed'
+                        : 'bg-white focus:ring-2 focus:ring-red-400'
+                    }`}
                   />
                 </div>
 

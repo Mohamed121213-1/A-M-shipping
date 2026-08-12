@@ -815,7 +815,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                       ) : (
                         <span className="text-[10px] text-slate-400 font-medium block mb-1">غير مسند</span>
                       )}
-                      {onAssignCourier && (
+                      {onAssignCourier && (currentRole === 'admin' || currentRole === 'hub_manager') && (
                         <select
                           value={s.assignedCourier?.id || ''}
                           onChange={(e) => {
@@ -836,6 +836,11 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                             );
                           })}
                         </select>
+                      )}
+                      {currentRole === 'merchant' && !s.assignedCourier && (
+                        <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-medium block text-center mt-1">
+                          بانتظار التعيين
+                        </span>
                       )}
                     </td>
                     <td className="p-3">
@@ -903,7 +908,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                           </button>
                         )}
 
-                        {s.status === 'pending_approval' && onApproveShipment && (
+                        {s.status === 'pending_approval' && onApproveShipment && currentRole === 'admin' && (
                           <button
                             onClick={() => onApproveShipment(s.id)}
                             title="تأكيد وموافقة الأوردر"
@@ -938,7 +943,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                           <Eye className="w-4 h-4" />
                         </button>
 
-                        {onDeleteShipment && (
+                        {onDeleteShipment && (currentRole === 'admin' || s.status === 'pending_approval' || s.status === 'created') && (
                           <button
                             onClick={() => {
                               if (window.confirm(`هل أنت تأكد من حذف الأوردر رقم (${s.trackingNumber}) نهائياً؟`)) {

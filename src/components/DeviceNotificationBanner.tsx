@@ -13,6 +13,7 @@ export const DeviceNotificationBanner: React.FC = () => {
   const [isDismissed, setIsDismissed] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showTestToast, setShowTestToast] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [activeInAppNotification, setActiveInAppNotification] = useState<{
     title: string;
     body?: string;
@@ -27,7 +28,14 @@ export const DeviceNotificationBanner: React.FC = () => {
   useEffect(() => {
     checkAndRefreshPermission();
 
-    // Listen for custom app device notification events (works on iPhone iOS, Mac, and all browsers)
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Listen for custom app device notification events
     const handleInAppNotif = (event: any) => {
       const detail = event.detail;
       if (detail) {
@@ -47,9 +55,22 @@ export const DeviceNotificationBanner: React.FC = () => {
 
     window.addEventListener('app-device-notification', handleInAppNotif);
     return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('app-device-notification', handleInAppNotif);
     };
   }, []);
+
+  const handleInstallPWA = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    } else {
+      setShowHelpModal(true);
+    }
+  };
 
   const handleEnable = async () => {
     const result = await requestNotificationPermission();
@@ -114,6 +135,16 @@ export const DeviceNotificationBanner: React.FC = () => {
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleInstallPWA}
+            className="bg-slate-800 hover:bg-slate-700 text-cyan-300 font-extrabold text-xs px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer border border-cyan-500/40 shadow-xs"
+            title="تثبيت التطبيق على الشاشة الرئيسية للهاتف"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
+            تثبيت التطبيق على الهاتف 📲
+          </button>
+
           {permission === 'default' && (
             <button
               type="button"
@@ -211,7 +242,7 @@ export const DeviceNotificationBanner: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-extrabold text-sm text-amber-400 flex items-center gap-2">
                 <BellRing className="w-4 h-4" />
-                خطوات السماح بالإشعارات على ماك وآيفون
+                طريقة استلام الإشعارات أثناء إغلاق الموقع أو قفل الشاشة
               </h3>
               <button
                 onClick={() => setShowHelpModal(false)}
@@ -222,28 +253,27 @@ export const DeviceNotificationBanner: React.FC = () => {
             </div>
 
             <div className="space-y-3 text-xs text-slate-300">
-              <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700 space-y-1.5">
-                <p className="font-black text-white flex items-center gap-1.5">
-                  <span>💻 على جهاز Mac (متصفح Chrome / Safari):</span>
-                </p>
-                <ol className="list-decimal list-inside space-y-1 text-slate-300 font-medium leading-relaxed">
-                  <li>اضغط على أيقونة الإعدادات 🔒 أو 🎛️ بجانب رابط الموقع في أعلى الصفحة.</li>
-                  <li>ابحث عن كلمة <strong>الإشعارات (Notifications)</strong>.</li>
-                  <li>غيّر الخيار من "حظر" إلى <strong>"سماح" (Allow)</strong>.</li>
-                  <li>قم بعمل إعادة تحميل للصفحة (Refresh).</li>
-                </ol>
-              </div>
-
               <div className="bg-indigo-950/60 p-3 rounded-2xl border border-indigo-800/80 space-y-1.5">
                 <p className="font-black text-indigo-200 flex items-center gap-1.5">
                   <Smartphone className="w-4 h-4 text-indigo-400" />
-                  <span>📱 على هاتف iPhone (آيفون iOS):</span>
+                  <span>📲 لضمان وصول الإشعار والشاشة مغلقة (Android & iPhone):</span>
                 </p>
-                <ol className="list-decimal list-inside space-y-1 text-indigo-100 font-medium leading-relaxed">
-                  <li>اضغط على زر المشاركة ⎋ في متصفح Safari.</li>
-                  <li>اختر <strong>"إضافة إلى الشاشة الرئيسية" (Add to Home Screen)</strong>.</li>
-                  <li>افتح التطبيق من الشاشة الرئيسية واضغط تفعيل الإشعارات.</li>
-                  <li>ملاحظة: الصوت والتنبيهات المباشرة تعمل دائماً أثناء استخدام التطبيق!</li>
+                <ol className="list-decimal list-inside space-y-1.5 text-indigo-100 font-medium leading-relaxed">
+                  <li>اضغط زر <strong>"تثبيت التطبيق على الهاتف 📲"</strong> بالشريط العلوي (أو اختار "إضافة إلى الشاشة الرئيسية Add to Home Screen" من قائمة المتصفح ⎋).</li>
+                  <li>افتح التطبيق من أيقونة الشاشة الرئيسية كـ <strong>PWA App</strong> مستقل.</li>
+                  <li>وافق على إذن الإشعارات عند ظهور النافذة المنبثقة.</li>
+                  <li>تأكد من عدم تفعيل وضع "عدم الإزعاج" (Do Not Disturb) في هاتفك لكي يرن الصوت مع الإشعار.</li>
+                </ol>
+              </div>
+
+              <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700 space-y-1.5">
+                <p className="font-black text-white flex items-center gap-1.5">
+                  <span>💻 على الكمبيوتر أو الماك (Chrome / Safari):</span>
+                </p>
+                <ol className="list-decimal list-inside space-y-1 text-slate-300 font-medium leading-relaxed">
+                  <li>اضغط على أيقونة القفل 🔒 أو الإعدادات بجانب رابط الموقع.</li>
+                  <li>اختر السماح بالإشعارات (Allow Notifications).</li>
+                  <li>سيعمل ملف الـ Service Worker في خلفية النظام لإرسال الإشعارات.</li>
                 </ol>
               </div>
             </div>

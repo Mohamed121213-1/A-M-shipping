@@ -131,6 +131,13 @@ export const Header: React.FC<HeaderProps> = ({
             <ShieldCheck className="w-4 h-4 text-amber-400" />
             <span>أدمن النظام والتحكم الكامل ({currentUser.name})</span>
           </div>
+        ) : currentUser?.role === 'merchant' ? (
+          <div className="flex items-center gap-2 bg-slate-800 px-3.5 py-1.5 rounded-lg border border-slate-700 text-xs font-bold">
+            <Building2 className="w-4 h-4 text-emerald-400" />
+            <span className="text-slate-200">
+              حساب التاجر: <strong className="text-emerald-400">{currentUser.storeName || `متجر ${currentUser.name}`}</strong> ({currentUser.phone})
+            </span>
+          </div>
         ) : (
           <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700 flex-wrap">
             <span className="text-slate-400 text-[11px] px-2 font-medium">عرض بصفة:</span>
@@ -358,7 +365,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {(currentRole === 'merchant' || currentRole === 'admin') && (
+              {currentRole === 'admin' && (
                 <button
                   onClick={() => handleNavClick('company_treasury')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
@@ -372,7 +379,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {(currentRole === 'merchant' || currentRole === 'admin') && (
+              {currentRole === 'admin' && (
                 <button
                   onClick={() => handleNavClick('analytics')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${

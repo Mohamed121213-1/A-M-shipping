@@ -2040,6 +2040,8 @@ export default function App() {
           setSelectedPrintShipment(s);
         }}
         isHighlighted={selectedDetailShipment?.id === highlightedShipmentId}
+        couriers={couriers}
+        currentRole={currentUser?.role || currentRole}
       />
 
       <WaybillPrintModal
