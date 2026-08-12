@@ -14,6 +14,7 @@ import { RateCalculatorView } from './components/RateCalculatorView';
 import { CompanyTreasuryView } from './components/CompanyTreasuryView';
 import { LoginView, createSessionUser } from './components/LoginView';
 import { AdminPanelView } from './components/AdminPanelView';
+import { DataBackupModal } from './components/DataBackupModal';
 import { supabase, isSupabaseConfigured, mapSupabaseUserToSession } from './lib/supabase';
 import { syncEngine } from './lib/syncEngine';
 
@@ -23,7 +24,7 @@ import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
 import { DeviceNotificationBanner } from './components/DeviceNotificationBanner';
-import { registerServiceWorker, sendDeviceNotification, isNotificationRelevantForUser } from './utils/deviceNotifications';
+import { registerServiceWorker, sendDeviceNotification, isNotificationRelevantForUser, markNotificationAsNotified, hasNotificationBeenNotified, isNotificationFresh } from './utils/deviceNotifications';
 
 // Safe localStorage loader helper
 const loadLocalState = <T,>(key: string, defaultValue: T): T => {
@@ -168,6 +169,60 @@ export default function App() {
     loadLocalState<CourierNotification[]>('bosta_courier_notifications', [])
   );
 
+  const [activeCourierIdInApp, setActiveCourierIdInApp] = useState<string | undefined>(undefined);
+
+  // Data Retention & Backup Modal State
+  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+
+  const handleRestoreState = (newState: any) => {
+    if (!newState || typeof newState !== 'object') return;
+
+    if (Array.isArray(newState.shipments)) {
+      setShipments(newState.shipments);
+      try { localStorage.setItem('bosta_shipments', JSON.stringify(newState.shipments)); } catch (e) {}
+    }
+    if (newState.wallet) {
+      setWallet(newState.wallet);
+      try { localStorage.setItem('bosta_wallet', JSON.stringify(newState.wallet)); } catch (e) {}
+    }
+    if (Array.isArray(newState.users)) {
+      setUsers(newState.users);
+      try { localStorage.setItem('bosta_users', JSON.stringify(newState.users)); } catch (e) {}
+    }
+    if (Array.isArray(newState.couriers)) {
+      setCouriers(newState.couriers);
+      try { localStorage.setItem('bosta_couriers', JSON.stringify(newState.couriers)); } catch (e) {}
+    }
+    if (Array.isArray(newState.hubs)) {
+      setHubs(newState.hubs);
+      try { localStorage.setItem('bosta_hubs', JSON.stringify(newState.hubs)); } catch (e) {}
+    }
+    if (Array.isArray(newState.governorates)) {
+      setGovernorates(newState.governorates);
+      try { localStorage.setItem('bosta_governorates', JSON.stringify(newState.governorates)); } catch (e) {}
+    }
+    if (Array.isArray(newState.companyTransactions)) {
+      setCompanyTransactions(newState.companyTransactions);
+      try { localStorage.setItem('bosta_company_txns', JSON.stringify(newState.companyTransactions)); } catch (e) {}
+    }
+    if (Array.isArray(newState.notifications)) {
+      setCourierNotifications(newState.notifications);
+      try { localStorage.setItem('bosta_courier_notifications', JSON.stringify(newState.notifications)); } catch (e) {}
+    }
+
+    // Broadcast state update across connected windows/devices
+    syncEngine.broadcastState({
+      shipments: newState.shipments || shipments,
+      wallet: newState.wallet || wallet,
+      users: newState.users || users,
+      couriers: newState.couriers || couriers,
+      hubs: newState.hubs || hubs,
+      governorates: newState.governorates || governorates,
+      companyTransactions: newState.companyTransactions || companyTransactions,
+      notifications: newState.notifications || courierNotifications,
+    });
+  };
+
   // Auto-sync state updates to localStorage and broadcast to all connected devices/accounts
   useEffect(() => {
     localStorage.setItem('bosta_company_txns', JSON.stringify(companyTransactions));
@@ -243,6 +298,23 @@ export default function App() {
   // Set of notification IDs already notified locally to avoid duplicate popups
   const notifiedNotifIdsRef = React.useRef<Set<string>>(new Set());
 
+  // Refs to ensure sync callback always uses latest role & user state without stale closures
+  const currentRoleRef = React.useRef(currentRole);
+  const currentUserRef = React.useRef(currentUser);
+  const activeCourierIdRef = React.useRef(activeCourierIdInApp);
+
+  useEffect(() => {
+    currentRoleRef.current = currentRole;
+  }, [currentRole]);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  useEffect(() => {
+    activeCourierIdRef.current = activeCourierIdInApp;
+  }, [activeCourierIdInApp]);
+
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
     const unsubscribe = syncEngine.subscribe((incoming) => {
@@ -267,10 +339,18 @@ export default function App() {
       }
       if (incoming.notifications && Array.isArray(incoming.notifications)) {
         const latestNotif = incoming.notifications[0];
-        if (latestNotif && !latestNotif.read && !notifiedNotifIdsRef.current.has(latestNotif.id)) {
+        if (
+          latestNotif &&
+          !latestNotif.read &&
+          !notifiedNotifIdsRef.current.has(latestNotif.id) &&
+          !hasNotificationBeenNotified(latestNotif.id) &&
+          isNotificationFresh(latestNotif.createdAt, 180)
+        ) {
           notifiedNotifIdsRef.current.add(latestNotif.id);
-          // Only show popup toast and trigger sound chime if relevant to current user role (Admin will NOT receive courier noise)
-          if (isNotificationRelevantForUser(latestNotif, currentUser, activeCourierIdInApp)) {
+          markNotificationAsNotified(latestNotif.id);
+
+          // Only show popup toast and trigger sound chime if relevant to current user role (Admin will NEVER receive courier/merchant noise)
+          if (isNotificationRelevantForUser(latestNotif, currentUserRef.current, activeCourierIdRef.current, currentRoleRef.current)) {
             setActiveCourierToast(latestNotif);
             sendDeviceNotification(latestNotif.statusTitle || `💬 إشعار جديد (بوليصة #${latestNotif.trackingNumber})`, {
               body: latestNotif.statusNote || `العميل: ${latestNotif.recipientName} - ${latestNotif.governorate} (${latestNotif.city})`,
@@ -548,7 +628,6 @@ export default function App() {
 
   // Courier & System Notification System
   const [activeCourierToast, setActiveCourierToast] = useState<CourierNotification | null>(null);
-  const [activeCourierIdInApp, setActiveCourierIdInApp] = useState<string | undefined>(undefined);
   const [activeTargetShipmentId, setActiveTargetShipmentId] = useState<string | undefined>(undefined);
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
 
@@ -916,7 +995,7 @@ export default function App() {
       setCourierNotifications(nextNotifications);
       notifiedNotifIdsRef.current.add(newNotif.id);
 
-      if (isNotificationRelevantForUser(newNotif, currentUser, activeCourierIdInApp)) {
+      if (isNotificationRelevantForUser(newNotif, currentUser, activeCourierIdInApp, currentRole)) {
         setActiveCourierToast(newNotif);
         sendDeviceNotification(`${statusEmoji} ${statusTitleStr}`, {
           body: `التاجر: ${updatedShipment.sender.storeName}\nالعميل: ${updatedShipment.recipient.name} (${updatedShipment.recipient.phone})\nالمحافظة: ${updatedShipment.recipient.governorate} - ${updatedShipment.recipient.city}\nالمبلغ: ${updatedShipment.financials.codAmount} ج.م\nالتفاصيل: ${statusNoteText}`,
@@ -1058,7 +1137,7 @@ export default function App() {
       setCourierNotifications(nextNotifications);
       notifiedNotifIdsRef.current.add(newNotification.id);
 
-      if (isNotificationRelevantForUser(newNotification, currentUser, activeCourierIdInApp)) {
+      if (isNotificationRelevantForUser(newNotification, currentUser, activeCourierIdInApp, currentRole)) {
         setActiveCourierToast(newNotification);
         sendDeviceNotification(`📦 شحنة جديدة مسندة إليك (#${shipmentData.trackingNumber})`, {
           body: `العميل: ${shipmentData.recipient.name} - ${shipmentData.recipient.governorate} (${shipmentData.recipient.city})\nالمبلغ: ${shipmentData.financials.codAmount} ج.م`,
@@ -1137,7 +1216,7 @@ export default function App() {
       setCourierNotifications(nextNotifications);
       notifiedNotifIdsRef.current.add(newNotif.id);
 
-      if (isNotificationRelevantForUser(newNotif, currentUser, activeCourierIdInApp)) {
+      if (isNotificationRelevantForUser(newNotif, currentUser, activeCourierIdInApp, currentRole)) {
         setActiveCourierToast(newNotif);
         sendDeviceNotification(`⚠️ تنبيه للتاجر: العميل لا يرد (#${targetShipmentObj.trackingNumber})`, {
           body: `المتجر: ${targetShipmentObj.sender.storeName}\nالعميل: ${targetShipmentObj.recipient.name} (${targetShipmentObj.recipient.phone})\nالملاحظة: ${courierNote || 'لا يجيب على اتصال الكابتن'}`,
@@ -1237,7 +1316,7 @@ export default function App() {
       setCourierNotifications(nextNotifications);
       notifiedNotifIdsRef.current.add(newNotification.id);
 
-      if (isNotificationRelevantForUser(newNotification, currentUser, activeCourierIdInApp)) {
+      if (isNotificationRelevantForUser(newNotification, currentUser, activeCourierIdInApp, currentRole)) {
         setActiveCourierToast(newNotification);
         sendDeviceNotification(`💬 رد جديد من التاجر (بوليصة #${targetTracking})`, {
           body: `العميل: ${recipientName} (${gov} - ${city}) - المبلغ: ${cod} ج.م\nالرد: ${merchantNote || 'تم إضافة تعليمات جديدة'}`,
@@ -1723,6 +1802,7 @@ export default function App() {
             setActiveTab(tab);
           }}
           onClearData={handleClearAllData}
+          onOpenBackupModal={() => setIsBackupModalOpen(true)}
           currentUser={currentUser}
           onOpenLogin={() => setActiveTab('login')}
           onLogout={handleLogout}
@@ -1877,6 +1957,7 @@ export default function App() {
                     onClearAllData={handleClearAllData}
                     onApproveShipment={handleApproveShipment}
                     onApproveAllPending={handleApproveAllPending}
+                    onOpenBackupModal={() => setIsBackupModalOpen(true)}
                   />
                 )}
 
@@ -1964,6 +2045,22 @@ export default function App() {
       <WaybillPrintModal
         shipment={selectedPrintShipment}
         onClose={() => setSelectedPrintShipment(null)}
+      />
+
+      <DataBackupModal
+        isOpen={isBackupModalOpen}
+        onClose={() => setIsBackupModalOpen(false)}
+        currentState={{
+          shipments,
+          wallet,
+          users,
+          couriers,
+          hubs,
+          governorates,
+          companyTransactions,
+          notifications: courierNotifications,
+        }}
+        onRestoreState={handleRestoreState}
       />
 
       {/* Footer */}

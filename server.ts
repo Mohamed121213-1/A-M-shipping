@@ -37,11 +37,19 @@ app.get("/api/health", (req, res) => {
 // Server-side State Persistence & Multi-Device Sync Engine
 import fs from "fs";
 const DATA_DIR = path.join(process.cwd(), "data");
+const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 const STATE_FILE = path.join(DATA_DIR, "app_state.json");
+const LATEST_BACKUP_FILE = path.join(BACKUPS_DIR, "latest_backup.json");
 
 if (!fs.existsSync(DATA_DIR)) {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (e) {}
+}
+
+if (!fs.existsSync(BACKUPS_DIR)) {
+  try {
+    fs.mkdirSync(BACKUPS_DIR, { recursive: true });
   } catch (e) {}
 }
 
@@ -112,6 +120,32 @@ function sanitizeServerState(rawState: any) {
 let serverAppState: any = null;
 let serverLastUpdated = 0;
 
+// Helper to save backup copy to disk safely
+function saveBackupSnapshot(state: any, timestamp: number) {
+  try {
+    const backupData = JSON.stringify({ state, timestamp, savedAt: new Date().toISOString() }, null, 2);
+    fs.writeFileSync(LATEST_BACKUP_FILE, backupData);
+    
+    // Also save a timestamped snapshot
+    const timestampedFile = path.join(BACKUPS_DIR, `backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+    fs.writeFileSync(timestampedFile, backupData);
+
+    // Keep only last 15 backup files
+    const files = fs.readdirSync(BACKUPS_DIR)
+      .filter((f) => f.startsWith("backup_"))
+      .sort((a, b) => fs.statSync(path.join(BACKUPS_DIR, b)).mtimeMs - fs.statSync(path.join(BACKUPS_DIR, a)).mtimeMs);
+
+    if (files.length > 15) {
+      files.slice(15).forEach((f) => {
+        try { fs.unlinkSync(path.join(BACKUPS_DIR, f)); } catch (e) {}
+      });
+    }
+  } catch (err) {
+    console.warn("Failed to write backup snapshot:", err);
+  }
+}
+
+// Load initial state with backup fallback
 if (fs.existsSync(STATE_FILE)) {
   try {
     const raw = fs.readFileSync(STATE_FILE, "utf-8");
@@ -120,6 +154,21 @@ if (fs.existsSync(STATE_FILE)) {
     serverLastUpdated = parsed.timestamp || 0;
   } catch (e) {
     console.warn("Failed to read app_state.json:", e);
+  }
+}
+
+// Fallback to latest backup if main file was empty or corrupted
+if ((!serverAppState || Object.keys(serverAppState).length === 0) && fs.existsSync(LATEST_BACKUP_FILE)) {
+  try {
+    const raw = fs.readFileSync(LATEST_BACKUP_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (parsed.state) {
+      serverAppState = sanitizeServerState(parsed.state);
+      serverLastUpdated = parsed.timestamp || Date.now();
+      console.log("Restored server state from latest backup snapshot!");
+    }
+  } catch (e) {
+    console.warn("Failed to load backup snapshot:", e);
   }
 }
 
@@ -132,19 +181,163 @@ app.get("/api/sync/state", (req, res) => {
 
 app.post("/api/sync/state", (req, res) => {
   try {
-    const { state, timestamp, senderId } = req.body || {};
+    const { state, timestamp, senderId, isExplicitClear } = req.body || {};
     const incomingTime = Number(timestamp) || Date.now();
 
-    if (incomingTime >= serverLastUpdated && state) {
+    if (!state) {
+      return res.status(400).json({ error: "بيانات الإرسال فارغة" });
+    }
+
+    // CRITICAL PROTECTION AGAINST ACCIDENTAL DATA WIPES:
+    // If incoming state contains empty arrays (e.g. shipments: [] or users: []),
+    // but current server state HAS valid data, do NOT overwrite non-empty server arrays
+    // unless 'isExplicitClear' flag is set!
+    let mergedState = { ...state };
+
+    if (!isExplicitClear && serverAppState) {
+      if (Array.isArray(serverAppState.shipments) && serverAppState.shipments.length > 0) {
+        if (!Array.isArray(state.shipments) || state.shipments.length === 0) {
+          mergedState.shipments = serverAppState.shipments;
+        }
+      }
+      if (Array.isArray(serverAppState.users) && serverAppState.users.length > 0) {
+        if (!Array.isArray(state.users) || state.users.length === 0) {
+          mergedState.users = serverAppState.users;
+        }
+      }
+      if (Array.isArray(serverAppState.couriers) && serverAppState.couriers.length > 0) {
+        if (!Array.isArray(state.couriers) || state.couriers.length === 0) {
+          mergedState.couriers = serverAppState.couriers;
+        }
+      }
+      if (Array.isArray(serverAppState.companyTransactions) && serverAppState.companyTransactions.length > 0) {
+        if (!Array.isArray(state.companyTransactions) || state.companyTransactions.length === 0) {
+          mergedState.companyTransactions = serverAppState.companyTransactions;
+        }
+      }
+    }
+
+    if (incomingTime >= serverLastUpdated || !serverAppState) {
       serverLastUpdated = incomingTime;
-      serverAppState = sanitizeServerState({ ...state, timestamp: incomingTime, senderId });
+      serverAppState = sanitizeServerState({ ...mergedState, timestamp: incomingTime, senderId });
 
       fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: incomingTime }), (err) => {
         if (err) console.warn("Error persisting server state:", err);
       });
+
+      // Save automatic rolling backup snapshot
+      saveBackupSnapshot(serverAppState, incomingTime);
     }
 
-    return res.json({ success: true, timestamp: serverLastUpdated });
+    return res.json({ success: true, timestamp: serverLastUpdated, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// BACKUP & RESTORE API ENDPOINTS
+
+// 1. Download/Export full JSON backup file
+app.get("/api/backup/export", (req, res) => {
+  try {
+    const backupPayload = {
+      app: "A&M Shipping Logistics",
+      version: "2.0",
+      exportedAt: new Date().toISOString(),
+      timestamp: serverLastUpdated || Date.now(),
+      state: serverAppState || {},
+    };
+
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Content-Disposition", `attachment; filename="bosta_backup_${new Date().toISOString().slice(0, 10)}.json"`);
+    return res.json(backupPayload);
+  } catch (err: any) {
+    return res.status(500).json({ error: "فشل إنشاء ملف النسخة الاحتياطية", details: err.message });
+  }
+});
+
+// 2. Import JSON backup file
+app.post("/api/backup/import", (req, res) => {
+  try {
+    const { state, timestamp } = req.body || {};
+    const importData = state || req.body;
+
+    if (!importData || (typeof importData !== "object")) {
+      return res.status(400).json({ error: "ملف النسخة الاحتياطية غير صالح" });
+    }
+
+    const newTime = Date.now();
+    const sanitized = sanitizeServerState(importData.state || importData);
+
+    serverAppState = sanitized;
+    serverLastUpdated = newTime;
+
+    fs.writeFileSync(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: newTime }));
+    saveBackupSnapshot(serverAppState, newTime);
+
+    return res.json({
+      success: true,
+      message: "تم استعادة النسخة الاحتياطية بنجاح وتسجيل البيانات في النظام!",
+      timestamp: newTime,
+      state: serverAppState,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: "فشل في استعادة البيانات من النسخة الاحتياطية", details: err.message });
+  }
+});
+
+// 3. List available server backup snapshots
+app.get("/api/backup/list", (req, res) => {
+  try {
+    if (!fs.existsSync(BACKUPS_DIR)) {
+      return res.json({ snapshots: [] });
+    }
+
+    const files = fs.readdirSync(BACKUPS_DIR)
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => {
+        const fullPath = path.join(BACKUPS_DIR, f);
+        const stats = fs.statSync(fullPath);
+        return {
+          filename: f,
+          size: stats.size,
+          mtime: stats.mtime,
+          isLatest: f === "latest_backup.json",
+        };
+      })
+      .sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime());
+
+    return res.json({ snapshots: files });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Restore a specific backup snapshot from server disk
+app.post("/api/backup/restore-snapshot", (req, res) => {
+  try {
+    const { filename } = req.body || {};
+    const targetFile = filename ? path.join(BACKUPS_DIR, filename) : LATEST_BACKUP_FILE;
+
+    if (!fs.existsSync(targetFile)) {
+      return res.status(404).json({ error: "ملف اللقطة الاحتياطية غير موجود" });
+    }
+
+    const raw = fs.readFileSync(targetFile, "utf-8");
+    const parsed = JSON.parse(raw);
+    const newTime = Date.now();
+
+    serverAppState = sanitizeServerState(parsed.state || parsed);
+    serverLastUpdated = newTime;
+
+    fs.writeFileSync(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: newTime }));
+
+    return res.json({
+      success: true,
+      message: "تم استعادة اللقطة الاحتياطية المحددة بنجاح!",
+      timestamp: newTime,
+      state: serverAppState,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

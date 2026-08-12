@@ -1,25 +1,80 @@
-import { CourierNotification, UserSession } from '../types';
+import { CourierNotification, UserSession, AppUserRole } from '../types';
 
 // Device Notification Utility using Browser Notification API & Web Audio Synthesizer
 
 export type NotificationPermissionState = 'granted' | 'denied' | 'default' | 'unsupported';
 
-// Helper to determine if a notification is relevant for the currently logged-in user
+const NOTIFIED_IDS_KEY = 'bosta_notified_notification_ids';
+
+export const getNotifiedNotificationIds = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(NOTIFIED_IDS_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set(arr);
+    }
+  } catch (e) {}
+  return new Set();
+};
+
+export const markNotificationAsNotified = (id: string) => {
+  if (!id) return;
+  try {
+    const set = getNotifiedNotificationIds();
+    set.add(id);
+    const arr = Array.from(set).slice(-1000);
+    localStorage.setItem(NOTIFIED_IDS_KEY, JSON.stringify(arr));
+  } catch (e) {}
+};
+
+export const hasNotificationBeenNotified = (id: string): boolean => {
+  if (!id) return false;
+  const set = getNotifiedNotificationIds();
+  return set.has(id);
+};
+
+export const isNotificationFresh = (createdAt?: string, maxAgeSeconds = 180): boolean => {
+  if (!createdAt) return true;
+  const date = new Date(createdAt);
+  if (isNaN(date.getTime())) return true;
+  const ageSeconds = (Date.now() - date.getTime()) / 1000;
+  return ageSeconds <= maxAgeSeconds;
+};
+
+// Helper to determine if a notification is relevant for the currently logged-in user & active role
 export const isNotificationRelevantForUser = (
   notif: CourierNotification,
   user: UserSession | null,
-  activeCourierId?: string
+  activeCourierId?: string,
+  currentRole?: AppUserRole
 ): boolean => {
-  if (!user) return false;
-
-  // 1. Admin NEVER receives routine courier/merchant operational popup notifications or sound chimes
-  if (user.role === 'admin') {
+  const effectiveRole = currentRole || user?.role;
+  if (!effectiveRole || effectiveRole === 'public_tracker') {
     return false;
   }
 
-  // 2. Courier receives notifications targeted to them or 'all'
-  if (user.role === 'courier') {
-    const courierIdToMatch = activeCourierId || user.id;
+  // 1. Admin NEVER receives routine courier/merchant operational popup notifications or sound chimes
+  if (effectiveRole === 'admin') {
+    return false;
+  }
+
+  // 2. Courier receives notifications targeted specifically to them or 'all'
+  if (effectiveRole === 'courier') {
+    // Never show courier merchant-targeted warning alerts
+    if (
+      notif.type === 'status_failed_attempt' ||
+      notif.type === 'no_response' ||
+      notif.statusTitle?.includes('تنبيه للتاجر') ||
+      notif.statusTitle?.includes('تنبيه عاجل للتاجر')
+    ) {
+      return false;
+    }
+
+    const courierIdToMatch = activeCourierId || (user?.role === 'courier' ? user.id : undefined);
+    if (!courierIdToMatch) {
+      return false;
+    }
+
     if (notif.courierId && (notif.courierId === courierIdToMatch || notif.courierId === 'all')) {
       return true;
     }
@@ -27,11 +82,32 @@ export const isNotificationRelevantForUser = (
   }
 
   // 3. Merchant receives notifications for their store/shipments
-  if (user.role === 'merchant') {
-    if (notif.merchantId && notif.merchantId === user.id) return true;
-    if (notif.merchantName && (user.storeName && notif.merchantName === user.storeName)) return true;
-    if (notif.type === 'status_failed_attempt' || notif.type === 'no_response') return true;
-    return true;
+  if (effectiveRole === 'merchant') {
+    // Merchant should NOT receive "new shipment assigned to courier" alerts
+    if (
+      notif.statusTitle?.includes('مسندة إليك') ||
+      notif.type === 'status_assigned' ||
+      notif.statusTitle?.includes('الكابتن')
+    ) {
+      return false;
+    }
+
+    // "No Response" alert or failed delivery attempt for merchant's customer
+    if (
+      notif.type === 'status_failed_attempt' ||
+      notif.type === 'no_response' ||
+      notif.statusTitle?.includes('تنبيه للتاجر')
+    ) {
+      if (user && notif.merchantId && notif.merchantId !== user.id) {
+        return false;
+      }
+      return true;
+    }
+
+    if (user && notif.merchantId && notif.merchantId === user.id) return true;
+    if (user?.storeName && notif.merchantName && notif.merchantName === user.storeName) return true;
+
+    return false;
   }
 
   return false;
@@ -137,7 +213,7 @@ interface SendNotificationOptions {
   onClick?: () => void;
 }
 
-// Set to keep track of recently triggered notification tags/hashes (deduplication window: 4 seconds)
+// Set to keep track of recently triggered notification tags/hashes (deduplication window: 10 seconds)
 const recentNotificationCache = new Map<string, number>();
 
 // Send Native Device/Browser System Notification + In-App Mobile Toast for iPhone iOS & Background PWA
@@ -152,15 +228,15 @@ export const sendDeviceNotification = (
   const now = Date.now();
   const lastSent = recentNotificationCache.get(dedupeKey);
 
-  if (lastSent && now - lastSent < 4000) {
-    console.log('Skipping duplicate notification trigger within 4s window:', dedupeKey);
+  if (lastSent && now - lastSent < 10000) {
+    console.log('Skipping duplicate notification trigger within 10s window:', dedupeKey);
     return;
   }
   recentNotificationCache.set(dedupeKey, now);
 
   // Clean up old cache entries
   for (const [key, timestamp] of recentNotificationCache.entries()) {
-    if (now - timestamp > 10000) {
+    if (now - timestamp > 30000) {
       recentNotificationCache.delete(key);
     }
   }
@@ -197,7 +273,7 @@ export const sendDeviceNotification = (
     const notifTag = tag || `notif-${Date.now()}`;
 
     // Prefer Service Worker registration showNotification for background/mobile/desktop support
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready
         .then((registration) => {
           registration.showNotification(title, {
@@ -217,7 +293,6 @@ export const sendDeviceNotification = (
           fallbackNotification(title, { body, icon: notificationIcon, tag: notifTag, data, onClick });
         });
     } else {
-      // Fallback only if no active Service Worker controller
       fallbackNotification(title, { body, icon: notificationIcon, tag: notifTag, data, onClick });
     }
   } catch (err) {
@@ -255,7 +330,7 @@ function fallbackNotification(
 // Register Service Worker for PWA / Mobile Web Push support
 export const registerServiceWorker = () => {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
+    const register = () => {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {
@@ -264,6 +339,13 @@ export const registerServiceWorker = () => {
         .catch((err) => {
           console.log('ServiceWorker registration skipped or failed:', err);
         });
-    });
+    };
+
+    if (document.readyState === 'complete') {
+      register();
+    } else {
+      window.addEventListener('load', register);
+    }
   }
 };
+

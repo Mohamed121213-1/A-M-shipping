@@ -20,7 +20,8 @@ import {
   RotateCcw,
   X,
   MapPin,
-  DollarSign
+  DollarSign,
+  Database
 } from 'lucide-react';
 import { AppUserRole, MerchantWallet, UserSession, CourierNotification } from '../types';
 
@@ -34,6 +35,7 @@ interface HeaderProps {
   setActiveTab: (tab: string) => void;
   onResetData?: () => void;
   onClearData?: () => void;
+  onOpenBackupModal?: () => void;
   currentUser?: UserSession | null;
   onOpenLogin?: () => void;
   onLogout?: () => void;
@@ -51,6 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   onResetData,
   onClearData,
+  onOpenBackupModal,
   currentUser,
   onOpenLogin,
   onLogout,
@@ -529,6 +532,18 @@ export const Header: React.FC<HeaderProps> = ({
                 <p className="text-xs font-extrabold">{merchantWallet.availableBalance.toLocaleString()} ج.م</p>
               </div>
             </div>
+          )}
+
+          {/* Backup & Keep Data Button */}
+          {onOpenBackupModal && (
+            <button
+              onClick={onOpenBackupModal}
+              className="bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-extrabold text-xs px-3.5 py-2 rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer border border-slate-700"
+              title="الاحتفاظ بالبيانات وأخذ نسخة احتياطية من كافة الشحنات والمستخدمين"
+            >
+              <Database className="w-4 h-4 text-amber-400" />
+              <span>الاحتفاظ بالبيانات</span>
+            </button>
           )}
 
           {/* Create Shipment CTA */}

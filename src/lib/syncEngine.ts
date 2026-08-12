@@ -147,6 +147,8 @@ class SyncEngine {
     }
   }
 
+  private isInitialized = false;
+
   private async fetchPersistedStateFromServer() {
     if (typeof window === 'undefined') return;
     try {
@@ -155,11 +157,18 @@ class SyncEngine {
       const data = await res.json();
       if (data && data.state && data.timestamp) {
         const remoteTime = Number(data.timestamp) || 0;
-        if (remoteTime > this.latestTimestamp && data.state.senderId !== this.instanceId) {
+
+        // Check if local storage currently has no shipments
+        const localShipmentsRaw = localStorage.getItem('bosta_shipments');
+        const localShipments = localShipmentsRaw ? JSON.parse(localShipmentsRaw) : [];
+        const isLocalEmpty = !Array.isArray(localShipments) || localShipments.length === 0;
+
+        // If local is empty OR remoteTime >= latestTimestamp, adopt server state!
+        if (remoteTime > this.latestTimestamp || isLocalEmpty) {
           this.handleIncomingUpdate({
             ...data.state,
-            timestamp: remoteTime,
-            senderId: data.state.senderId || 'server_sync',
+            timestamp: remoteTime || Date.now(),
+            senderId: 'server_initial_sync',
           });
         } else if (this.latestTimestamp > remoteTime && this.latestStateCache) {
           // Local client has newer state than server, push to server
@@ -171,10 +180,12 @@ class SyncEngine {
       }
     } catch (e) {
       // Network/Server offline, silently continue
+    } finally {
+      this.isInitialized = true;
     }
   }
 
-  private async postStateToServer(state: SyncedAppState, timestamp: number) {
+  private async postStateToServer(state: SyncedAppState, timestamp: number, isExplicitClear = false) {
     try {
       await fetch('/api/sync/state', {
         method: 'POST',
@@ -183,6 +194,7 @@ class SyncEngine {
           state,
           timestamp,
           senderId: this.instanceId,
+          isExplicitClear,
         }),
       });
     } catch (e) {
@@ -200,9 +212,6 @@ class SyncEngine {
   private handleIncomingUpdate(data: SyncedAppState) {
     if (this.isProcessingIncoming) return;
 
-    const isFromOtherSender = Boolean(data.senderId && data.senderId !== this.instanceId);
-    if (!isFromOtherSender) return;
-
     // Sanitize state entities to purge dummy accounts and mock data
     if (data.shipments) data.shipments = sanitizeShipments(data.shipments);
     if (data.users) data.users = sanitizeUsers(data.users);
@@ -210,7 +219,7 @@ class SyncEngine {
     if (data.wallet) data.wallet = sanitizeWallet(data.wallet);
     if (data.companyTransactions) data.companyTransactions = sanitizeCompanyTxns(data.companyTransactions);
 
-    const incomingTime = data.timestamp || 0;
+    const incomingTime = data.timestamp || Date.now();
 
     this.isProcessingIncoming = true;
     this.latestTimestamp = Math.max(this.latestTimestamp, incomingTime);
@@ -218,9 +227,13 @@ class SyncEngine {
     if (typeof window !== 'undefined' && incomingTime > 0) {
       try {
         localStorage.setItem('bosta_last_updated', String(incomingTime));
-        if (data.shipments) localStorage.setItem('bosta_shipments', JSON.stringify(data.shipments));
+        if (data.shipments && Array.isArray(data.shipments) && data.shipments.length > 0) {
+          localStorage.setItem('bosta_shipments', JSON.stringify(data.shipments));
+        }
         if (data.wallet) localStorage.setItem('bosta_wallet', JSON.stringify(data.wallet));
-        if (data.users) localStorage.setItem('bosta_users', JSON.stringify(data.users));
+        if (data.users && Array.isArray(data.users) && data.users.length > 0) {
+          localStorage.setItem('bosta_users', JSON.stringify(data.users));
+        }
         if (data.couriers) localStorage.setItem('bosta_couriers', JSON.stringify(data.couriers));
         if (data.hubs) localStorage.setItem('bosta_hubs', JSON.stringify(data.hubs));
         if (data.governorates) localStorage.setItem('bosta_governorates', JSON.stringify(data.governorates));

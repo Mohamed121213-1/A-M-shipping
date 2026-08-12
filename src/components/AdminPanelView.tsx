@@ -21,7 +21,8 @@ import {
   UserCheck,
   AlertTriangle,
   RefreshCw,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Database
 } from 'lucide-react';
 import { 
   UserSession, 
@@ -60,6 +61,7 @@ interface AdminPanelViewProps {
   onClearAllData: () => void;
   onApproveShipment?: (shipmentId: string) => void;
   onApproveAllPending?: () => void;
+  onOpenBackupModal?: () => void;
 }
 
 export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
@@ -84,6 +86,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
   onClearAllData,
   onApproveShipment,
   onApproveAllPending,
+  onOpenBackupModal,
 }) => {
   const pendingShipments = shipments.filter((s) => s.status === 'pending_approval');
   const [activeTab, setActiveTab] = useState<'approval' | 'users' | 'couriers' | 'hubs' | 'rates' | 'wallet' | 'danger'>(
@@ -1423,6 +1426,25 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
               أدوات تفريغ النظام وإزالة كافة البيانات أو تصفير الشحنات لتبدأ العمل على نظافة
             </p>
           </div>
+
+          {onOpenBackupModal && (
+            <div className="bg-emerald-950/80 border border-emerald-700/80 p-5 rounded-2xl space-y-3">
+              <h3 className="text-sm font-black text-emerald-400 flex items-center gap-2">
+                <Database className="w-5 h-5 text-emerald-400" />
+                الاحتفاظ بالبيانات وأخذ نسخة احتياطية (تصدير / استعادة)
+              </h3>
+              <p className="text-xs text-slate-300">
+                حفظ نسخة احتياطية من كافة الشحنات والعملاء والمحفظة، أو استعادة نسخة سابقة مسجلة على جهازك أو السيرفر.
+              </p>
+              <button
+                onClick={onOpenBackupModal}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-md"
+              >
+                <Database className="w-4 h-4" />
+                فتح مركز الاحتفاظ بالبيانات والنسخ الاحتياطي
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl space-y-3">
