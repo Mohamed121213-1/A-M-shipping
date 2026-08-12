@@ -77,15 +77,22 @@ export const DeviceNotificationBanner: React.FC = () => {
     setPermission(result);
   };
 
-  const handleSendTestNotification = () => {
+  const handleSendTestNotification = async () => {
     playNotificationSound();
-    sendDeviceNotification('🔔 إشعار تجريبي ناجح!', {
+    sendDeviceNotification('🔔 إشعار تجريبي مباشر!', {
       body: 'نظام إشعارات الأجهزة مفعّل ويعمل بنجاح على جهازك (A&M Shipping).',
       sound: true,
       tag: 'test-notification',
     });
     setShowTestToast(true);
     setTimeout(() => setShowTestToast(false), 4000);
+
+    try {
+      // Trigger server push notification so user receives it even if they lock phone or exit
+      await fetch('/api/push/test', { method: 'POST' });
+    } catch (e) {
+      console.warn('Server test push trigger:', e);
+    }
   };
 
   if (isDismissed) {

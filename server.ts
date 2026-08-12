@@ -45,19 +45,11 @@ const LATEST_BACKUP_FILE = path.join(BACKUPS_DIR, "latest_backup.json");
 const VAPID_KEYS_FILE = path.join(DATA_DIR, "vapid_keys.json");
 const PUSH_SUBS_FILE = path.join(DATA_DIR, "push_subscriptions.json");
 
-// Web Push VAPID Key Initialization
-let vapidKeys: { publicKey: string; privateKey: string };
-if (fs.existsSync(VAPID_KEYS_FILE)) {
-  try {
-    vapidKeys = JSON.parse(fs.readFileSync(VAPID_KEYS_FILE, "utf-8"));
-  } catch (e) {
-    vapidKeys = webpush.generateVAPIDKeys();
-    fs.writeFileSync(VAPID_KEYS_FILE, JSON.stringify(vapidKeys));
-  }
-} else {
-  vapidKeys = webpush.generateVAPIDKeys();
-  fs.writeFileSync(VAPID_KEYS_FILE, JSON.stringify(vapidKeys));
-}
+// Permanent Static Web Push VAPID Keys (Guarantees push subscriptions remain valid across restarts)
+const vapidKeys = {
+  publicKey: "BG3V0XFkpUw3Z0hJir8nueeTkvLKxeAKSwME5al0uYiwtp8E5NUAPaw9FSTHL4WbFlV3wURUAl9UldcpqHaPIbA",
+  privateKey: "P_XsqaNOrOFgxttq2naHZ02z-OoT7tvD7HHzmkFCxQI"
+};
 
 try {
   webpush.setVapidDetails(
@@ -111,17 +103,22 @@ async function sendWebPushToSubscribers(payload: {
   });
 
   const deadEndpoints: string[] = [];
+  const options = {
+    TTL: 86400,
+    headers: {
+      'Urgency': 'high',
+      'Topic': 'shipment-updates',
+    },
+  };
 
   for (const subItem of pushSubscriptions) {
-    if (payload.targetCourierId && subItem.courierId && subItem.courierId !== payload.targetCourierId && subItem.courierId !== 'all') {
-      continue;
-    }
-
     try {
-      await webpush.sendNotification(subItem.subscription, notificationPayload);
+      await webpush.sendNotification(subItem.subscription, notificationPayload, options);
     } catch (err: any) {
       if (err?.statusCode === 410 || err?.statusCode === 404) {
         deadEndpoints.push(subItem.subscription?.endpoint);
+      } else {
+        console.warn('Web Push delivery notice:', err?.statusCode || err?.message);
       }
     }
   }
@@ -291,6 +288,26 @@ app.post("/api/push/subscribe", (req, res) => {
 
     savePushSubscriptions();
     return res.json({ success: true, count: pushSubscriptions.length });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/push/test", async (req, res) => {
+  try {
+    const activeSubsCount = pushSubscriptions.length;
+    if (activeSubsCount === 0) {
+      return res.status(400).json({ error: "لا يوجد أجهزة مشتركة حالياً بالخادم" });
+    }
+
+    await sendWebPushToSubscribers({
+      title: "🔔 إشعار هاتف تجريبي (والتطبيق مقفول)",
+      body: "تهانينا! الإشعارات تعمل بنجاح في خلفية هاتفك حتى أثناء قفل الشاشة وإغلاق الموقع.",
+      tag: `test-push-${Date.now()}`,
+      data: { url: '/' },
+    });
+
+    return res.json({ success: true, sentTo: activeSubsCount });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
