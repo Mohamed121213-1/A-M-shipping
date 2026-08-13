@@ -52,7 +52,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
   const [activeSubTab, setActiveSubTab] = useState<'courier_reports' | 'merchant_reports' | 'logistics_overview'>('merchant_reports');
 
   // Filter state for Reports
-  const [reportPeriod, setReportPeriod] = useState<'daily' | 'monthly' | 'all'>('monthly');
+  const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'all'>('monthly');
   const [selectedDate, setSelectedDate] = useState<string>('2026-07-29'); // Sample date matching mock data
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-07'); // Sample month
   const [selectedCourierId, setSelectedCourierId] = useState<string>('all');
@@ -105,6 +105,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
       if (reportPeriod === 'daily') {
         const sDate = s.createdAt ? s.createdAt.substring(0, 10) : '';
         if (sDate && sDate !== selectedDate) return false;
+      } else if (reportPeriod === 'weekly') {
+        const sDateStr = s.createdAt ? s.createdAt.substring(0, 10) : '';
+        if (sDateStr) {
+          const sTime = new Date(sDateStr).getTime();
+          const targetTime = new Date(selectedDate).getTime();
+          const diffDays = (targetTime - sTime) / (1000 * 3600 * 24);
+          if (diffDays < 0 || diffDays >= 7) return false;
+        }
       } else if (reportPeriod === 'monthly') {
         const sMonth = s.createdAt ? s.createdAt.substring(0, 7) : '';
         if (sMonth && sMonth !== selectedMonth) return false;
@@ -303,6 +311,27 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
         .filter(s => s.status === 'delivered' || s.status === 'partial_delivery')
         .reduce((sum, s) => sum + (s.financials?.shippingFee || 0), 0);
 
+      // Courier Commission Earned calculation
+      const commType = courier.commissionType || 'fixed';
+      const commVal = courier.commissionValue ?? 20;
+
+      const earnedCommission = courierShipments.reduce((sum, s) => {
+        if (
+          s.status === 'delivered' ||
+          s.status === 'partial_delivery' ||
+          ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid))
+        ) {
+          if (commType === 'percentage') {
+            return sum + ((s.financials?.shippingFee || 0) * commVal) / 100;
+          }
+          return sum + commVal;
+        }
+        return sum;
+      }, 0);
+
+      const netCod = codCollected || (reportPeriod === 'daily' && courierShipments.length === 0 ? courier.codCollectedToday : codCollected);
+      const netRequiredCash = Math.max(0, netCod - earnedCommission);
+
       // Success Rate Calculation
       let successRate = 100;
       if (totalAssigned > 0) {
@@ -327,8 +356,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
         failedAttempt,
         totalReturnedCount,
         inProgress,
-        codCollected: codCollected || (reportPeriod === 'daily' && courierShipments.length === 0 ? courier.codCollectedToday : codCollected),
+        codCollected: netCod,
         shippingFees,
+        earnedCommission,
+        netRequiredCash,
+        commissionType: commType,
+        commissionValue: commVal,
         successRate,
       };
     });
@@ -341,6 +374,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
   const totalPeriodFailed = courierPerformanceList.reduce((acc, c) => acc + c.failedAttempt, 0);
   const totalPeriodCod = courierPerformanceList.reduce((acc, c) => acc + c.codCollected, 0);
   const totalPeriodShippingFees = courierPerformanceList.reduce((acc, c) => acc + c.shippingFees, 0);
+  const totalPeriodCommission = courierPerformanceList.reduce((acc, c) => acc + c.earnedCommission, 0);
+  const totalPeriodNetRequired = courierPerformanceList.reduce((acc, c) => acc + c.netRequiredCash, 0);
   
   const overallSuccessRate = totalPeriodDelivered + totalPeriodReturned > 0 
     ? Math.round((totalPeriodDelivered / (totalPeriodDelivered + totalPeriodReturned)) * 100)
@@ -478,6 +513,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
         'المرتجع والرفض',
         'محاولات فاشلة',
         'المبالغ المحصلة COD (ج.م)',
+        'نوع العمولة',
+        'عمولة المندوب المستحقة (ج.م)',
+        'الصافي المطلوب توريده (ج.م)',
         'رسوم الشحن (ج.م)',
         'نسبة النجاح %',
         'التقييم'
@@ -493,6 +531,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
         c.totalReturnedCount,
         c.failedAttempt,
         c.codCollected,
+        `"${c.commissionType === 'percentage' ? `${c.commissionValue}% من الشحن` : `${c.commissionValue} ج.م/أوردر`}"`,
+        c.earnedCommission,
+        c.netRequiredCash,
         c.shippingFees,
         `${c.successRate}%`,
         c.rating
@@ -620,10 +661,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
             </div>
 
             {/* Period Type Buttons */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 w-full sm:w-auto">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 w-full sm:w-auto overflow-x-auto">
               <button
                 onClick={() => setReportPeriod('daily')}
-                className={`flex-1 sm:flex-initial px-4 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   reportPeriod === 'daily'
                     ? 'bg-white text-red-600 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -634,8 +675,20 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
               </button>
 
               <button
+                onClick={() => setReportPeriod('weekly')}
+                className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  reportPeriod === 'weekly'
+                    ? 'bg-white text-red-600 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                تقرير أسبوعي
+              </button>
+
+              <button
                 onClick={() => setReportPeriod('monthly')}
-                className={`flex-1 sm:flex-initial px-4 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   reportPeriod === 'monthly'
                     ? 'bg-white text-red-600 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -647,7 +700,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
 
               <button
                 onClick={() => setReportPeriod('all')}
-                className={`flex-1 sm:flex-initial px-4 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   reportPeriod === 'all'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -678,11 +731,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
               </select>
             </div>
 
-            {/* Daily Picker */}
-            <div className={`space-y-1 ${reportPeriod !== 'daily' ? 'opacity-50 pointer-events-none' : ''}`}>
+            {/* Daily & Weekly Picker */}
+            <div className={`space-y-1 ${reportPeriod !== 'daily' && reportPeriod !== 'weekly' ? 'opacity-50 pointer-events-none' : ''}`}>
               <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                اختيار اليوم:
+                {reportPeriod === 'weekly' ? 'الأسبوع المنتهي في:' : 'اختيار اليوم:'}
               </label>
               <select
                 value={selectedDate}
@@ -1072,76 +1125,87 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
       {activeSubTab === 'courier_reports' && (
         <div className="space-y-6">
           {/* Period Summary Metric Cards Row */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
             {/* Delivered Shipments Metric */}
-            <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs space-y-2 relative overflow-hidden">
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-slate-500">التسليم الناجح</span>
-                <div className="w-9 h-9 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <CheckCircle2 className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900">
-                {totalPeriodDelivered} <span className="text-xs font-extrabold text-slate-500">طرد تسليم</span>
+              <div className="text-xl sm:text-2xl font-black text-slate-900">
+                {totalPeriodDelivered} <span className="text-xs font-extrabold text-slate-500">طرد</span>
               </div>
               <div className="flex items-center justify-between text-[11px] text-emerald-600 font-bold pt-1">
-                <span>ناجح بنسبة 100%</span>
+                <span>ناجح %100</span>
                 <span className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                  %{overallSuccessRate} معدل الإنجاز
+                  %{overallSuccessRate} إنجاز
                 </span>
               </div>
             </div>
 
             {/* Cash COD Collected Metric */}
-            <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs space-y-2 relative overflow-hidden">
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-slate-500">إجمالي التحصيل المالي (COD)</span>
-                <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
-                  <DollarSign className="w-5 h-5" />
+                <span className="text-xs font-extrabold text-slate-500">الكاش المحصل (COD)</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-xl sm:text-3xl font-black text-amber-700">
+              <div className="text-xl sm:text-2xl font-black text-amber-700">
                 {totalPeriodCod.toLocaleString()} <span className="text-xs font-extrabold text-slate-500">ج.م</span>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+              <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
                 <span>رسوم شحن: {totalPeriodShippingFees.toLocaleString()} ج.م</span>
-                <span className="text-amber-800 font-extrabold">جاهز للتسوية كاش</span>
               </div>
             </div>
 
-            {/* Returned & Refused Metric */}
-            <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs space-y-2 relative overflow-hidden">
+            {/* Total Courier Commissions Metric */}
+            <div className="bg-white border border-emerald-200 bg-emerald-50/20 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-slate-500">إجمالي المرتجعات والرفض</span>
-                <div className="w-9 h-9 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center">
-                  <PackageX className="w-5 h-5" />
+                <span className="text-xs font-extrabold text-emerald-900">عمولات المناديب المستحقة</span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                  <Receipt className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-rose-600">
-                {totalPeriodReturned} <span className="text-xs font-extrabold text-slate-500">مرتجع</span>
+              <div className="text-xl sm:text-2xl font-black text-emerald-700 font-mono">
+                +{totalPeriodCommission.toLocaleString()} <span className="text-xs font-extrabold text-slate-500">ج.م</span>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-rose-600 font-bold pt-1">
-                <span>محاولات فاشلة: {totalPeriodFailed}</span>
-                <span className="bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                  %{totalPeriodAssigned > 0 ? Math.round((totalPeriodReturned / totalPeriodAssigned) * 100) : 0} نسبة الارتجاع
-                </span>
+              <div className="text-[10px] text-emerald-700 font-bold pt-1">
+                مستحقة الخصم للمندوبين
+              </div>
+            </div>
+
+            {/* Net Required Handover Cash Metric */}
+            <div className="bg-white border border-amber-300 bg-amber-50/30 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-amber-900">الصافي المطلوب توريده</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center">
+                  <Wallet className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-amber-900 font-mono">
+                {totalPeriodNetRequired.toLocaleString()} <span className="text-xs font-extrabold text-slate-600">ج.م</span>
+              </div>
+              <div className="text-[10px] text-amber-800 font-bold pt-1">
+                الصافي للشركة بعد العمولات
               </div>
             </div>
 
             {/* Total Handled / Couriers Count Metric */}
-            <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs space-y-2 relative overflow-hidden">
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden col-span-2 md:col-span-1">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-slate-500">إجمالي الشحنات المسندة</span>
-                <div className="w-9 h-9 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
-                  <Truck className="w-5 h-5" />
+                <span className="text-xs font-extrabold text-slate-500">الشحنات والمناديب</span>
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <Truck className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900">
-                {totalPeriodAssigned} <span className="text-xs font-extrabold text-slate-500">شحنة بالتقرير</span>
+              <div className="text-xl sm:text-2xl font-black text-slate-900">
+                {totalPeriodAssigned} <span className="text-xs font-extrabold text-slate-500">شحنة</span>
               </div>
               <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                <span>عدد المناديب بالتقرير: {courierPerformanceList.length}</span>
-                <span className="text-emerald-600 font-extrabold">تغطية ميدانية active</span>
+                <span>عدد المناديب: {courierPerformanceList.length}</span>
               </div>
             </div>
           </div>
@@ -1243,75 +1307,81 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
               <table className="w-full text-right text-xs">
                 <thead className="bg-slate-900 text-slate-200 font-black border-b border-slate-800">
                   <tr>
-                    <th className="p-3.5">المندوب (الكابتن)</th>
-                    <th className="p-3.5">المستودع / الفرع</th>
-                    <th className="p-3.5 text-center">إجمالي المسند</th>
-                    <th className="p-3.5 text-center bg-emerald-950/60 text-emerald-400">التسليم الناجح</th>
-                    <th className="p-3.5 text-center">استلام جزئي</th>
-                    <th className="p-3.5 text-center bg-rose-950/60 text-rose-400">المرتجع والرفض</th>
-                    <th className="p-3.5 text-center">محاولات فاشلة</th>
-                    <th className="p-3.5 bg-amber-950/60 text-amber-400">المبالغ المحصلة (COD)</th>
-                    <th className="p-3.5 text-center">نسبة النجاح</th>
-                    <th className="p-3.5 text-center">التقييم</th>
+                    <th className="p-3">المندوب (الكابتن)</th>
+                    <th className="p-3">المستودع / الفرع</th>
+                    <th className="p-3 text-center">إجمالي المسند</th>
+                    <th className="p-3 text-center bg-emerald-950/60 text-emerald-400">التسليم الناجح</th>
+                    <th className="p-3 text-center">استلام جزئي</th>
+                    <th className="p-3 text-center bg-rose-950/60 text-rose-400">المرتجع والرفض</th>
+                    <th className="p-3 bg-amber-950/60 text-amber-400">الكاش المحصل (COD)</th>
+                    <th className="p-3 text-center bg-emerald-950/80 text-emerald-300">نوع العمولة</th>
+                    <th className="p-3 text-center bg-emerald-950/80 text-emerald-300">عمولة المندوب</th>
+                    <th className="p-3 bg-amber-900/80 text-amber-300">الصافي المطلوب توريده</th>
+                    <th className="p-3 text-center">نسبة النجاح</th>
+                    <th className="p-3 text-center">التقييم</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-800">
                   {courierPerformanceList.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="text-center py-10 text-slate-500 font-bold">
+                      <td colSpan={12} className="text-center py-10 text-slate-500 font-bold">
                         لا توجد بيانات تسليمات مناديب مطابقة للفترة والفلترة المختارة.
                       </td>
                     </tr>
                   ) : (
                     courierPerformanceList.map((c) => (
                       <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-3.5">
-                          <div className="flex items-center gap-3">
+                        <td className="p-3">
+                          <div className="flex items-center gap-2.5">
                             <img 
                               src={c.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'} 
                               alt={c.name} 
-                              className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
+                              className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
                               referrerPolicy="no-referrer"
                             />
                             <div>
                               <div className="font-extrabold text-slate-900 text-xs">{c.name}</div>
-                              <div className="text-[11px] text-slate-500 dir-ltr text-right font-mono">{c.phone}</div>
+                              <div className="text-[10px] text-slate-500 dir-ltr text-right font-mono">{c.phone}</div>
                             </div>
                           </div>
                         </td>
-                        <td className="p-3.5 text-slate-600 text-xs font-semibold">{c.assignedHub}</td>
-                        <td className="p-3.5 text-center font-extrabold text-slate-900">{c.totalAssigned}</td>
-                        <td className="p-3.5 text-center font-extrabold text-emerald-700 bg-emerald-50/40">
+                        <td className="p-3 text-slate-600 text-xs font-semibold">{c.assignedHub}</td>
+                        <td className="p-3 text-center font-extrabold text-slate-900">{c.totalAssigned}</td>
+                        <td className="p-3 text-center font-extrabold text-emerald-700 bg-emerald-50/40">
                           {c.totalDeliveredCount}
                         </td>
-                        <td className="p-3.5 text-center font-bold text-amber-700">
+                        <td className="p-3 text-center font-bold text-amber-700">
                           {c.partialDelivery}
                         </td>
-                        <td className="p-3.5 text-center font-extrabold text-rose-600 bg-rose-50/40">
+                        <td className="p-3 text-center font-extrabold text-rose-600 bg-rose-50/40">
                           {c.totalReturnedCount}
                         </td>
-                        <td className="p-3.5 text-center font-bold text-slate-500">
-                          {c.failedAttempt}
+                        <td className="p-3 font-extrabold text-slate-900 bg-amber-50/40">
+                          <span className="text-amber-800 text-xs font-black block">{c.codCollected.toLocaleString()} ج.م</span>
+                          <span className="text-[9px] text-slate-500 block">شحن: {c.shippingFees} ج.م</span>
                         </td>
-                        <td className="p-3.5 font-extrabold text-slate-900 bg-amber-50/40">
-                          <span className="text-amber-800 text-sm font-black">{c.codCollected.toLocaleString()} ج.م</span>
-                          <span className="text-[10px] text-slate-500 block">رسوم شحن: {c.shippingFees} ج.م</span>
+                        <td className="p-3 text-center font-bold text-slate-600 bg-emerald-50/20 text-[11px]">
+                          {c.commissionType === 'percentage' ? `${c.commissionValue}% من الشحن` : `${c.commissionValue} ج.م / أوردر`}
                         </td>
-                        <td className="p-3.5 text-center">
-                          <div className="flex flex-col items-center gap-1">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black ${
-                              c.successRate >= 90 
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                                : c.successRate >= 70
-                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                : 'bg-rose-100 text-rose-800 border border-rose-300'
-                            }`}>
-                              %{c.successRate}
-                            </span>
-                          </div>
+                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/60 font-mono text-xs">
+                          +{c.earnedCommission.toLocaleString()} ج.م
                         </td>
-                        <td className="p-3.5 text-center">
-                          <span className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg text-xs">
+                        <td className="p-3 font-black text-amber-900 bg-amber-100/50 font-mono text-xs">
+                          {c.netRequiredCash.toLocaleString()} ج.م
+                        </td>
+                        <td className="p-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            c.successRate >= 90 
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                              : c.successRate >= 70
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                              : 'bg-rose-100 text-rose-800 border border-rose-300'
+                          }`}>
+                            %{c.successRate}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center">
+                          <span className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-lg text-[11px]">
                             <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                             {c.rating}
                           </span>
@@ -1323,23 +1393,29 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
                 {/* Summary Row */}
                 <tfoot className="bg-slate-900 text-white font-extrabold text-xs">
                   <tr>
-                    <td colSpan={2} className="p-3.5 text-right font-black">
-                      الإجمالي الكلي للفترة المختارة ({reportPeriod === 'daily' ? selectedDate : reportPeriod === 'monthly' ? selectedMonth : 'الكل'}):
+                    <td colSpan={2} className="p-3 text-right font-black">
+                      الإجمالي الكلي بالفترة ({reportPeriod === 'daily' ? selectedDate : reportPeriod === 'weekly' ? `أسبوع ${selectedDate}` : reportPeriod === 'monthly' ? selectedMonth : 'الكل'}):
                     </td>
-                    <td className="p-3.5 text-center font-black text-white">{totalPeriodAssigned}</td>
-                    <td className="p-3.5 text-center font-black text-emerald-400 bg-emerald-950/80">{totalPeriodDelivered}</td>
-                    <td className="p-3.5 text-center font-black text-amber-400">
+                    <td className="p-3 text-center font-black text-white">{totalPeriodAssigned}</td>
+                    <td className="p-3 text-center font-black text-emerald-400 bg-emerald-950/80">{totalPeriodDelivered}</td>
+                    <td className="p-3 text-center font-black text-amber-400">
                       {courierPerformanceList.reduce((acc, c) => acc + c.partialDelivery, 0)}
                     </td>
-                    <td className="p-3.5 text-center font-black text-rose-400 bg-rose-950/80">{totalPeriodReturned}</td>
-                    <td className="p-3.5 text-center font-black text-slate-300">{totalPeriodFailed}</td>
-                    <td className="p-3.5 font-black text-amber-400 text-sm bg-amber-950/80">
+                    <td className="p-3 text-center font-black text-rose-400 bg-rose-950/80">{totalPeriodReturned}</td>
+                    <td className="p-3 font-black text-amber-400 bg-amber-950/80">
                       {totalPeriodCod.toLocaleString()} ج.م
                     </td>
-                    <td className="p-3.5 text-center font-black text-emerald-400">
+                    <td className="p-3 text-center text-slate-400 text-[10px]">-</td>
+                    <td className="p-3 text-center font-black text-emerald-400 bg-emerald-950/80 font-mono">
+                      +{totalPeriodCommission.toLocaleString()} ج.م
+                    </td>
+                    <td className="p-3 font-black text-amber-300 bg-amber-950/90 font-mono">
+                      {totalPeriodNetRequired.toLocaleString()} ج.م
+                    </td>
+                    <td className="p-3 text-center font-black text-emerald-400">
                       %{overallSuccessRate}
                     </td>
-                    <td className="p-3.5"></td>
+                    <td className="p-3"></td>
                   </tr>
                 </tfoot>
               </table>

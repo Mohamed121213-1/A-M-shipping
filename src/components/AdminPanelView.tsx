@@ -1008,7 +1008,8 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredCouriers.map((c) => {
               const courierDelivered = shipments.filter(
-                (s) => s.status === 'delivered' && (s.assignedCourier?.id === c.id || (c.phone && s.assignedCourier?.phone === c.phone))
+                (s) => (s.status === 'delivered' || s.status === 'partial_delivery' || ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid))) &&
+                       (s.assignedCourier?.id === c.id || (c.phone && s.assignedCourier?.phone === c.phone))
               );
               const commType = c.commissionType || 'fixed';
               const commVal = c.commissionValue ?? 20;
@@ -1018,6 +1019,18 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                 }
                 return sum + commVal;
               }, 0);
+
+              const codCollected = courierDelivered.reduce((sum, s) => {
+                if (s.status === 'partial_delivery' && s.partialDetails?.partialCodAmount) {
+                  return sum + s.partialDetails.partialCodAmount;
+                }
+                if (s.status === 'refused' || s.status === 'returned') {
+                  return sum + (s.refusedDetails?.amountCollected ?? (s.refusedDetails?.shippingFeePaid ? s.financials.shippingFee : 0));
+                }
+                return sum + (s.financials?.codAmount || 0);
+              }, 0);
+
+              const netRequiredCash = Math.max(0, codCollected - earnedComm);
 
               return (
                 <div key={c.id} className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-3 hover:border-red-300 transition-all">
@@ -1060,18 +1073,27 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Commission Display Box on Courier Card */}
-                  <div className="bg-white p-2.5 rounded-xl border border-red-100 flex items-center justify-between text-xs font-bold">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block font-normal">العمولة المحددة من الأدمن:</span>
-                      <span className="text-red-700 font-extrabold">
-                        {commType === 'fixed' ? `${commVal} ج.م / أوردر` : `${commVal}% من الشحن`}
-                      </span>
+                  {/* Commission & Net Required Display Box on Courier Card */}
+                  <div className="bg-white p-3 rounded-xl border border-red-100 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold border-b border-slate-100 pb-1.5">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-normal">نوع وقيمة العمولة:</span>
+                        <span className="text-red-700 font-black">
+                          {commType === 'fixed' ? `${commVal} ج.م / أوردر` : `${commVal}% من الشحن`}
+                        </span>
+                      </div>
+                      <div className="text-left bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                        <span className="text-[9px] text-slate-500 block font-medium">عمولة المندوب المستحقة:</span>
+                        <span className="text-emerald-700 font-black font-mono">
+                          +{earnedComm.toLocaleString()} ج.م
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-left bg-red-50 px-2.5 py-1 rounded-lg border border-red-200">
-                      <span className="text-[9px] text-slate-500 block font-medium">أرباح العمولات:</span>
-                      <span className="text-emerald-700 font-black font-mono">
-                        +{earnedComm.toLocaleString()} ج.م
+
+                    <div className="flex items-center justify-between text-xs font-extrabold text-slate-800 pt-0.5">
+                      <span className="text-slate-500 text-[11px]">الصافي المطلوب توريده للشركة:</span>
+                      <span className="text-amber-800 font-black bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200">
+                        {netRequiredCash.toLocaleString()} ج.م
                       </span>
                     </div>
                   </div>

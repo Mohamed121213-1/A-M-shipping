@@ -202,8 +202,8 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     return sum;
   }, 0);
 
-  // Net Cash to Handover to Hub
-  const cashToHandover = totalCodCollectedToday;
+  // Net Cash Required to Handover to Hub (Amount Collected - Courier Commission)
+  const cashToHandover = Math.max(0, totalCodCollectedToday - courierCommissionEarned);
 
   const handleConfirmDelivery = (e: React.FormEvent) => {
     e.preventDefault();
@@ -949,19 +949,20 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-amber-500/40">
-              <div className="bg-black/25 p-2.5 rounded-xl">
+              <div className="bg-black/25 p-2.5 rounded-xl border border-emerald-500/30">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-amber-200 block">عمولة التوصيل المستحقة:</span>
-                  <span className="text-[9px] bg-amber-500/20 text-amber-200 px-1.5 py-0.2 rounded font-mono">
+                  <span className="text-[10px] text-amber-200 block font-extrabold">عمولة التوصيل المستحقة:</span>
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-mono font-black">
                     {commType === 'fixed' ? `${commVal} ج.م/شحنة` : `${commVal}% من الشحن`}
                   </span>
                 </div>
                 <span className="text-base font-black text-emerald-300">+{courierCommissionEarned.toLocaleString()} ج.م</span>
               </div>
 
-              <div className="bg-black/25 p-2.5 rounded-xl">
-                <span className="text-[10px] text-amber-200 block">العهد المتبقية للتسليم:</span>
-                <span className="text-base font-black text-white">{cashToHandover.toLocaleString()} ج.م</span>
+              <div className="bg-black/35 p-2.5 rounded-xl border border-amber-300/40">
+                <span className="text-[10px] text-amber-100 block font-black">الصافي المطلوب توريده للفرع:</span>
+                <span className="text-base font-black text-amber-300">{cashToHandover.toLocaleString()} ج.م</span>
+                <span className="text-[9px] text-amber-200/80 block mt-0.5">(المحصل - العمولة)</span>
               </div>
             </div>
           </div>
@@ -983,7 +984,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                   تسليم النقدية لخزينة المستودع
                 </h4>
                 <p className="text-[10px] text-slate-400 mt-0.5">
-                  قم بتأكيد تسليم المبلغ كاش لمدير الخزينة والمستودع.
+                  قم بتأكيد تسليم الصافي كاش لمدير الخزينة والمستودع بعد خصم عمولتك المستحقة.
                 </p>
               </div>
             </div>
@@ -991,10 +992,10 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
             <button
               onClick={handleHandoverCashToHub}
               disabled={cashToHandover <= 0}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-black text-xs py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-black text-xs py-3 px-4 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
             >
               <ArrowUpRight className="w-4 h-4" />
-              <span>توريد العهدة كاش للفرع ({cashToHandover.toLocaleString()} ج.م)</span>
+              <span>توريد الصافي المطلوب كاش للفرع ({cashToHandover.toLocaleString()} ج.م)</span>
             </button>
           </div>
 

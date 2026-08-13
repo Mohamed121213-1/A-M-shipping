@@ -55,16 +55,17 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
   // Edit Wallet State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [inlineEditingField, setInlineEditingField] = useState<'availableBalance' | 'totalPaidOut' | null>(null);
+  const [inlineEditingField, setInlineEditingField] = useState<'availableBalance' | 'totalPaidOut' | 'pendingCod' | null>(null);
   const [inlineValue, setInlineValue] = useState<number>(0);
 
   const [editForm, setEditForm] = useState({
     availableBalance: wallet.availableBalance,
     totalPaidOut: wallet.totalPaidOut,
+    pendingCod: wallet.pendingCod,
     merchantName: wallet.merchantName || 'التاجر الرئيسي',
   });
 
-  const handleStartInlineEdit = (field: 'availableBalance' | 'totalPaidOut', currentVal: number) => {
+  const handleStartInlineEdit = (field: 'availableBalance' | 'totalPaidOut' | 'pendingCod', currentVal: number) => {
     setInlineEditingField(field);
     setInlineValue(currentVal);
   };
@@ -79,7 +80,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
     setInlineEditingField(null);
   };
 
-  const handleQuickZeroOut = (field: 'totalPaidOut' | 'availableBalance') => {
+  const handleQuickZeroOut = (field: 'totalPaidOut' | 'availableBalance' | 'pendingCod') => {
     if (onUpdateWallet) {
       onUpdateWallet({
         ...wallet,
@@ -92,6 +93,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
     setEditForm({
       availableBalance: wallet.availableBalance,
       totalPaidOut: wallet.totalPaidOut,
+      pendingCod: wallet.pendingCod,
       merchantName: wallet.merchantName || 'التاجر الرئيسي',
     });
     setIsEditModalOpen(true);
@@ -103,6 +105,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
       ...wallet,
       availableBalance: Number(editForm.availableBalance) || 0,
       totalPaidOut: Number(editForm.totalPaidOut) || 0,
+      pendingCod: Number(editForm.pendingCod) || 0,
       merchantName: editForm.merchantName,
     };
     if (onUpdateWallet) {
@@ -352,8 +355,8 @@ export const WalletView: React.FC<WalletViewProps> = ({
             </div>
           )}
 
-          {/* Wallet Summary Cards (Available Balance & Total Paid Out) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Wallet Summary Cards (Available Balance, Total Paid Out, and Pending COD for Admin) */}
+          <div className={`grid grid-cols-1 ${isAdmin ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
             {/* Available Balance Box */}
             <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden group transition-all">
               <div className="absolute right-0 bottom-0 opacity-10 p-4 pointer-events-none">
@@ -504,6 +507,91 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 </>
               )}
             </div>
+
+            {/* Pending COD Box (Shown ONLY for Admin) */}
+            {isAdmin && (
+              <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-2xl p-6 shadow-md relative overflow-hidden group transition-all">
+                <div className="absolute right-0 bottom-0 opacity-10 p-4 pointer-events-none">
+                  <Clock className="w-32 h-32" />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-amber-100 uppercase tracking-wider block">
+                    مبالغ قيد التحصيل مع المندوبين (Pending COD):
+                  </span>
+                  {inlineEditingField !== 'pendingCod' && (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={handleSyncPendingCodWithCouriers}
+                        className="px-2 py-1 bg-white hover:bg-amber-50 text-amber-950 text-[11px] font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                        title="مزامنة مبالغ قيد التحصيل مع إجمالي عهدة المناديب الحالية"
+                      >
+                        <RefreshCw className="w-3 h-3 text-amber-950" />
+                        <span>زامن ({totalCouriersCashHeld.toLocaleString()} ج.م)</span>
+                      </button>
+                      <button
+                        onClick={() => handleStartInlineEdit('pendingCod', wallet.pendingCod)}
+                        className="p-1.5 bg-amber-700/80 hover:bg-amber-700 text-white rounded-lg transition-all cursor-pointer"
+                        title="تعديل مبالغ قيد التحصيل"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {inlineEditingField === 'pendingCod' ? (
+                  <div className="mt-3 space-y-2 bg-amber-900/40 p-3 rounded-xl border border-amber-300/30">
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={inlineValue}
+                        onChange={(e) => setInlineValue(Number(e.target.value))}
+                        className="w-full text-xl font-black p-2 bg-white text-amber-950 rounded-lg focus:outline-none"
+                        placeholder="0"
+                        autoFocus
+                      />
+                      <span className="absolute left-2 top-2.5 text-xs font-black text-slate-400">ج.م</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 justify-end">
+                      <button
+                        onClick={() => setInlineEditingField(null)}
+                        className="px-2.5 py-1 bg-amber-800 hover:bg-amber-900 text-white text-xs font-bold rounded-md cursor-pointer"
+                      >
+                        إلغاء
+                      </button>
+                      <button
+                        onClick={handleSaveInlineEdit}
+                        className="px-3 py-1 bg-white hover:bg-amber-100 text-amber-950 text-xs font-black rounded-md shadow-xs cursor-pointer"
+                      >
+                        حفظ
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-3xl font-black mt-2">
+                      {wallet.pendingCod.toLocaleString()} <span className="text-base font-bold">ج.م</span>
+                    </p>
+                    {wallet.pendingCod !== totalCouriersCashHeld ? (
+                      <div className="mt-2 text-[11px] font-black text-amber-950 bg-amber-200/90 border border-amber-300 p-2 rounded-xl flex items-center justify-between gap-2">
+                        <span>💡 إجمالي عهدة المندوبين الفعلية الحالية: {totalCouriersCashHeld.toLocaleString()} ج.م</span>
+                        <button
+                          onClick={handleSyncPendingCodWithCouriers}
+                          className="underline text-amber-950 font-black hover:text-black cursor-pointer shrink-0"
+                        >
+                          مزامنة الآن ⚡
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-amber-100 mt-2 flex items-center gap-1 font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-200 inline shrink-0" />
+                        مطابقة 100% مع عهدة المندوبين الحالية ({totalCouriersCashHeld.toLocaleString()} ج.م)
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Instant Payout Form */}
@@ -773,6 +861,32 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 />
               </div>
 
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-black text-amber-950">
+                    مبالغ قيد التحصيل مع المندوبين (Pending COD):
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, pendingCod: 0 })}
+                    className="text-[11px] font-black text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    تحديد كـ 0 (صفر)
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={editForm.pendingCod}
+                    onChange={(e) => setEditForm({ ...editForm, pendingCod: Number(e.target.value) })}
+                    className="w-full text-lg font-black p-2.5 bg-white border border-amber-300 rounded-xl text-amber-700 focus:ring-2 focus:ring-amber-500"
+                  />
+                  <span className="absolute left-3 top-3 text-xs font-black text-amber-500">ج.م</span>
+                </div>
+                <p className="text-[10px] font-bold text-amber-800">تظهر هذه المبالغ للأدمن فقط لإدارة وتحصيل عهد المناديب</p>
+              </div>
 
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
                 <div className="flex items-center justify-between">
