@@ -825,14 +825,15 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
 
                     {/* Status Indicator & Option to re-edit */}
                     {shipment.status === 'delivered' && (
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-950/80 border border-emerald-700/80">
-                        <div className="text-[11px] text-emerald-300 font-bold flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> تم التسليم بنجاح وتحصيل كامل المبلغ ({shipment.financials.codAmount} ج.م)
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 rounded-xl bg-emerald-950/90 border border-emerald-700/90">
+                        <div className="text-xs text-emerald-200 font-extrabold flex items-center gap-1.5 leading-snug">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>تم التسليم بنجاح وتحصيل كامل المبلغ ({shipment.financials.codAmount.toLocaleString()} ج.م)</span>
                         </div>
                         {!isEditingThis && (
                           <button
                             onClick={() => setEditingShipmentId(shipment.id)}
-                            className="text-[10px] text-emerald-200 hover:text-white bg-emerald-900/80 px-2 py-0.5 rounded border border-emerald-700 cursor-pointer"
+                            className="text-xs font-extrabold text-emerald-200 hover:text-white bg-emerald-900/90 px-3 py-1 rounded-lg border border-emerald-700 cursor-pointer shrink-0 self-end sm:self-auto"
                           >
                             تعديل ✎
                           </button>
@@ -841,14 +842,15 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                     )}
 
                     {shipment.status === 'partial_delivery' && (
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-amber-950/60 border border-amber-800/60">
-                        <div className="text-[11px] text-amber-300 font-bold flex items-center gap-1">
-                          <Receipt className="w-3.5 h-3.5 text-amber-400" /> تم الاستلام الجزئي (تحصيل {shipment.partialDetails?.partialCodAmount ?? shipment.financials.codAmount} ج.م)
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 rounded-xl bg-amber-950/80 border border-amber-800/80">
+                        <div className="text-xs text-amber-200 font-extrabold flex items-center gap-1.5 leading-snug">
+                          <Receipt className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>تم الاستلام الجزئي (تحصيل {(shipment.partialDetails?.partialCodAmount ?? shipment.financials.codAmount).toLocaleString()} ج.م)</span>
                         </div>
                         {!isEditingThis && (
                           <button
                             onClick={() => setEditingShipmentId(shipment.id)}
-                            className="text-[10px] text-amber-200 hover:text-white bg-amber-900/80 px-2 py-0.5 rounded border border-amber-700 cursor-pointer"
+                            className="text-xs font-extrabold text-amber-200 hover:text-white bg-amber-900/90 px-3 py-1 rounded-lg border border-amber-700 cursor-pointer shrink-0 self-end sm:self-auto"
                           >
                             تعديل ✎
                           </button>
@@ -857,46 +859,55 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                     )}
 
                     {(shipment.status === 'refused' || shipment.status === 'returned') && (
-                      <div className="text-[11px] font-bold flex items-center justify-between p-2 rounded-xl border bg-rose-950/60 border-rose-800/60">
-                        <div className="flex items-center gap-1 text-rose-300">
-                          <XCircle className="w-3.5 h-3.5 text-rose-400" />
-                          <span>رفض الاستلام من العميل</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {shipment.refusedDetails?.shippingFeePaid ? (
-                            <span className="bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
-                              دفع كامل الشحن ({shipment.refusedDetails.amountCollected || shipment.financials.shippingFee} ج.م بالعهدة)
-                            </span>
-                          ) : (shipment.refusedDetails?.partialShippingFeePaid || ((shipment.refusedDetails?.amountCollected || 0) > 0)) ? (
-                            <span className="bg-amber-950 text-amber-300 border border-amber-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
-                              دفع جزء من الشحن ({shipment.refusedDetails?.amountCollected} ج.م بالعهدة)
-                            </span>
-                          ) : (
-                            <span className="bg-rose-900/90 text-rose-200 border border-rose-700/60 text-[10px] px-2 py-0.5 rounded-full font-black">
-                              لم يدفع شحن (0 ج.م)
-                            </span>
-                          )}
+                      <div className="flex flex-col gap-2 p-3 rounded-xl border bg-rose-950/80 border-rose-800/80 text-xs font-bold">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-rose-300 font-extrabold">
+                            <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                            <span>رفض الاستلام / مرتجع</span>
+                          </div>
                           {!isEditingThis && (
                             <button
                               onClick={() => setEditingShipmentId(shipment.id)}
-                              className="text-[10px] text-rose-200 hover:text-white bg-rose-900/80 px-2 py-0.5 rounded border border-rose-700 cursor-pointer"
+                              className="text-xs font-extrabold text-rose-200 hover:text-white bg-rose-900/90 px-2.5 py-1 rounded-lg border border-rose-700 cursor-pointer shrink-0"
                             >
                               تعديل ✎
                             </button>
+                          )}
+                        </div>
+
+                        <div className="pt-1 border-t border-rose-900/60 leading-relaxed">
+                          {shipment.refusedDetails?.shippingFeePaid ? (
+                            <span className="inline-block bg-emerald-950 text-emerald-300 border border-emerald-700/80 text-xs px-2.5 py-1 rounded-lg font-black">
+                              دفع كامل الشحن ({shipment.refusedDetails.amountCollected || shipment.financials.shippingFee} ج.م بالعهدة)
+                            </span>
+                          ) : (shipment.refusedDetails?.partialShippingFeePaid || ((shipment.refusedDetails?.amountCollected || 0) > 0)) ? (
+                            <span className="inline-block bg-amber-950 text-amber-300 border border-amber-700/80 text-xs px-2.5 py-1 rounded-lg font-black">
+                              دفع جزء من الشحن ({shipment.refusedDetails?.amountCollected} ج.م بالعهدة)
+                            </span>
+                          ) : (
+                            <span className="inline-block bg-rose-900/90 text-rose-200 border border-rose-700/80 text-xs px-2.5 py-1 rounded-lg font-black">
+                              لم يدفع شحن (0 ج.م)
+                            </span>
+                          )}
+                          {shipment.refusedDetails?.reason && (
+                            <p className="text-[11px] text-rose-300/90 mt-1 font-medium">
+                              السبب: {shipment.refusedDetails.reason}
+                            </p>
                           )}
                         </div>
                       </div>
                     )}
 
                     {shipment.status === 'failed_attempt' && (
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-amber-950/60 border border-amber-800/60">
-                        <div className="text-[11px] text-amber-400 font-bold flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" /> محاولة تسليم غير ناجحة
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 rounded-xl bg-amber-950/80 border border-amber-800/80">
+                        <div className="text-xs text-amber-300 font-extrabold flex items-center gap-1.5 leading-snug">
+                          <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>محاولة تسليم غير ناجحة</span>
                         </div>
                         {!isEditingThis && (
                           <button
                             onClick={() => setEditingShipmentId(shipment.id)}
-                            className="text-[10px] text-amber-200 hover:text-white bg-amber-900/80 px-2 py-0.5 rounded border border-amber-700 cursor-pointer"
+                            className="text-xs font-extrabold text-amber-200 hover:text-white bg-amber-900/90 px-3 py-1 rounded-lg border border-amber-700 cursor-pointer shrink-0 self-end sm:self-auto"
                           >
                             تعديل ✎
                           </button>

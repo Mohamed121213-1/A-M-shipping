@@ -152,6 +152,8 @@ export interface Shipment {
   };
   isCourierSettled?: boolean;
   courierSettledAt?: string;
+  isReturnedToMerchant?: boolean;
+  returnedToMerchantAt?: string;
   estimatedDeliveryDate: string;
 }
 

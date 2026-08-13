@@ -1057,6 +1057,30 @@ export default function App() {
     showToast('تم حذف الأوردر بنجاح');
   };
 
+  // Mark Shipment Returned to Merchant Handler
+  const handleMarkReturnedToMerchant = (shipmentId: string) => {
+    let nextShipments: Shipment[] = [];
+    setShipments((prev) => {
+      nextShipments = prev.map((s) => {
+        if (s.id === shipmentId) {
+          return {
+            ...s,
+            isReturnedToMerchant: true,
+            returnedToMerchantAt: new Date().toISOString()
+          };
+        }
+        return s;
+      });
+      return nextShipments;
+    });
+
+    setTimeout(() => {
+      broadcastDataChange({ shipments: nextShipments });
+    }, 20);
+
+    showToast('تم تأكيد تسليم المرتجع للتاجر بنجاح وحفظ البيانات بالتحليلات');
+  };
+
   // Delete Multiple Shipments Handler
   const handleDeleteMultipleShipments = (shipmentIds: string[]) => {
     let nextShipments: Shipment[] = [];
@@ -1881,7 +1905,7 @@ export default function App() {
                 )}
 
                 {activeTab === 'returns' && (
-                  <ReturnsAccountingView shipments={userShipments} systemUsers={users} currentUser={currentUser} />
+                  <ReturnsAccountingView shipments={userShipments} systemUsers={users} currentUser={currentUser} onMarkReturnedToMerchant={handleMarkReturnedToMerchant} />
                 )}
 
                 {activeTab === 'company_treasury' && (
@@ -1994,7 +2018,7 @@ export default function App() {
                 )}
 
                 {activeTab === 'returns' && (
-                  <ReturnsAccountingView shipments={shipments} systemUsers={users} currentUser={currentUser} />
+                  <ReturnsAccountingView shipments={shipments} systemUsers={users} currentUser={currentUser} onMarkReturnedToMerchant={handleMarkReturnedToMerchant} />
                 )}
 
                 {activeTab === 'company_treasury' && (
