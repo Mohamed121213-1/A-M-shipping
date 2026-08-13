@@ -85,15 +85,96 @@ function savePushSubscriptions() {
   }
 }
 
-// Broadcast Remote Web Push to closed/background devices
+// Mirrors the client-side relevance rules in src/utils/deviceNotifications.ts
+// (isNotificationRelevantForUser). Keeping the two in sync is what guarantees the right
+// notification reaches only the right device — this is the source of the "sync isn't 100%
+// accurate" symptom: previously every push went to every subscribed device unfiltered.
+function isSubscriptionRelevantForNotification(
+  subItem: { role?: string; courierId?: string; userId?: string },
+  notif: {
+    type?: string;
+    statusTitle?: string;
+    courierId?: string;
+    merchantId?: string;
+    merchantName?: string;
+  }
+): boolean {
+  const role = subItem.role;
+  if (!role || role === 'public_tracker') return false;
+
+  // 1. Admin never receives routine courier/merchant operational push notifications.
+  if (role === 'admin') return false;
+
+  // 2. Courier: only notifications targeted specifically at them (or 'all'), never
+  //    merchant-targeted warning alerts.
+  if (role === 'courier') {
+    if (
+      notif.type === 'status_failed_attempt' ||
+      notif.type === 'no_response' ||
+      notif.statusTitle?.includes('تنبيه للتاجر') ||
+      notif.statusTitle?.includes('تنبيه عاجل للتاجر')
+    ) {
+      return false;
+    }
+    const courierIdToMatch = subItem.courierId || subItem.userId;
+    if (!courierIdToMatch) return false;
+    return !!notif.courierId && (notif.courierId === courierIdToMatch || notif.courierId === 'all');
+  }
+
+  // 3. Merchant: only notifications about their own store/shipments.
+  if (role === 'merchant') {
+    if (
+      notif.statusTitle?.includes('مسندة إليك') ||
+      notif.type === 'status_assigned' ||
+      notif.statusTitle?.includes('الكابتن')
+    ) {
+      return false;
+    }
+
+    if (
+      notif.type === 'status_failed_attempt' ||
+      notif.type === 'no_response' ||
+      notif.statusTitle?.includes('تنبيه للتاجر')
+    ) {
+      if (notif.merchantId && subItem.userId && notif.merchantId !== subItem.userId) {
+        return false;
+      }
+      return true;
+    }
+
+    if (notif.merchantId && subItem.userId && notif.merchantId === subItem.userId) return true;
+
+    return false;
+  }
+
+  return false;
+}
+
+// Send Remote Web Push to closed/background devices.
+// Pass `notif` for real event-driven notifications so recipients are filtered exactly like the
+// in-app logic (right role, right courier, right merchant). Omit it only for explicit
+// broadcast-to-everyone actions (the manual admin/dev "test push" button).
 async function sendWebPushToSubscribers(payload: {
   title: string;
   body: string;
   tag?: string;
   data?: any;
   targetCourierId?: string;
+  notif?: {
+    type?: string;
+    statusTitle?: string;
+    courierId?: string;
+    merchantId?: string;
+    merchantName?: string;
+  };
 }) {
   if (!pushSubscriptions || pushSubscriptions.length === 0) return;
+
+  const recipients = payload.notif
+    ? pushSubscriptions.filter((subItem) => isSubscriptionRelevantForNotification(subItem, payload.notif!))
+    : pushSubscriptions;
+
+  if (recipients.length === 0) return;
 
   const notificationPayload = JSON.stringify({
     title: payload.title,
@@ -111,7 +192,7 @@ async function sendWebPushToSubscribers(payload: {
     },
   };
 
-  for (const subItem of pushSubscriptions) {
+  for (const subItem of recipients) {
     try {
       await webpush.sendNotification(subItem.subscription, notificationPayload, options);
     } catch (err: any) {
@@ -367,6 +448,15 @@ app.post("/api/sync/state", (req, res) => {
           tag: notif.id,
           data: { shipmentId: notif.shipmentId, url: '/' },
           targetCourierId: notif.courierId,
+          // Filters recipients so only the relevant courier/merchant (never admin) gets this
+          // push — see isSubscriptionRelevantForNotification above.
+          notif: {
+            type: notif.type,
+            statusTitle: notif.statusTitle,
+            courierId: notif.courierId,
+            merchantId: notif.merchantId,
+            merchantName: notif.merchantName,
+          },
         }).catch((e) => console.warn('Remote push send error:', e));
       }
     }
