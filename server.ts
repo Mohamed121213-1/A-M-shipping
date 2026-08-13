@@ -85,96 +85,15 @@ function savePushSubscriptions() {
   }
 }
 
-// Mirrors the client-side relevance rules in src/utils/deviceNotifications.ts
-// (isNotificationRelevantForUser). Keeping the two in sync is what guarantees the right
-// notification reaches only the right device — this is the source of the "sync isn't 100%
-// accurate" symptom: previously every push went to every subscribed device unfiltered.
-function isSubscriptionRelevantForNotification(
-  subItem: { role?: string; courierId?: string; userId?: string },
-  notif: {
-    type?: string;
-    statusTitle?: string;
-    courierId?: string;
-    merchantId?: string;
-    merchantName?: string;
-  }
-): boolean {
-  const role = subItem.role;
-  if (!role || role === 'public_tracker') return false;
-
-  // 1. Admin never receives routine courier/merchant operational push notifications.
-  if (role === 'admin') return false;
-
-  // 2. Courier: only notifications targeted specifically at them (or 'all'), never
-  //    merchant-targeted warning alerts.
-  if (role === 'courier') {
-    if (
-      notif.type === 'status_failed_attempt' ||
-      notif.type === 'no_response' ||
-      notif.statusTitle?.includes('تنبيه للتاجر') ||
-      notif.statusTitle?.includes('تنبيه عاجل للتاجر')
-    ) {
-      return false;
-    }
-    const courierIdToMatch = subItem.courierId || subItem.userId;
-    if (!courierIdToMatch) return false;
-    return !!notif.courierId && (notif.courierId === courierIdToMatch || notif.courierId === 'all');
-  }
-
-  // 3. Merchant: only notifications about their own store/shipments.
-  if (role === 'merchant') {
-    if (
-      notif.statusTitle?.includes('مسندة إليك') ||
-      notif.type === 'status_assigned' ||
-      notif.statusTitle?.includes('الكابتن')
-    ) {
-      return false;
-    }
-
-    if (
-      notif.type === 'status_failed_attempt' ||
-      notif.type === 'no_response' ||
-      notif.statusTitle?.includes('تنبيه للتاجر')
-    ) {
-      if (notif.merchantId && subItem.userId && notif.merchantId !== subItem.userId) {
-        return false;
-      }
-      return true;
-    }
-
-    if (notif.merchantId && subItem.userId && notif.merchantId === subItem.userId) return true;
-
-    return false;
-  }
-
-  return false;
-}
-
-// Send Remote Web Push to closed/background devices.
-// Pass `notif` for real event-driven notifications so recipients are filtered exactly like the
-// in-app logic (right role, right courier, right merchant). Omit it only for explicit
-// broadcast-to-everyone actions (the manual admin/dev "test push" button).
+// Broadcast Remote Web Push to closed/background devices
 async function sendWebPushToSubscribers(payload: {
   title: string;
   body: string;
   tag?: string;
   data?: any;
   targetCourierId?: string;
-  notif?: {
-    type?: string;
-    statusTitle?: string;
-    courierId?: string;
-    merchantId?: string;
-    merchantName?: string;
-  };
 }) {
   if (!pushSubscriptions || pushSubscriptions.length === 0) return;
-
-  const recipients = payload.notif
-    ? pushSubscriptions.filter((subItem) => isSubscriptionRelevantForNotification(subItem, payload.notif!))
-    : pushSubscriptions;
-
-  if (recipients.length === 0) return;
 
   const notificationPayload = JSON.stringify({
     title: payload.title,
@@ -192,7 +111,7 @@ async function sendWebPushToSubscribers(payload: {
     },
   };
 
-  for (const subItem of recipients) {
+  for (const subItem of pushSubscriptions) {
     try {
       await webpush.sendNotification(subItem.subscription, notificationPayload, options);
     } catch (err: any) {
@@ -431,7 +350,7 @@ app.post("/api/sync/state", (req, res) => {
       return res.status(400).json({ error: "بيانات الإرسال فارغة" });
     }
 
-    // Detect new notifications to send remote push to closed devices
+    // Detect new notifications or shipment updates to send remote push to closed devices
     if (Array.isArray(state.notifications) && state.notifications.length > 0) {
       const previousNotifIds = new Set(
         Array.isArray(serverAppState?.notifications)
@@ -444,20 +363,51 @@ app.post("/api/sync/state", (req, res) => {
       for (const notif of newNotifs) {
         sendWebPushToSubscribers({
           title: notif.statusTitle || `💬 إشعار شحنة جديد (#${notif.trackingNumber || ''})`,
-          body: notif.message || `تم تحديث حالة الشحنة رقم ${notif.trackingNumber}`,
+          body: notif.message || notif.statusNote || `تم تحديث حالة الشحنة رقم ${notif.trackingNumber || ''}`,
           tag: notif.id,
           data: { shipmentId: notif.shipmentId, url: '/' },
           targetCourierId: notif.courierId,
-          // Filters recipients so only the relevant courier/merchant (never admin) gets this
-          // push — see isSubscriptionRelevantForNotification above.
-          notif: {
-            type: notif.type,
-            statusTitle: notif.statusTitle,
-            courierId: notif.courierId,
-            merchantId: notif.merchantId,
-            merchantName: notif.merchantName,
-          },
         }).catch((e) => console.warn('Remote push send error:', e));
+      }
+    }
+
+    // Detect direct shipment status changes, new shipments, and courier assignments
+    if (Array.isArray(state.shipments) && state.shipments.length > 0 && Array.isArray(serverAppState?.shipments) && serverAppState.shipments.length > 0) {
+      const oldShipmentsMap = new Map<string, any>(
+        serverAppState.shipments.map((s: any) => [s.id || s.trackingNumber, s])
+      );
+
+      for (const s of state.shipments) {
+        if (!s || (!s.id && !s.trackingNumber)) continue;
+        const key = s.id || s.trackingNumber;
+        const oldS = oldShipmentsMap.get(key);
+
+        if (!oldS) {
+          // New shipment created
+          sendWebPushToSubscribers({
+            title: `📦 شحنة جديدة (#${s.trackingNumber || s.id})`,
+            body: `تم إضافة شحنة جديدة للعميل ${s.recipient?.name || ''} - ${s.recipient?.governorate || ''}`,
+            tag: `new-shipment-${key}`,
+            data: { shipmentId: s.id, url: '/' },
+          }).catch((e) => console.warn('New shipment push error:', e));
+        } else if (oldS.status !== s.status) {
+          // Status changed!
+          sendWebPushToSubscribers({
+            title: `🚚 تحديث حالة شحنة (#${s.trackingNumber || s.id})`,
+            body: `تغيرت الحالة إلى (${s.status || 'تحديث جديد'}) - العميل: ${s.recipient?.name || s.recipient?.governorate || ''}`,
+            tag: `status-change-${key}-${Date.now()}`,
+            data: { shipmentId: s.id, url: '/' },
+          }).catch((e) => console.warn('Status change push error:', e));
+        } else if (s.assignedCourier?.id && oldS.assignedCourier?.id !== s.assignedCourier?.id) {
+          // Courier assigned/changed!
+          sendWebPushToSubscribers({
+            title: `🛵 تعيين مندوب للشحنة (#${s.trackingNumber || s.id})`,
+            body: `تم تكليف المندوب (${s.assignedCourier.name}) بالتوصيل`,
+            tag: `courier-assigned-${key}-${Date.now()}`,
+            data: { shipmentId: s.id, url: '/' },
+            targetCourierId: s.assignedCourier.id,
+          }).catch((e) => console.warn('Courier change push error:', e));
+        }
       }
     }
 
