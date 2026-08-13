@@ -56,15 +56,19 @@ class SyncEngine {
     // 2. Initialize Server-Side API Sync (cross-device & cross-browser synchronization)
     if (typeof window !== 'undefined') {
       this.fetchPersistedStateFromServer();
+      this.initSseStream();
       
-      // Poll server state every 2.5 seconds to guarantee multi-device updates
+      // Safety fallback poll every 2 seconds
       setInterval(() => {
         this.fetchPersistedStateFromServer();
-      }, 2500);
+      }, 2000);
 
       // Re-check state immediately on window focus or online status change
       window.addEventListener('focus', () => this.fetchPersistedStateFromServer());
-      window.addEventListener('online', () => this.fetchPersistedStateFromServer());
+      window.addEventListener('online', () => {
+        this.fetchPersistedStateFromServer();
+        this.initSseStream();
+      });
     }
 
     // 3. Initialize Supabase Realtime Broadcast Channel for cross-device & cross-account syncing
@@ -148,6 +152,47 @@ class SyncEngine {
   }
 
   private isInitialized = false;
+  private sseSource: EventSource | null = null;
+
+  private initSseStream() {
+    if (typeof window === 'undefined' || !('EventSource' in window)) return;
+    if (this.sseSource) {
+      try { this.sseSource.close(); } catch (e) {}
+    }
+
+    try {
+      this.sseSource = new EventSource('/api/sync/sse');
+      this.sseSource.onmessage = (event) => {
+        if (!event.data) return;
+        try {
+          const data = JSON.parse(event.data);
+          if (data && data.state && data.timestamp) {
+            const remoteTime = Number(data.timestamp) || 0;
+            if (remoteTime > this.latestTimestamp && data.senderId !== this.instanceId) {
+              this.handleIncomingUpdate({
+                ...data.state,
+                timestamp: remoteTime,
+                senderId: data.senderId || 'sse_realtime',
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('SSE payload parse error:', e);
+        }
+      };
+
+      this.sseSource.onerror = () => {
+        if (this.sseSource) {
+          try { this.sseSource.close(); } catch (e) {}
+          this.sseSource = null;
+        }
+        // Auto reconnect after 3s
+        setTimeout(() => this.initSseStream(), 3000);
+      };
+    } catch (e) {
+      console.warn('Failed to connect to SSE stream:', e);
+    }
+  }
 
   private async fetchPersistedStateFromServer() {
     if (typeof window === 'undefined') return;

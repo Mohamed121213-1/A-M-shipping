@@ -181,12 +181,23 @@ export const subscribeUserToWebPush = async (
 
     let subscription = await reg.pushManager.getSubscription();
     
-    // Always subscribe with server key
     if (!subscription) {
-      subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey,
-      });
+      try {
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
+      } catch (subErr) {
+        console.warn('Subscription attempt error, resetting subscription:', subErr);
+        const existingSub = await reg.pushManager.getSubscription();
+        if (existingSub) {
+          await existingSub.unsubscribe();
+        }
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
+      }
     }
 
     // Register Push Subscription on Express server

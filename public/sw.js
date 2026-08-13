@@ -29,27 +29,54 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Support background push / broadcast messages
+// Support background push / broadcast messages (works when phone is locked or app is closed)
 self.addEventListener('push', (event) => {
+  let title = 'إشعار جديد 📦';
+  let body = 'تم تحديث حالة شحنة في النظام';
+  let tag = `push-${Date.now()}`;
+  let data = { url: '/' };
+
   if (event.data) {
     try {
-      const data = event.data.json();
-      const title = data.title || 'إشعار شحنة جديد 📦';
-      const options = {
-        body: data.body || '',
-        icon: data.icon || 'https://cdn-icons-png.flaticon.com/512/2822/2822408.png',
-        badge: data.icon || 'https://cdn-icons-png.flaticon.com/512/2822/2822408.png',
-        tag: data.tag || `notif-${Date.now()}`,
-        data: data.data || {},
-        dir: 'rtl',
-        lang: 'ar',
-        vibrate: [200, 100, 200],
-        requireInteraction: true,
-        renotify: true,
-      };
-      event.waitUntil(self.registration.showNotification(title, options));
+      const parsed = event.data.json();
+      if (parsed.title) title = parsed.title;
+      if (parsed.body) body = parsed.body;
+      if (parsed.tag) tag = parsed.tag;
+      if (parsed.data) data = parsed.data;
     } catch (e) {
-      console.error('Error handling background push event:', e);
+      body = event.data.text() || body;
     }
   }
+
+  const options = {
+    body,
+    icon: 'https://cdn-icons-png.flaticon.com/512/2822/2822408.png',
+    badge: 'https://cdn-icons-png.flaticon.com/512/2822/2822408.png',
+    tag,
+    data,
+    dir: 'rtl',
+    lang: 'ar',
+    vibrate: [300, 100, 300, 100, 300],
+    requireInteraction: true,
+    renotify: true,
+    timestamp: Date.now(),
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
+// Handle automatic background subscription refresh
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    self.registration.pushManager.subscribe(event.oldSubscription.options)
+      .then((subscription) => {
+        return fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription }),
+        });
+      })
+  );
 });

@@ -107,21 +107,34 @@ async function sendWebPushToSubscribers(payload: {
     TTL: 86400,
     headers: {
       'Urgency': 'high',
-      'Topic': 'shipment-updates',
     },
   };
 
-  for (const subItem of pushSubscriptions) {
-    try {
-      await webpush.sendNotification(subItem.subscription, notificationPayload, options);
-    } catch (err: any) {
-      if (err?.statusCode === 410 || err?.statusCode === 404) {
-        deadEndpoints.push(subItem.subscription?.endpoint);
-      } else {
-        console.warn('Web Push delivery notice:', err?.statusCode || err?.message);
+  await Promise.allSettled(
+    pushSubscriptions.map(async (subItem) => {
+      if (!subItem || !subItem.subscription) return;
+      if (
+        payload.targetCourierId &&
+        subItem.courierId &&
+        subItem.courierId !== payload.targetCourierId &&
+        subItem.role === 'courier'
+      ) {
+        return;
       }
-    }
-  }
+
+      try {
+        await webpush.sendNotification(subItem.subscription, notificationPayload, options);
+      } catch (err: any) {
+        if (err?.statusCode === 410 || err?.statusCode === 404) {
+          if (subItem.subscription?.endpoint) {
+            deadEndpoints.push(subItem.subscription.endpoint);
+          }
+        } else {
+          console.warn('Web Push delivery notice:', err?.statusCode || err?.message);
+        }
+      }
+    })
+  );
 
   if (deadEndpoints.length > 0) {
     pushSubscriptions = pushSubscriptions.filter(
@@ -334,6 +347,62 @@ app.post("/api/push/notify", async (req, res) => {
   }
 });
 
+// Active Server-Sent Events (SSE) connections for sub-second real-time cross-device sync
+const sseClients = new Set<express.Response>();
+
+function broadcastSseState(state: any, timestamp: number, senderId?: string) {
+  if (sseClients.size === 0) return;
+  const payload = JSON.stringify({
+    state,
+    timestamp,
+    senderId: senderId || "server_broadcast",
+  });
+  sseClients.forEach((client) => {
+    try {
+      client.write(`data: ${payload}\n\n`);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  });
+}
+
+// Service Worker Route with Service-Worker-Allowed header to ensure PWA works when app/phone is locked
+app.get("/sw.js", (req, res) => {
+  res.setHeader("Content-Type", "application/javascript");
+  res.setHeader("Service-Worker-Allowed", "/");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  const swPath = path.join(process.cwd(), "public", "sw.js");
+  if (fs.existsSync(swPath)) {
+    return res.sendFile(swPath);
+  }
+  return res.status(404).send("// sw.js not found");
+});
+
+app.get("/api/sync/sse", (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  });
+
+  // Send current state immediately on connection
+  if (serverAppState) {
+    const initPayload = JSON.stringify({
+      state: serverAppState,
+      timestamp: serverLastUpdated,
+      senderId: "server_sse_init",
+    });
+    res.write(`data: ${initPayload}\n\n`);
+  }
+
+  sseClients.add(res);
+
+  req.on("close", () => {
+    sseClients.delete(res);
+  });
+});
+
 app.get("/api/sync/state", (req, res) => {
   res.json({
     state: serverAppState,
@@ -372,9 +441,11 @@ app.post("/api/sync/state", (req, res) => {
     }
 
     // Detect direct shipment status changes, new shipments, and courier assignments
-    if (Array.isArray(state.shipments) && state.shipments.length > 0 && Array.isArray(serverAppState?.shipments) && serverAppState.shipments.length > 0) {
+    if (Array.isArray(state.shipments) && state.shipments.length > 0) {
       const oldShipmentsMap = new Map<string, any>(
-        serverAppState.shipments.map((s: any) => [s.id || s.trackingNumber, s])
+        Array.isArray(serverAppState?.shipments)
+          ? serverAppState.shipments.map((s: any) => [s.id || s.trackingNumber, s])
+          : []
       );
 
       for (const s of state.shipments) {
@@ -382,7 +453,7 @@ app.post("/api/sync/state", (req, res) => {
         const key = s.id || s.trackingNumber;
         const oldS = oldShipmentsMap.get(key);
 
-        if (!oldS) {
+        if (!oldS && oldShipmentsMap.size > 0) {
           // New shipment created
           sendWebPushToSubscribers({
             title: `📦 شحنة جديدة (#${s.trackingNumber || s.id})`,
@@ -390,7 +461,7 @@ app.post("/api/sync/state", (req, res) => {
             tag: `new-shipment-${key}`,
             data: { shipmentId: s.id, url: '/' },
           }).catch((e) => console.warn('New shipment push error:', e));
-        } else if (oldS.status !== s.status) {
+        } else if (oldS && oldS.status !== s.status) {
           // Status changed!
           sendWebPushToSubscribers({
             title: `🚚 تحديث حالة شحنة (#${s.trackingNumber || s.id})`,
@@ -398,7 +469,7 @@ app.post("/api/sync/state", (req, res) => {
             tag: `status-change-${key}-${Date.now()}`,
             data: { shipmentId: s.id, url: '/' },
           }).catch((e) => console.warn('Status change push error:', e));
-        } else if (s.assignedCourier?.id && oldS.assignedCourier?.id !== s.assignedCourier?.id) {
+        } else if (oldS && s.assignedCourier?.id && oldS.assignedCourier?.id !== s.assignedCourier?.id) {
           // Courier assigned/changed!
           sendWebPushToSubscribers({
             title: `🛵 تعيين مندوب للشحنة (#${s.trackingNumber || s.id})`,
@@ -446,6 +517,9 @@ app.post("/api/sync/state", (req, res) => {
 
       // Save automatic rolling backup snapshot
       saveBackupSnapshot(serverAppState, incomingTime);
+
+      // Broadcast state update INSTANTLY (< 50ms) to all connected SSE clients across devices
+      broadcastSseState(serverAppState, incomingTime, senderId);
     }
 
     return res.json({ success: true, timestamp: serverLastUpdated, state: serverAppState });
