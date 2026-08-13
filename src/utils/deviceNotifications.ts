@@ -155,26 +155,17 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
-// Small localStorage flag so we don't hammer the server with the same subscription every load
-const WEB_PUSH_SUBSCRIBED_KEY = 'bosta_web_push_subscribed_endpoint';
-
-// Subscribe user device to server-side remote Web Push (works when app/browser/site is completely
-// closed and the phone is locked — this is the mechanism that actually delivers notifications in
-// that case, since sendDeviceNotification() below only fires while the JS/tab is alive).
-//
-// `force` re-validates the subscription against the server even if we already have a cached
-// endpoint, and re-subscribes if the VAPID key changed or the old subscription is invalid.
+// Subscribe user device to server-side remote Web Push (works when app/browser is completely closed)
 export const subscribeUserToWebPush = async (
   user?: UserSession | null,
-  activeCourierId?: string,
-  force = false
-): Promise<boolean> => {
+  activeCourierId?: string
+) => {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-    return false;
+    return;
   }
 
   if (Notification.permission !== 'granted') {
-    return false;
+    return;
   }
 
   try {
@@ -182,33 +173,13 @@ export const subscribeUserToWebPush = async (
 
     // Fetch VAPID public key from Express server
     const res = await fetch('/api/push/vapid-public-key');
-    if (!res.ok) return false;
+    if (!res.ok) return;
     const { publicKey } = await res.json();
-    if (!publicKey) return false;
+    if (!publicKey) return;
 
     const applicationServerKey = urlBase64ToUint8Array(publicKey);
 
     let subscription = await reg.pushManager.getSubscription();
-
-    // If the subscription exists but was created with a different (old) VAPID key,
-    // it's dead weight — the server can no longer send to it. Drop it and re-subscribe.
-    if (subscription) {
-      const existingKey = subscription.options?.applicationServerKey
-        ? new Uint8Array(subscription.options.applicationServerKey as ArrayBuffer)
-        : null;
-      const keysMatch =
-        existingKey &&
-        existingKey.length === applicationServerKey.length &&
-        existingKey.every((b, i) => b === applicationServerKey[i]);
-
-      if (!keysMatch) {
-        try {
-          await subscription.unsubscribe();
-        } catch (e) {}
-        subscription = null;
-      }
-    }
-
     if (!subscription) {
       subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -216,15 +187,8 @@ export const subscribeUserToWebPush = async (
       });
     }
 
-    const cachedEndpoint = localStorage.getItem(WEB_PUSH_SUBSCRIBED_KEY);
-    if (!force && cachedEndpoint === subscription.endpoint) {
-      // Already registered this exact subscription with the server, nothing to do.
-      return true;
-    }
-
-    // Register Push Subscription on Express server so it can push to this device
-    // even while the app/tab/site is fully closed and the phone screen is locked.
-    const subscribeRes = await fetch('/api/push/subscribe', {
+    // Register Push Subscription on Express server
+    await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -234,43 +198,9 @@ export const subscribeUserToWebPush = async (
         courierId: activeCourierId || (user?.role === 'courier' ? user.id : undefined),
       }),
     });
-
-    if (subscribeRes.ok) {
-      localStorage.setItem(WEB_PUSH_SUBSCRIBED_KEY, subscription.endpoint);
-      console.log('✅ Registered device for remote Web Push notifications (works even when closed)');
-      return true;
-    }
-    return false;
+    console.log('✅ Registered device for remote Web Push notifications (works even when closed)');
   } catch (err) {
     console.warn('Web Push subscription skipped or failed:', err);
-    return false;
-  }
-};
-
-// Call this once when the app boots (after registerServiceWorker) to make sure an already-granted
-// user still has a live subscription on the server. Push subscriptions can silently expire/rotate
-// (browser updates, storage clears, etc.) — without this, notifications quietly stop arriving
-// while permission still shows "granted".
-export const ensureWebPushSubscriptionIsFresh = async (
-  user?: UserSession | null,
-  activeCourierId?: string
-) => {
-  if (typeof window === 'undefined') return;
-  if (getNotificationPermission() !== 'granted') return;
-  await subscribeUserToWebPush(user, activeCourierId, true);
-};
-
-export const isSubscribedToWebPush = async (): Promise<boolean> => {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-    return false;
-  }
-  try {
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) return false;
-    const sub = await reg.pushManager.getSubscription();
-    return !!sub;
-  } catch {
-    return false;
   }
 };
 
@@ -377,6 +307,15 @@ export const sendDeviceNotification = (
     }
   }
 
+  // Also send remote web push to all closed background devices via server
+  try {
+    fetch('/api/push/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, body, tag: dedupeKey, data }),
+    }).catch(() => {});
+  } catch (e) {}
+
   if (sound) {
     playNotificationSound();
   }
@@ -469,25 +408,15 @@ export const registerServiceWorker = (user?: UserSession | null, activeCourierId
     const register = () => {
       navigator.serviceWorker
         .register('/sw.js')
-        .then(async (reg) => {
+        .then((reg) => {
           console.log('ServiceWorker registered with scope:', reg.scope);
           if (Notification.permission === 'granted') {
-            await subscribeUserToWebPush(user, activeCourierId);
+            subscribeUserToWebPush(user, activeCourierId);
           }
         })
         .catch((err) => {
           console.log('ServiceWorker registration skipped or failed:', err);
         });
-
-      // Keep the subscription alive across sessions: browsers can silently invalidate
-      // a push subscription (e.g. `pushsubscriptionchange`, key rotation on the server, etc.).
-      // Re-verify and re-subscribe automatically instead of requiring the user to toggle
-      // notifications off/on again.
-      navigator.serviceWorker.ready.then((reg) => {
-        (reg as any).addEventListener?.('pushsubscriptionchange', () => {
-          subscribeUserToWebPush(user, activeCourierId, true);
-        });
-      });
     };
 
     if (document.readyState === 'complete') {
@@ -495,26 +424,6 @@ export const registerServiceWorker = (user?: UserSession | null, activeCourierId
     } else {
       window.addEventListener('load', register);
     }
-
-    // Also re-check whenever the app is brought back to the foreground / tab becomes visible,
-    // and once on initial load — this is what catches the "permission granted but subscription
-    // silently died" case so notifications keep arriving reliably, WhatsApp-style.
-    const revalidate = () => {
-      if (document.visibilityState === 'visible') {
-        ensureWebPushSubscriptionIsFresh(user, activeCourierId);
-      }
-    };
-    document.addEventListener('visibilitychange', revalidate);
-    window.addEventListener('focus', revalidate);
-    ensureWebPushSubscriptionIsFresh(user, activeCourierId);
   }
-};
-
-// Full setup helper: registers the service worker, and if permission is already granted,
-// makes sure the push subscription is registered/fresh. If permission hasn't been asked yet,
-// this does NOT prompt automatically (that must stay behind a user gesture per browser policy) —
-// call `requestNotificationPermission()` from a button/click handler for that.
-export const initializeDeviceNotifications = (user?: UserSession | null, activeCourierId?: string) => {
-  registerServiceWorker(user, activeCourierId);
 };
 

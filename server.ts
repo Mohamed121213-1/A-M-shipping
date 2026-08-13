@@ -313,6 +313,27 @@ app.post("/api/push/test", async (req, res) => {
   }
 });
 
+app.post("/api/push/notify", async (req, res) => {
+  try {
+    const { title, body, tag, data, courierId } = req.body || {};
+    if (!title) {
+      return res.status(400).json({ error: "عنوان الإشعار مطلوب" });
+    }
+
+    await sendWebPushToSubscribers({
+      title,
+      body: body || '',
+      tag: tag || `push-${Date.now()}`,
+      data: data || {},
+      targetCourierId: courierId,
+    });
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/sync/state", (req, res) => {
   res.json({
     state: serverAppState,
