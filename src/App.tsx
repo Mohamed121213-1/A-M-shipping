@@ -2012,6 +2012,7 @@ export default function App() {
                     onRequestPayout={handleRequestPayout}
                     couriers={couriers}
                     systemUsers={users}
+                    currentUser={currentUser}
                     onSettleCourierCustody={handleSettleCourierCustody}
                     onUpdateWallet={handleUpdateWallet}
                   />
