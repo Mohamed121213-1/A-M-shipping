@@ -41,8 +41,9 @@ const loadLocalState = <T,>(key: string, defaultValue: T): T => {
 
 export default function App() {
   const [shipments, setShipments] = useState<Shipment[]>(() => {
-    const saved = loadLocalState<Shipment[]>('bosta_shipments', []);
-    return sanitizeShipments(saved);
+    const saved = loadLocalState<Shipment[]>('bosta_shipments', INITIAL_SHIPMENTS);
+    const cleaned = sanitizeShipments(saved);
+    return cleaned.length > 0 ? cleaned : INITIAL_SHIPMENTS;
   });
 
   const [wallet, setWallet] = useState<MerchantWallet>(() => {
@@ -52,13 +53,15 @@ export default function App() {
 
   // Dynamic system entities customizable by Admin
   const [users, setUsers] = useState<UserSession[]>(() => {
-    const saved = loadLocalState<UserSession[]>('bosta_users', []);
-    return sanitizeUsers(saved);
+    const saved = loadLocalState<UserSession[]>('bosta_users', INITIAL_USERS);
+    const cleaned = sanitizeUsers(saved);
+    return cleaned.length > 0 ? cleaned : sanitizeUsers(INITIAL_USERS);
   });
 
   const [couriers, setCouriers] = useState<CourierInfo[]>(() => {
-    const saved = loadLocalState<CourierInfo[]>('bosta_couriers', []);
-    return sanitizeCouriers(saved);
+    const saved = loadLocalState<CourierInfo[]>('bosta_couriers', BOSTA_COURIERS);
+    const cleaned = sanitizeCouriers(saved);
+    return cleaned.length > 0 ? cleaned : BOSTA_COURIERS;
   });
 
   const [hubs, setHubs] = useState<HubInfo[]>(() =>

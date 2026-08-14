@@ -203,13 +203,20 @@ class SyncEngine {
       if (data && data.state && data.timestamp) {
         const remoteTime = Number(data.timestamp) || 0;
 
-        // Check if local storage currently has no shipments
+        // Check if local storage currently has shipments
         const localShipmentsRaw = localStorage.getItem('bosta_shipments');
         const localShipments = localShipmentsRaw ? JSON.parse(localShipmentsRaw) : [];
         const isLocalEmpty = !Array.isArray(localShipments) || localShipments.length === 0;
 
-        // If local is empty OR remoteTime >= latestTimestamp, adopt server state!
-        if (remoteTime > this.latestTimestamp || isLocalEmpty) {
+        const serverShipments = data.state?.shipments;
+        const isServerEmpty = !Array.isArray(serverShipments) || serverShipments.length === 0;
+
+        if (isServerEmpty && !isLocalEmpty) {
+          // If server is empty but client has local data, push local state to server!
+          if (this.latestStateCache) {
+            this.postStateToServer(this.latestStateCache, Date.now());
+          }
+        } else if (remoteTime > this.latestTimestamp || isLocalEmpty) {
           this.handleIncomingUpdate({
             ...data.state,
             timestamp: remoteTime || Date.now(),
