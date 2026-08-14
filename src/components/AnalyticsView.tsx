@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Shipment } from '../types';
+import { Shipment, CourierInfo } from '../types';
 import { BOSTA_COURIERS, BOSTA_HUBS } from '../data/mockData';
 import { 
   BarChart, 
@@ -45,16 +45,20 @@ import {
 
 interface AnalyticsViewProps {
   shipments: Shipment[];
+  couriers?: CourierInfo[];
 }
 
-export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
+export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, couriers: couriersProp }) => {
   // Navigation Sub-tab
-  const [activeSubTab, setActiveSubTab] = useState<'courier_reports' | 'merchant_reports' | 'logistics_overview'>('merchant_reports');
+  const [activeSubTab, setActiveSubTab] = useState<'courier_reports' | 'merchant_reports' | 'logistics_overview'>('courier_reports');
+
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const currentMonthStr = new Date().toISOString().substring(0, 7);
 
   // Filter state for Reports
-  const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'all'>('monthly');
-  const [selectedDate, setSelectedDate] = useState<string>('2026-07-29'); // Sample date matching mock data
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-07'); // Sample month
+  const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'all'>('all');
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
   const [selectedCourierId, setSelectedCourierId] = useState<string>('all');
   const [selectedHub, setSelectedHub] = useState<string>('all');
   const [selectedMerchant, setSelectedMerchant] = useState<string>('all');
@@ -124,7 +128,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
       }
 
       // Courier filter
-      if (selectedCourierId !== 'all' && s.assignedCourier?.id !== selectedCourierId) {
+      if (selectedCourierId !== 'all' && s.assignedCourier?.id !== selectedCourierId && s.assignedCourierId !== selectedCourierId) {
         return false;
       }
 
@@ -247,8 +251,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
   const courierPerformanceList = useMemo(() => {
     const courierMap = new Map();
 
-    // Populate default couriers
-    BOSTA_COURIERS.forEach(c => courierMap.set(c.id, c));
+    // Populate active system couriers passed as prop or fallback mock
+    const activeCouriers = (couriersProp && couriersProp.length > 0) ? couriersProp : BOSTA_COURIERS;
+    activeCouriers.forEach(c => courierMap.set(c.id, c));
     
     // Also capture any custom courier attached to shipments
     shipments.forEach(s => {
@@ -275,13 +280,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments }) => {
       couriers = couriers.filter(c => 
         c.name.toLowerCase().includes(q) || 
         c.phone.includes(q) ||
-        c.assignedHub.toLowerCase().includes(q)
+        (c.assignedHub && c.assignedHub.toLowerCase().includes(q))
       );
     }
 
     return couriers.map(courier => {
       // Find shipments assigned to this courier in the selected period
-      const courierShipments = filteredShipments.filter(s => s.assignedCourier?.id === courier.id);
+      const courierShipments = filteredShipments.filter(s => s.assignedCourier?.id === courier.id || s.assignedCourierId === courier.id);
 
       const delivered = courierShipments.filter(s => s.status === 'delivered').length;
       const partialDelivery = courierShipments.filter(s => s.status === 'partial_delivery').length;

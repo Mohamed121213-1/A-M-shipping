@@ -1922,7 +1922,7 @@ export default function App() {
                   />
                 )}
 
-                {activeTab === 'analytics' && <AnalyticsView shipments={userShipments} />}
+                {activeTab === 'analytics' && <AnalyticsView shipments={userShipments} couriers={couriers} />}
 
                 {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
 
@@ -2036,7 +2036,7 @@ export default function App() {
                   />
                 )}
 
-                {activeTab === 'analytics' && <AnalyticsView shipments={shipments} />}
+                {activeTab === 'analytics' && <AnalyticsView shipments={shipments} couriers={couriers} />}
 
                 {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
               </>

@@ -114,9 +114,9 @@ export const WalletView: React.FC<WalletViewProps> = ({
     setIsEditModalOpen(false);
   };
 
-  // All collected shipments (for merchant ledger)
+  // All completed & returned shipments (for merchant ledger)
   const collectedShipments = shipments.filter(
-    (s) => s.status === 'delivered' || s.status === 'partial_delivery' || ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid))
+    (s) => s.status === 'delivered' || s.status === 'partial_delivery' || s.status === 'refused' || s.status === 'returned'
   );
 
   // Unsettled collected shipments for courier custody
@@ -211,8 +211,16 @@ export const WalletView: React.FC<WalletViewProps> = ({
       const collected = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
       return sum + (s.financials.netPayout ?? Math.max(0, collected - s.financials.shippingFee));
     }
-    if ((s.status === 'refused' || s.status === 'returned') && (s.refusedDetails?.shippingFeePaid === false || s.financials.netPayout < 0)) {
-      return sum - s.financials.shippingFee;
+    if (s.status === 'refused' || s.status === 'returned') {
+      if (s.financials.netPayout !== undefined) {
+        return sum + s.financials.netPayout;
+      }
+      if (s.refusedDetails?.merchantDeductedAmount !== undefined) {
+        return sum - s.refusedDetails.merchantDeductedAmount;
+      }
+      if (s.refusedDetails?.shippingFeePaid === false) {
+        return sum - s.financials.shippingFee;
+      }
     }
     return sum;
   }, 0);
@@ -663,38 +671,57 @@ export const WalletView: React.FC<WalletViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {collectedShipments.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50/80">
-                      <td className="p-3 font-mono font-black text-slate-900">{s.trackingNumber}</td>
-                      <td className="p-3 font-bold text-slate-800">{s.recipient.name}</td>
-                      <td className="p-3 font-extrabold text-slate-900">
-                        {(s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid
-                          ? `${s.refusedDetails.amountCollected || s.financials.shippingFee} ج.م (شحن)`
-                          : `${s.financials.codAmount.toLocaleString()} ج.م`}
-                      </td>
-                      <td className="p-3 text-red-600 font-bold">
-                        -{s.financials.shippingFee} ج.م
-                      </td>
-                      <td className="p-3 font-black text-emerald-600">{(s.financials.codAmount - s.financials.shippingFee).toLocaleString()} ج.م</td>
-                      <td className="p-3">
-                        {s.status === 'partial_delivery' ? (
-                          <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-amber-300">
-                            استلام جزئي ({s.financials.codAmount} ج.م)
+                  {collectedShipments.map((s) => {
+                    let codVal = s.financials.codAmount;
+                    let feeVal = s.financials.shippingFee;
+                    let netPayoutVal = s.financials.netPayout ?? (codVal - feeVal);
+                    let noteText = 'جاهز للسحب';
+                    let badgeStyle = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+
+                    if (s.status === 'partial_delivery') {
+                      codVal = s.partialDetails?.partialCodAmount ?? codVal;
+                      netPayoutVal = s.financials.netPayout ?? Math.max(0, codVal - feeVal);
+                      noteText = `استلام جزئي (${codVal} ج.م)`;
+                      badgeStyle = 'bg-amber-100 text-amber-900 border-amber-300';
+                    } else if (s.status === 'refused' || s.status === 'returned') {
+                      const collected = s.refusedDetails?.amountCollected || 0;
+                      if (s.refusedDetails?.shippingFeePaid || collected >= feeVal) {
+                        codVal = feeVal;
+                        feeVal = feeVal;
+                        netPayoutVal = 0;
+                        noteText = 'العميل دفع الشحن ورجع (لا خصم على التاجر ✅)';
+                        badgeStyle = 'bg-emerald-100 text-emerald-950 border-emerald-300';
+                      } else if (s.refusedDetails?.partialShippingFeePaid || collected > 0) {
+                        codVal = collected;
+                        const deducted = s.refusedDetails?.merchantDeductedAmount ?? (feeVal - collected);
+                        netPayoutVal = -deducted;
+                        noteText = `دفع جزء (${collected} ج.م) — خصم المتبقي (${deducted} ج.م) من التاجر`;
+                        badgeStyle = 'bg-amber-100 text-amber-900 border-amber-300';
+                      } else {
+                        codVal = 0;
+                        netPayoutVal = -feeVal;
+                        noteText = `العميل لم يدفع شحن — (خصم ${feeVal} ج.م من التاجر ❌)`;
+                        badgeStyle = 'bg-rose-100 text-rose-950 border-rose-300';
+                      }
+                    }
+
+                    return (
+                      <tr key={s.id} className="hover:bg-slate-50/80">
+                        <td className="p-3 font-mono font-black text-slate-900">{s.trackingNumber}</td>
+                        <td className="p-3 font-bold text-slate-800">{s.recipient.name}</td>
+                        <td className="p-3 font-extrabold text-slate-900">{codVal.toLocaleString()} ج.م</td>
+                        <td className="p-3 text-red-600 font-bold">-{feeVal.toLocaleString()} ج.م</td>
+                        <td className={`p-3 font-black ${netPayoutVal < 0 ? 'text-rose-600 font-bold' : netPayoutVal === 0 ? 'text-slate-600' : 'text-emerald-600'}`}>
+                          {netPayoutVal > 0 ? `+${netPayoutVal.toLocaleString()}` : `${netPayoutVal.toLocaleString()}`} ج.m
+                        </td>
+                        <td className="p-3">
+                          <span className={`${badgeStyle} text-[10px] font-extrabold px-2.5 py-1 rounded-full border`}>
+                            {noteText}
                           </span>
-                        ) : (s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid) ? (
-                          <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-amber-300">
-                            {s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee)
-                              ? `دفع جزء من الشحن (${s.refusedDetails?.amountCollected} ج.م)`
-                              : `دفع الشحن ورجع (${s.refusedDetails?.amountCollected || s.financials.shippingFee} ج.م)`}
-                          </span>
-                        ) : (
-                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-emerald-200">
-                            جاهز للسحب
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
