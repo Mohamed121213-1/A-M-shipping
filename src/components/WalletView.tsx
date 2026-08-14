@@ -188,12 +188,33 @@ export const WalletView: React.FC<WalletViewProps> = ({
       return sum + s.financials.codAmount;
     }, 0);
 
+    const commType = courier.commissionType || 'fixed';
+    const commVal = courier.commissionValue ?? 20;
+
+    const pendingCommission = courierCollected.reduce((sum, s) => {
+      if (
+        s.status === 'delivered' ||
+        s.status === 'partial_delivery' ||
+        ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid))
+      ) {
+        if (commType === 'percentage') {
+          return sum + ((s.financials.shippingFee || 0) * commVal) / 100;
+        }
+        return sum + commVal;
+      }
+      return sum;
+    }, 0);
+
+    const netRequired = Math.max(0, totalCollected - pendingCommission);
+
     const isSettled = totalCollected === 0;
 
     return {
       courier,
       deliveredCount: courierCollected.length,
       totalCollected,
+      pendingCommission,
+      netRequired,
       isSettled,
       deliveredShipments: courierCollected
     };
@@ -201,6 +222,12 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
   const totalCouriersCashHeld = courierFinancials
     .reduce((sum, cf) => sum + cf.totalCollected, 0);
+
+  const totalCouriersCommission = courierFinancials
+    .reduce((sum, cf) => sum + cf.pendingCommission, 0);
+
+  const totalCouriersNetRequired = courierFinancials
+    .reduce((sum, cf) => sum + cf.netRequired, 0);
 
   // Calculate total net payouts earned by merchant across all completed/refused shipments
   const totalEarnedMerchantNetPayout = shipments.reduce((sum, s) => {
@@ -231,9 +258,9 @@ export const WalletView: React.FC<WalletViewProps> = ({
     if (onUpdateWallet) {
       onUpdateWallet({
         ...wallet,
-        pendingCod: totalCouriersCashHeld,
+        pendingCod: totalCouriersNetRequired,
       });
-      setSettlementSuccessMsg(`تمت مزامنة مبالغ قيد التحصيل بنجاح لتصبح (${totalCouriersCashHeld.toLocaleString()} ج.م) بناءً على عهدة المناديب الفعلية الحالية.`);
+      setSettlementSuccessMsg(`تمت مزامنة مبالغ قيد التحصيل بنجاح لتصبح (${totalCouriersNetRequired.toLocaleString()} ج.م) بناءً على الصافي المطلوب استلامه من المناديب بعد خصم عمولاتهم المستحقة (${totalCouriersCommission.toLocaleString()} ج.م) من أصل العهدة (${totalCouriersCashHeld.toLocaleString()} ج.م).`);
       setTimeout(() => setSettlementSuccessMsg(null), 5000);
     }
   };
@@ -253,10 +280,10 @@ export const WalletView: React.FC<WalletViewProps> = ({
     if (onUpdateWallet) {
       onUpdateWallet({
         ...wallet,
-        pendingCod: totalCouriersCashHeld,
+        pendingCod: totalCouriersNetRequired,
         availableBalance: expectedAvailableBalance,
       });
-      setSettlementSuccessMsg(`تمت المزامنة الشاملة للمحفظة بنجاح (العهدة: ${totalCouriersCashHeld.toLocaleString()} ج.م | الرصيد المتاح: ${expectedAvailableBalance.toLocaleString()} ج.م).`);
+      setSettlementSuccessMsg(`تمت المزامنة الشاملة للمحفظة بنجاح (العهدة الصافية: ${totalCouriersNetRequired.toLocaleString()} ج.م | الرصيد المتاح: ${expectedAvailableBalance.toLocaleString()} ج.م).`);
       setTimeout(() => setSettlementSuccessMsg(null), 5000);
     }
   };
@@ -273,11 +300,11 @@ export const WalletView: React.FC<WalletViewProps> = ({
     setTimeout(() => setPayoutSuccessMsg(''), 5000);
   };
 
-  const handleConfirmCourierSettlement = (courierId: string, courierName: string, amount: number) => {
+  const handleConfirmCourierSettlement = (courierId: string, courierName: string, netAmount: number, grossAmount: number, commission: number) => {
     if (onSettleCourierCustody) {
       onSettleCourierCustody(courierId);
     }
-    setSettlementSuccessMsg(`تم استلام وتوريد العهدة النقدية بمبلغ ${amount.toLocaleString()} ج.م من ${courierName} بنجاح، وتصفير حسابه وحذف الشحنات المسواة من عهدته!`);
+    setSettlementSuccessMsg(`تم استلام وتوريد صافي العهدة النقدية بمبلغ ${netAmount.toLocaleString()} ج.م من ${courierName} بنجاح (بعد خصم عمولته المستحقة ${commission.toLocaleString()} ج.م من أصل ${grossAmount.toLocaleString()} ج.م كاش محصل)، وتصفير حسابه وتصفية الشحنات!`);
     setTimeout(() => setSettlementSuccessMsg(null), 5000);
   };
 
@@ -524,17 +551,17 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-amber-100 uppercase tracking-wider block">
-                    مبالغ قيد التحصيل مع المندوبين (Pending COD):
+                    الصافي المطلوب توريده من عهدة المناديب:
                   </span>
                   {inlineEditingField !== 'pendingCod' && (
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         onClick={handleSyncPendingCodWithCouriers}
                         className="px-2 py-1 bg-white hover:bg-amber-50 text-amber-950 text-[11px] font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-                        title="مزامنة مبالغ قيد التحصيل مع إجمالي عهدة المناديب الحالية"
+                        title="مزامنة الصافي المطلوب توريده بعد خصم العمولة"
                       >
                         <RefreshCw className="w-3 h-3 text-amber-950" />
-                        <span>زامن ({totalCouriersCashHeld.toLocaleString()} ج.م)</span>
+                        <span>زامن الصافي ({totalCouriersNetRequired.toLocaleString()} ج.م)</span>
                       </button>
                       <button
                         onClick={() => handleStartInlineEdit('pendingCod', wallet.pendingCod)}
@@ -580,22 +607,20 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     <p className="text-3xl font-black mt-2">
                       {wallet.pendingCod.toLocaleString()} <span className="text-base font-bold">ج.م</span>
                     </p>
-                    {wallet.pendingCod !== totalCouriersCashHeld ? (
-                      <div className="mt-2 text-[11px] font-black text-amber-950 bg-amber-200/90 border border-amber-300 p-2 rounded-xl flex items-center justify-between gap-2">
-                        <span>💡 إجمالي عهدة المندوبين الفعلية الحالية: {totalCouriersCashHeld.toLocaleString()} ج.م</span>
-                        <button
-                          onClick={handleSyncPendingCodWithCouriers}
-                          className="underline text-amber-950 font-black hover:text-black cursor-pointer shrink-0"
-                        >
-                          مزامنة الآن ⚡
-                        </button>
+                    <div className="mt-2 text-[11px] font-bold text-amber-100 bg-amber-900/30 border border-amber-300/30 p-2 rounded-xl space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span>إجمالي الكاش باليد مع الكباتن:</span>
+                        <span className="font-mono font-black">{totalCouriersCashHeld.toLocaleString()} ج.م</span>
                       </div>
-                    ) : (
-                      <p className="text-xs text-amber-100 mt-2 flex items-center gap-1 font-bold">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-200 inline shrink-0" />
-                        مطابقة 100% مع عهدة المندوبين الحالية ({totalCouriersCashHeld.toLocaleString()} ج.م)
-                      </p>
-                    )}
+                      <div className="flex items-center justify-between text-amber-200">
+                        <span>خصم عمولة الكباتن المستحقة:</span>
+                        <span className="font-mono font-black">-{totalCouriersCommission.toLocaleString()} ج.م</span>
+                      </div>
+                      <div className="flex items-center justify-between text-white font-extrabold border-t border-amber-300/20 pt-1">
+                        <span>الصافي المطلوب تسليمه للخزينة:</span>
+                        <span className="font-mono font-black text-amber-200">{totalCouriersNetRequired.toLocaleString()} ج.م</span>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
@@ -780,7 +805,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
             </div>
 
             <div className="divide-y divide-slate-100">
-              {courierFinancials.map(({ courier, deliveredCount, totalCollected, isSettled, deliveredShipments: courierDelivered }) => (
+              {courierFinancials.map(({ courier, deliveredCount, totalCollected, pendingCommission, netRequired, isSettled, deliveredShipments: courierDelivered }) => (
                 <div key={courier.id} className="p-4 sm:p-5 hover:bg-slate-50/80 transition-colors space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
@@ -803,13 +828,27 @@ export const WalletView: React.FC<WalletViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-500 block font-bold">العهدة المباشرة المحصلة:</span>
-                        <span className="text-lg font-black text-amber-600">
+                    <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 pt-2 sm:pt-0">
+                      <div className="text-right bg-amber-50/60 p-2 rounded-xl border border-amber-200/60">
+                        <span className="text-[10px] text-amber-900 block font-bold">إجمالي الكاش المحصل:</span>
+                        <span className="text-sm font-black text-amber-800 font-mono">
                           {totalCollected.toLocaleString()} ج.م
                         </span>
-                        <span className="text-[10px] text-slate-400 block font-bold">({deliveredCount} شحنة تسليم)</span>
+                      </div>
+
+                      <div className="text-right bg-rose-50/60 p-2 rounded-xl border border-rose-200/60">
+                        <span className="text-[10px] text-rose-900 block font-bold">خصم عمولة المندوب:</span>
+                        <span className="text-sm font-black text-rose-700 font-mono">
+                          -{pendingCommission.toLocaleString()} ج.م
+                        </span>
+                      </div>
+
+                      <div className="text-right bg-blue-50/80 p-2 rounded-xl border border-blue-200/80">
+                        <span className="text-[10px] text-blue-950 block font-bold">الصافي المطلوب توريده:</span>
+                        <span className="text-lg font-black text-blue-900 font-mono">
+                          {netRequired.toLocaleString()} ج.م
+                        </span>
+                        <span className="text-[9px] text-slate-500 block font-bold">({deliveredCount} شحنة تسليم)</span>
                       </div>
 
                       {isSettled ? (
@@ -819,12 +858,12 @@ export const WalletView: React.FC<WalletViewProps> = ({
                         </div>
                       ) : (
                         <button
-                          onClick={() => handleConfirmCourierSettlement(courier.id, courier.name, totalCollected)}
-                          disabled={totalCollected <= 0}
-                          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5"
+                          onClick={() => handleConfirmCourierSettlement(courier.id, courier.name, netRequired, totalCollected, pendingCommission)}
+                          disabled={netRequired < 0 && totalCollected <= 0}
+                          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
                         >
                           <HandCoins className="w-4 h-4" />
-                          <span>استلام العهدة توريد للخزينة</span>
+                          <span>استلام الصافي ({netRequired.toLocaleString()} ج.م) توريد</span>
                         </button>
                       )}
                     </div>

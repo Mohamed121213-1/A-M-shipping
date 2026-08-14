@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Shipment, CourierInfo } from '../types';
+import { Shipment, CourierInfo, MerchantWallet, CompanyTransaction } from '../types';
 import { BOSTA_COURIERS, BOSTA_HUBS } from '../data/mockData';
 import { 
   BarChart, 
@@ -46,9 +46,16 @@ import {
 interface AnalyticsViewProps {
   shipments: Shipment[];
   couriers?: CourierInfo[];
+  wallet?: MerchantWallet;
+  companyTransactions?: CompanyTransaction[];
 }
 
-export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, couriers: couriersProp }) => {
+export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ 
+  shipments, 
+  couriers: couriersProp,
+  wallet,
+  companyTransactions = []
+}) => {
   // Navigation Sub-tab
   const [activeSubTab, setActiveSubTab] = useState<'courier_reports' | 'merchant_reports' | 'logistics_overview'>('courier_reports');
 
@@ -192,30 +199,55 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
       const totalShipments = merchantShipments.length;
 
       // Cash Collection COD calculation for Merchant
-      const totalCod = merchantShipments
-        .filter(s => s.status === 'delivered' || s.status === 'partial_delivery')
-        .reduce((sum, s) => {
-          if (s.status === 'partial_delivery' && s.partialDetails?.partialCodAmount) {
-            return sum + s.partialDetails.partialCodAmount;
-          }
-          return sum + (s.financials?.codAmount || 0);
-        }, 0);
+      const totalCod = merchantShipments.reduce((sum, s) => {
+        if (s.status === 'delivered') return sum + (s.financials?.codAmount || 0);
+        if (s.status === 'partial_delivery') return sum + ((s.partialDetails?.partialCodAmount ?? s.financials?.codAmount) || 0);
+        if ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid)) {
+          return sum + (s.refusedDetails?.amountCollected ?? (s.refusedDetails?.shippingFeePaid ? s.financials?.shippingFee || 0 : 0));
+        }
+        return sum;
+      }, 0);
 
       // Shipping fees deducted
       const shippingFees = merchantShipments
-        .filter(s => s.status === 'delivered' || s.status === 'partial_delivery')
+        .filter(s => s.status === 'delivered' || s.status === 'partial_delivery' || s.status === 'refused' || s.status === 'returned')
         .reduce((sum, s) => sum + (s.financials?.shippingFee || 0), 0);
 
-      // Net Payout to merchant (COD - Fees)
-      const netPayout = merchantShipments
-        .filter(s => s.status === 'delivered' || s.status === 'partial_delivery')
-        .reduce((sum, s) => {
-          const cod = (s.status === 'partial_delivery' && s.partialDetails?.partialCodAmount)
-            ? s.partialDetails.partialCodAmount
-            : (s.financials?.codAmount || 0);
+      // Net Payout to merchant across statuses
+      const netPayout = merchantShipments.reduce((sum, s) => {
+        if (s.status === 'delivered') {
+          return sum + Math.max(0, (s.financials?.codAmount || 0) - (s.financials?.shippingFee || 0));
+        }
+        if (s.status === 'partial_delivery') {
+          const cod = s.partialDetails?.partialCodAmount ?? (s.financials?.codAmount || 0);
+          return sum + Math.max(0, cod - (s.financials?.shippingFee || 0));
+        }
+        if (s.status === 'refused' || s.status === 'returned') {
+          const collected = s.refusedDetails?.amountCollected || 0;
           const fee = s.financials?.shippingFee || 0;
-          return sum + Math.max(0, cod - fee);
-        }, 0);
+          if (s.refusedDetails?.shippingFeePaid || collected >= fee) {
+            return sum; // Customer paid shipping, no deduction on merchant
+          } else if (s.refusedDetails?.partialShippingFeePaid || collected > 0) {
+            const deducted = s.refusedDetails?.merchantDeductedAmount ?? (fee - collected);
+            return sum - deducted;
+          } else {
+            return sum - fee; // Customer didn't pay shipping, deduct fee from merchant
+          }
+        }
+        return sum;
+      }, 0);
+
+      // Paid Out / Settled to merchant from company transactions or wallet
+      const merchantExpenseTxns = companyTransactions.filter(
+        t => t.type === 'expense' && (t.category === 'تسليم مستحقات تجار' || t.relatedMerchant) &&
+        (t.relatedMerchant?.toLowerCase() === merchant.storeName.toLowerCase() || merchantMap.size === 1)
+      );
+      const paidOutTxnsSum = merchantExpenseTxns.reduce((sum, t) => sum + t.amount, 0);
+      const paidOut = (wallet?.merchantName === merchant.storeName || merchantMap.size === 1)
+        ? Math.max(paidOutTxnsSum, wallet?.totalPaidOut || 0)
+        : paidOutTxnsSum;
+
+      const remainingBalance = Math.max(0, netPayout - paidOut);
 
       // Success Rate Calculation
       let successRate = 100;
@@ -242,10 +274,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
         totalCod,
         shippingFees,
         netPayout,
+        paidOut,
+        remainingBalance,
         successRate,
       };
     });
-  }, [filteredShipments, shipments, selectedMerchant, searchQuery]);
+  }, [filteredShipments, shipments, selectedMerchant, searchQuery, companyTransactions, wallet]);
 
   // Build Courier Performance Map based on filtered shipments
   const courierPerformanceList = useMemo(() => {
@@ -302,13 +336,37 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
       const totalAssigned = courierShipments.length;
 
       // Cash Collection COD calculation
-      const codCollected = courierShipments
-        .filter(s => s.status === 'delivered' || s.status === 'partial_delivery')
+      const codCollected = courierShipments.reduce((sum, s) => {
+        if (s.status === 'delivered') return sum + (s.financials?.codAmount || 0);
+        if (s.status === 'partial_delivery') return sum + ((s.partialDetails?.partialCodAmount ?? s.financials?.codAmount) || 0);
+        if ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid)) {
+          return sum + (s.refusedDetails?.amountCollected ?? (s.refusedDetails?.shippingFeePaid ? s.financials?.shippingFee || 0 : 0));
+        }
+        return sum;
+      }, 0);
+
+      // Settled COD (Already handed over to treasury)
+      const settledCod = courierShipments
+        .filter(s => s.isCourierSettled)
         .reduce((sum, s) => {
-          if (s.status === 'partial_delivery' && s.partialDetails?.partialCodAmount) {
-            return sum + s.partialDetails.partialCodAmount;
+          if (s.status === 'delivered') return sum + (s.financials?.codAmount || 0);
+          if (s.status === 'partial_delivery') return sum + ((s.partialDetails?.partialCodAmount ?? s.financials?.codAmount) || 0);
+          if ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid)) {
+            return sum + (s.refusedDetails?.amountCollected ?? (s.refusedDetails?.shippingFeePaid ? s.financials?.shippingFee || 0 : 0));
           }
-          return sum + (s.financials?.codAmount || 0);
+          return sum;
+        }, 0);
+
+      // Pending Custody (Still with courier)
+      const pendingCustody = courierShipments
+        .filter(s => !s.isCourierSettled && ['delivered', 'partial_delivery', 'refused', 'returned'].includes(s.status))
+        .reduce((sum, s) => {
+          if (s.status === 'delivered') return sum + (s.financials?.codAmount || 0);
+          if (s.status === 'partial_delivery') return sum + ((s.partialDetails?.partialCodAmount ?? s.financials?.codAmount) || 0);
+          if ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid)) {
+            return sum + (s.refusedDetails?.amountCollected ?? (s.refusedDetails?.shippingFeePaid ? s.financials?.shippingFee || 0 : 0));
+          }
+          return sum;
         }, 0);
 
       // Shipping fees collected
@@ -319,6 +377,25 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
       // Courier Commission Earned calculation
       const commType = courier.commissionType || 'fixed';
       const commVal = courier.commissionValue ?? 20;
+
+      // Pending commission specifically earned on unsettled shipments
+      const pendingCommission = courierShipments
+        .filter(s => !s.isCourierSettled && ['delivered', 'partial_delivery', 'refused', 'returned'].includes(s.status))
+        .reduce((sum, s) => {
+          if (
+            s.status === 'delivered' ||
+            s.status === 'partial_delivery' ||
+            ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid))
+          ) {
+            if (commType === 'percentage') {
+              return sum + ((s.financials?.shippingFee || 0) * commVal) / 100;
+            }
+            return sum + commVal;
+          }
+          return sum;
+        }, 0);
+
+      const pendingNetRequired = Math.max(0, pendingCustody - pendingCommission);
 
       const earnedCommission = courierShipments.reduce((sum, s) => {
         if (
@@ -362,6 +439,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
         totalReturnedCount,
         inProgress,
         codCollected: netCod,
+        settledCod,
+        pendingCustody,
+        pendingCommission,
+        pendingNetRequired,
         shippingFees,
         earnedCommission,
         netRequiredCash,
@@ -370,7 +451,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
         successRate,
       };
     });
-  }, [filteredShipments, shipments, selectedCourierId, selectedHub, searchQuery, reportPeriod]);
+  }, [filteredShipments, shipments, selectedCourierId, selectedHub, searchQuery, reportPeriod, couriersProp]);
 
   // Aggregates for Courier Reports
   const totalPeriodAssigned = courierPerformanceList.reduce((acc, c) => acc + c.totalAssigned, 0);
@@ -378,6 +459,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
   const totalPeriodReturned = courierPerformanceList.reduce((acc, c) => acc + c.totalReturnedCount, 0);
   const totalPeriodFailed = courierPerformanceList.reduce((acc, c) => acc + c.failedAttempt, 0);
   const totalPeriodCod = courierPerformanceList.reduce((acc, c) => acc + c.codCollected, 0);
+  const totalPeriodSettledCod = courierPerformanceList.reduce((acc, c) => acc + c.settledCod, 0);
+  const totalPeriodPendingCustody = courierPerformanceList.reduce((acc, c) => acc + c.pendingCustody, 0);
+  const totalPeriodPendingCommission = courierPerformanceList.reduce((acc, c) => acc + c.pendingCommission, 0);
+  const totalPeriodPendingNetRequired = courierPerformanceList.reduce((acc, c) => acc + c.pendingNetRequired, 0);
   const totalPeriodShippingFees = courierPerformanceList.reduce((acc, c) => acc + c.shippingFees, 0);
   const totalPeriodCommission = courierPerformanceList.reduce((acc, c) => acc + c.earnedCommission, 0);
   const totalPeriodNetRequired = courierPerformanceList.reduce((acc, c) => acc + c.netRequiredCash, 0);
@@ -393,6 +478,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
   const totalMerchantCod = merchantPerformanceList.reduce((acc, m) => acc + m.totalCod, 0);
   const totalMerchantShippingFees = merchantPerformanceList.reduce((acc, m) => acc + m.shippingFees, 0);
   const totalMerchantNetPayout = merchantPerformanceList.reduce((acc, m) => acc + m.netPayout, 0);
+  const totalMerchantPaidOut = merchantPerformanceList.reduce((acc, m) => acc + m.paidOut, 0);
+  const totalMerchantRemainingBalance = merchantPerformanceList.reduce((acc, m) => acc + m.remainingBalance, 0);
 
   // Bar Chart Data for Couriers
   const courierChartData = courierPerformanceList.map(c => ({
@@ -799,20 +886,20 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
       {activeSubTab === 'merchant_reports' && (
         <div className="space-y-6">
           {/* Merchant Metric Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3.5">
             {/* Total Merchant Orders */}
-            <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs space-y-2 relative overflow-hidden">
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-slate-500">إجمالي شحنات التجار</span>
-                <div className="w-9 h-9 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center">
-                  <Package className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center">
+                  <Package className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900">
+              <div className="text-xl sm:text-2xl font-black text-slate-900">
                 {totalMerchantShipmentsCount} <span className="text-xs font-extrabold text-slate-500">أوردر</span>
               </div>
               <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold pt-1">
-                <span>توزيع عبر التجار</span>
+                <span>المتاجر:</span>
                 <span className="bg-red-50 border border-red-200 text-red-700 px-2 py-0.5 rounded-full font-extrabold">
                   {merchantPerformanceList.length} تاجر
                 </span>
@@ -820,14 +907,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
             </div>
 
             {/* Delivered Count & Success Rate */}
-            <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs space-y-2 relative overflow-hidden">
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-slate-500">التسليم الناجح</span>
-                <div className="w-9 h-9 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <CheckCircle2 className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-emerald-700">
+              <div className="text-xl sm:text-2xl font-black text-emerald-700">
                 {totalMerchantDeliveredCount} <span className="text-xs font-extrabold text-slate-500">تسليم</span>
               </div>
               <div className="flex items-center justify-between text-[11px] text-emerald-600 font-bold pt-1">
@@ -839,36 +926,66 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
             </div>
 
             {/* Total COD Collection */}
-            <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs space-y-2 relative overflow-hidden">
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-slate-500">إجمالي كاش التحصيل (COD)</span>
-                <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
-                  <DollarSign className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-xl sm:text-3xl font-black text-amber-700">
+              <div className="text-lg sm:text-2xl font-black text-amber-700">
                 {totalMerchantCod.toLocaleString()} <span className="text-xs font-extrabold text-slate-500">ج.م</span>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+              <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
                 <span>خصم الشحن: {totalMerchantShippingFees.toLocaleString()} ج.م</span>
-                <span className="text-amber-800 font-extrabold">تحصيل إجمالي</span>
               </div>
             </div>
 
-            {/* Net Payout to Merchant */}
-            <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs space-y-2 relative overflow-hidden bg-gradient-to-br from-white to-emerald-50/40">
+            {/* Net Payout Earned */}
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-emerald-900">الصافي المستحق للتجار</span>
-                <div className="w-9 h-9 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                  <Wallet className="w-5 h-5" />
+                <span className="text-xs font-extrabold text-slate-600">إجمالي المستحقات المكتسبة</span>
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center">
+                  <Receipt className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-xl sm:text-3xl font-black text-emerald-700">
-                {totalMerchantNetPayout.toLocaleString()} <span className="text-xs font-extrabold text-slate-600">ج.م</span>
+              <div className="text-lg sm:text-2xl font-black text-blue-800 font-mono">
+                {totalMerchantNetPayout.toLocaleString()} <span className="text-xs font-extrabold text-slate-500">ج.م</span>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-emerald-800 font-extrabold pt-1">
-                <span>جاهز للتسوية الفورية</span>
-                <span className="bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">صافي محول</span>
+              <div className="text-[10px] text-slate-500 font-bold pt-1">
+                الصافي الإجمالي للتجار
+              </div>
+            </div>
+
+            {/* Paid Out to Merchant */}
+            <div className="bg-white border border-emerald-200 bg-emerald-50/30 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-emerald-900">المسدد/المحول للتجار بالفعل</span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-lg sm:text-2xl font-black text-emerald-700 font-mono">
+                {totalMerchantPaidOut.toLocaleString()} <span className="text-xs font-extrabold text-slate-600">ج.م</span>
+              </div>
+              <div className="text-[10px] text-emerald-800 font-bold pt-1">
+                المسحوبات المسلمة
+              </div>
+            </div>
+
+            {/* Remaining Balance */}
+            <div className="bg-white border border-amber-300 bg-amber-50/40 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-amber-900">المستحقات المعلقة المتاحة</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                  <Wallet className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-lg sm:text-2xl font-black text-amber-800 font-mono">
+                {totalMerchantRemainingBalance.toLocaleString()} <span className="text-xs font-extrabold text-slate-600">ج.م</span>
+              </div>
+              <div className="text-[10px] text-amber-800 font-bold pt-1">
+                متاح للسحب والتسوية
               </div>
             </div>
           </div>
@@ -908,10 +1025,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
               <div>
                 <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
                   <Store className="w-5 h-5 text-red-600" />
-                  تقرير كشف حساب وتسويات التجار
+                  تقرير كشف حساب وتسويات التجار المحدث باللحظة
                 </h3>
                 <p className="text-xs font-semibold text-slate-500 mt-1">
-                  تقرير رسمي يوضح إجمالي الشحنات والتسليمات والتحصيل والصافي المستحق لكل متجر/تاجر
+                  تقرير رسمي يوضح إجمالي الشحنات، التحصيل، الصافي المكتسب، المسدد بالفعل، والرصيد المتبقي المعلق لكل تاجر
                 </p>
               </div>
 
@@ -931,31 +1048,34 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
               <table className="w-full text-right text-xs">
                 <thead className="bg-slate-900 text-slate-200 font-black border-b border-slate-800">
                   <tr>
-                    <th className="p-3.5">اسم المتجر / التاجر</th>
-                    <th className="p-3.5">المسؤول والتواصل</th>
-                    <th className="p-3.5 text-center">إجمالي الأوردرات</th>
-                    <th className="p-3.5 text-center bg-emerald-950/60 text-emerald-400">التسليم الناجح</th>
-                    <th className="p-3.5 text-center bg-rose-950/60 text-rose-400">المرتجع والرفض</th>
-                    <th className="p-3.5 bg-amber-950/60 text-amber-400">إجمالي الكاش (COD)</th>
-                    <th className="p-3.5 text-center">مصاريف الشحن</th>
-                    <th className="p-3.5 bg-emerald-900 text-white text-left">الصافي المستحق للتاجر</th>
-                    <th className="p-3.5 text-center">نسبة النجاح</th>
+                    <th className="p-3">اسم المتجر / التاجر</th>
+                    <th className="p-3">المسؤول والتواصل</th>
+                    <th className="p-3 text-center">إجمالي الأوردرات</th>
+                    <th className="p-3 text-center bg-emerald-950/60 text-emerald-400">التسليم الناجح</th>
+                    <th className="p-3 text-center bg-rose-950/60 text-rose-400">المرتجع والرفض</th>
+                    <th className="p-3 bg-amber-950/60 text-amber-400">الكاش (COD)</th>
+                    <th className="p-3 text-center">خصم الشحن</th>
+                    <th className="p-3 bg-blue-950 text-blue-300">الصافي المكتسب</th>
+                    <th className="p-3 bg-emerald-900 text-emerald-300">المسدد بالفعل 💸</th>
+                    <th className="p-3 bg-amber-900 text-amber-300">المتبقي بالسحب ⏳</th>
+                    <th className="p-3 text-center">حالة السداد</th>
+                    <th className="p-3 text-center">نسبة النجاح</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-800">
                   {merchantPerformanceList.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="text-center py-10 text-slate-500 font-bold">
+                      <td colSpan={12} className="text-center py-10 text-slate-500 font-bold">
                         لا توجد بيانات تجار مطابقة للفلترة والبحث المختارة.
                       </td>
                     </tr>
                   ) : (
                     merchantPerformanceList.map((m) => (
                       <tr key={m.storeName} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-3.5">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-9 h-9 rounded-xl bg-red-50 text-red-600 border border-red-200 flex items-center justify-center shrink-0">
-                              <Store className="w-4 h-4" />
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 border border-red-200 flex items-center justify-center shrink-0">
+                              <Store className="w-3.5 h-3.5" />
                             </div>
                             <div>
                               <div className="font-black text-slate-900 text-xs">{m.storeName}</div>
@@ -963,28 +1083,47 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
                             </div>
                           </div>
                         </td>
-                        <td className="p-3.5 text-slate-600">
+                        <td className="p-3 text-slate-600">
                           <div className="font-extrabold text-slate-800">{m.contactName}</div>
                           <div className="text-[11px] text-slate-500 font-mono dir-ltr text-right">{m.phone}</div>
                         </td>
-                        <td className="p-3.5 text-center font-black text-slate-900">{m.totalShipments}</td>
-                        <td className="p-3.5 text-center font-extrabold text-emerald-700 bg-emerald-50/40">
+                        <td className="p-3 text-center font-black text-slate-900">{m.totalShipments}</td>
+                        <td className="p-3 text-center font-extrabold text-emerald-700 bg-emerald-50/40">
                           {m.totalDeliveredCount}
                         </td>
-                        <td className="p-3.5 text-center font-extrabold text-rose-600 bg-rose-50/40">
+                        <td className="p-3 text-center font-extrabold text-rose-600 bg-rose-50/40">
                           {m.totalReturnedCount}
                         </td>
-                        <td className="p-3.5 font-extrabold text-slate-900 bg-amber-50/40">
+                        <td className="p-3 font-extrabold text-slate-900 bg-amber-50/40">
                           <span className="text-amber-800 font-black">{m.totalCod.toLocaleString()} ج.م</span>
                         </td>
-                        <td className="p-3.5 text-center font-bold text-slate-600">
+                        <td className="p-3 text-center font-bold text-slate-600">
                           {m.shippingFees.toLocaleString()} ج.م
                         </td>
-                        <td className="p-3.5 text-left bg-emerald-50/60 font-black">
-                          <span className="text-emerald-800 text-sm">{m.netPayout.toLocaleString()} ج.م</span>
+                        <td className="p-3 font-black text-blue-900 bg-blue-50/50 font-mono">
+                          {m.netPayout.toLocaleString()} ج.م
                         </td>
-                        <td className="p-3.5 text-center">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black ${
+                        <td className="p-3 font-black text-emerald-800 bg-emerald-50/60 font-mono">
+                          {m.paidOut.toLocaleString()} ج.م
+                        </td>
+                        <td className="p-3 font-black text-amber-900 bg-amber-100/60 font-mono">
+                          {m.remainingBalance.toLocaleString()} ج.م
+                        </td>
+                        <td className="p-3 text-center">
+                          {m.remainingBalance <= 0 && m.netPayout > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              مُسدد بالكامل ✅
+                            </span>
+                          ) : m.remainingBalance > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                              متبقي للسحب ⏳
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-[10px]">—</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${
                             m.successRate >= 90 
                               ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
                               : m.successRate >= 70
@@ -1000,16 +1139,18 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
                 </tbody>
                 <tfoot className="bg-slate-900 text-white font-extrabold text-xs">
                   <tr>
-                    <td colSpan={2} className="p-3.5 text-right font-black">
+                    <td colSpan={2} className="p-3 text-right font-black">
                       الإجمالي الكلي للتجار ({reportPeriod === 'daily' ? selectedDate : reportPeriod === 'monthly' ? selectedMonth : 'الكل'}):
                     </td>
-                    <td className="p-3.5 text-center font-black text-white">{totalMerchantShipmentsCount}</td>
-                    <td className="p-3.5 text-center font-black text-emerald-400 bg-emerald-950/80">{totalMerchantDeliveredCount}</td>
-                    <td className="p-3.5 text-center font-black text-rose-400 bg-rose-950/80">{totalMerchantReturnedCount}</td>
-                    <td className="p-3.5 font-black text-amber-400 bg-amber-950/80">{totalMerchantCod.toLocaleString()} ج.م</td>
-                    <td className="p-3.5 text-center font-black text-slate-300">{totalMerchantShippingFees.toLocaleString()} ج.م</td>
-                    <td className="p-3.5 text-left font-black text-emerald-300 text-sm bg-emerald-950/90">{totalMerchantNetPayout.toLocaleString()} ج.م</td>
-                    <td className="p-3.5"></td>
+                    <td className="p-3 text-center font-black text-white">{totalMerchantShipmentsCount}</td>
+                    <td className="p-3 text-center font-black text-emerald-400 bg-emerald-950/80">{totalMerchantDeliveredCount}</td>
+                    <td className="p-3 text-center font-black text-rose-400 bg-rose-950/80">{totalMerchantReturnedCount}</td>
+                    <td className="p-3 font-black text-amber-400 bg-amber-950/80">{totalMerchantCod.toLocaleString()} ج.م</td>
+                    <td className="p-3 text-center font-black text-slate-300">{totalMerchantShippingFees.toLocaleString()} ج.م</td>
+                    <td className="p-3 font-black text-blue-300 bg-blue-950/90 font-mono">{totalMerchantNetPayout.toLocaleString()} ج.م</td>
+                    <td className="p-3 font-black text-emerald-300 bg-emerald-950/90 font-mono">{totalMerchantPaidOut.toLocaleString()} ج.م</td>
+                    <td className="p-3 font-black text-amber-300 bg-amber-950/90 font-mono">{totalMerchantRemainingBalance.toLocaleString()} ج.م</td>
+                    <td className="p-3" colSpan={2}></td>
                   </tr>
                 </tfoot>
               </table>
@@ -1130,7 +1271,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
       {activeSubTab === 'courier_reports' && (
         <div className="space-y-6">
           {/* Period Summary Metric Cards Row */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
             {/* Delivered Shipments Metric */}
             <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
               <div className="flex items-center justify-between">
@@ -1143,9 +1284,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
                 {totalPeriodDelivered} <span className="text-xs font-extrabold text-slate-500">طرد</span>
               </div>
               <div className="flex items-center justify-between text-[11px] text-emerald-600 font-bold pt-1">
-                <span>ناجح %100</span>
+                <span>إجاز المندوبين</span>
                 <span className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                  %{overallSuccessRate} إنجاز
+                  %{overallSuccessRate} نجاح
                 </span>
               </div>
             </div>
@@ -1158,7 +1299,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
                   <DollarSign className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-amber-700">
+              <div className="text-lg sm:text-2xl font-black text-amber-700">
                 {totalPeriodCod.toLocaleString()} <span className="text-xs font-extrabold text-slate-500">ج.م</span>
               </div>
               <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
@@ -1166,51 +1307,67 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
               </div>
             </div>
 
-            {/* Total Courier Commissions Metric */}
+            {/* Settled COD (Handed over to Treasury) */}
             <div className="bg-white border border-emerald-200 bg-emerald-50/20 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-emerald-900">عمولات المناديب المستحقة</span>
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                <span className="text-xs font-black text-emerald-900">المورد بالفعل للخزينة</span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-lg sm:text-2xl font-black text-emerald-700 font-mono">
+                {totalPeriodSettledCod.toLocaleString()} <span className="text-xs font-extrabold text-slate-600">ج.م</span>
+              </div>
+              <div className="text-[10px] text-emerald-800 font-bold pt-1">
+                تم الاستلام وتوريد العهدة
+              </div>
+            </div>
+
+            {/* Pending Custody (Gross Cash with Courier) */}
+            <div className="bg-white border border-amber-300 bg-amber-50/30 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-amber-900">العهدة المعلقة باليد (كاش)</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-lg sm:text-2xl font-black text-amber-800 font-mono">
+                {totalPeriodPendingCustody.toLocaleString()} <span className="text-xs font-extrabold text-slate-600">ج.م</span>
+              </div>
+              <div className="text-[10px] text-amber-900 font-bold pt-1 flex items-center justify-between">
+                <span>إجمالي الكاش باليد</span>
+              </div>
+            </div>
+
+            {/* Deducted Pending Commission */}
+            <div className="bg-white border border-rose-200 bg-rose-50/20 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-rose-900">خصم عمولة العهدة</span>
+                <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center">
                   <Receipt className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-emerald-700 font-mono">
-                +{totalPeriodCommission.toLocaleString()} <span className="text-xs font-extrabold text-slate-500">ج.م</span>
+              <div className="text-lg sm:text-2xl font-black text-rose-700 font-mono">
+                -{totalPeriodPendingCommission.toLocaleString()} <span className="text-xs font-extrabold text-slate-500">ج.م</span>
               </div>
-              <div className="text-[10px] text-emerald-700 font-bold pt-1">
-                مستحقة الخصم للمندوبين
+              <div className="text-[10px] text-rose-800 font-bold pt-1">
+                تستقطع لصالح المندوب
               </div>
             </div>
 
-            {/* Net Required Handover Cash Metric */}
-            <div className="bg-white border border-amber-300 bg-amber-50/30 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
+            {/* Net Required Custody Handover */}
+            <div className="bg-white border border-blue-300 bg-blue-50/30 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-amber-900">الصافي المطلوب توريده</span>
-                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center">
+                <span className="text-xs font-black text-blue-950">الصافي المطلوب توريده 🎯</span>
+                <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
                   <Wallet className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-amber-900 font-mono">
-                {totalPeriodNetRequired.toLocaleString()} <span className="text-xs font-extrabold text-slate-600">ج.م</span>
+              <div className="text-lg sm:text-2xl font-black text-blue-900 font-mono">
+                {totalPeriodPendingNetRequired.toLocaleString()} <span className="text-xs font-extrabold text-slate-600">ج.م</span>
               </div>
-              <div className="text-[10px] text-amber-800 font-bold pt-1">
-                الصافي للشركة بعد العمولات
-              </div>
-            </div>
-
-            {/* Total Handled / Couriers Count Metric */}
-            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-1.5 relative overflow-hidden col-span-2 md:col-span-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-slate-500">الشحنات والمناديب</span>
-                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
-                  <Truck className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900">
-                {totalPeriodAssigned} <span className="text-xs font-extrabold text-slate-500">شحنة</span>
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                <span>عدد المناديب: {courierPerformanceList.length}</span>
+              <div className="text-[10px] text-blue-800 font-bold pt-1">
+                الصافي المطلوب استلامه بالخزينة
               </div>
             </div>
           </div>
@@ -1287,10 +1444,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
               <div>
                 <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
                   <UserCheck className="w-5 h-5 text-red-600" />
-                  جدول تقرير أداء وتسليمات وتحصيل المناديب التفصيلي
+                  جدول تقرير أداء وتسليمات وتحصيل وتوريد عهدة المناديب
                 </h3>
                 <p className="text-xs font-semibold text-slate-500 mt-1">
-                  تقرير رسمي يوضح التفاصيل المالية وعدديات التسليم والمرتجع لكل كابتن توصيل بالفترة المختارة
+                  تقرير رسمي يوضح الكاش المحصل، المورد للخزينة بالفعل، والعهدة المتبقية باليد لكل مندوب توصيل
                 </p>
               </div>
 
@@ -1316,14 +1473,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
                     <th className="p-3">المستودع / الفرع</th>
                     <th className="p-3 text-center">إجمالي المسند</th>
                     <th className="p-3 text-center bg-emerald-950/60 text-emerald-400">التسليم الناجح</th>
-                    <th className="p-3 text-center">استلام جزئي</th>
                     <th className="p-3 text-center bg-rose-950/60 text-rose-400">المرتجع والرفض</th>
                     <th className="p-3 bg-amber-950/60 text-amber-400">الكاش المحصل (COD)</th>
-                    <th className="p-3 text-center bg-emerald-950/80 text-emerald-300">نوع العمولة</th>
-                    <th className="p-3 text-center bg-emerald-950/80 text-emerald-300">عمولة المندوب</th>
-                    <th className="p-3 bg-amber-900/80 text-amber-300">الصافي المطلوب توريده</th>
+                    <th className="p-3 bg-emerald-900 text-emerald-300">المورد للخزينة ✅</th>
+                    <th className="p-3 bg-amber-900 text-amber-300">العهدة المتبقية (كاش) ⏳</th>
+                    <th className="p-3 text-center bg-rose-950 text-rose-300">خصم عمولة العهدة 💸</th>
+                    <th className="p-3 bg-blue-900 text-blue-200">الصافي المطلوب 🎯</th>
+                    <th className="p-3 text-center">حالة التوريد</th>
                     <th className="p-3 text-center">نسبة النجاح</th>
-                    <th className="p-3 text-center">التقييم</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-800">
@@ -1355,9 +1512,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
                         <td className="p-3 text-center font-extrabold text-emerald-700 bg-emerald-50/40">
                           {c.totalDeliveredCount}
                         </td>
-                        <td className="p-3 text-center font-bold text-amber-700">
-                          {c.partialDelivery}
-                        </td>
                         <td className="p-3 text-center font-extrabold text-rose-600 bg-rose-50/40">
                           {c.totalReturnedCount}
                         </td>
@@ -1365,14 +1519,30 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
                           <span className="text-amber-800 text-xs font-black block">{c.codCollected.toLocaleString()} ج.م</span>
                           <span className="text-[9px] text-slate-500 block">شحن: {c.shippingFees} ج.م</span>
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-600 bg-emerald-50/20 text-[11px]">
-                          {c.commissionType === 'percentage' ? `${c.commissionValue}% من الشحن` : `${c.commissionValue} ج.م / أوردر`}
+                        <td className="p-3 font-black text-emerald-800 bg-emerald-50/60 font-mono text-xs">
+                          {c.settledCod.toLocaleString()} ج.م
                         </td>
-                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/60 font-mono text-xs">
-                          +{c.earnedCommission.toLocaleString()} ج.م
+                        <td className="p-3 font-black text-amber-900 bg-amber-100/60 font-mono text-xs">
+                          {c.pendingCustody.toLocaleString()} ج.م
                         </td>
-                        <td className="p-3 font-black text-amber-900 bg-amber-100/50 font-mono text-xs">
-                          {c.netRequiredCash.toLocaleString()} ج.م
+                        <td className="p-3 text-center font-black text-rose-700 bg-rose-50/60 font-mono text-xs">
+                          -{c.pendingCommission.toLocaleString()} ج.م
+                        </td>
+                        <td className="p-3 font-black text-blue-950 bg-blue-50 font-mono text-xs">
+                          {c.pendingNetRequired.toLocaleString()} ج.م
+                        </td>
+                        <td className="p-3 text-center">
+                          {c.pendingCustody <= 0 && c.codCollected > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              تم التوريد بالكامل ✅
+                            </span>
+                          ) : c.pendingCustody > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                              مطلوب {c.pendingNetRequired.toLocaleString()} ج.م ⏳
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-[10px]">—</span>
+                          )}
                         </td>
                         <td className="p-3 text-center">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
@@ -1383,12 +1553,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
                               : 'bg-rose-100 text-rose-800 border border-rose-300'
                           }`}>
                             %{c.successRate}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-lg text-[11px]">
-                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                            {c.rating}
                           </span>
                         </td>
                       </tr>
@@ -1403,19 +1567,21 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ shipments, courier
                     </td>
                     <td className="p-3 text-center font-black text-white">{totalPeriodAssigned}</td>
                     <td className="p-3 text-center font-black text-emerald-400 bg-emerald-950/80">{totalPeriodDelivered}</td>
-                    <td className="p-3 text-center font-black text-amber-400">
-                      {courierPerformanceList.reduce((acc, c) => acc + c.partialDelivery, 0)}
-                    </td>
                     <td className="p-3 text-center font-black text-rose-400 bg-rose-950/80">{totalPeriodReturned}</td>
                     <td className="p-3 font-black text-amber-400 bg-amber-950/80">
                       {totalPeriodCod.toLocaleString()} ج.م
                     </td>
-                    <td className="p-3 text-center text-slate-400 text-[10px]">-</td>
-                    <td className="p-3 text-center font-black text-emerald-400 bg-emerald-950/80 font-mono">
-                      +{totalPeriodCommission.toLocaleString()} ج.م
+                    <td className="p-3 font-black text-emerald-300 bg-emerald-950/90 font-mono">
+                      {totalPeriodSettledCod.toLocaleString()} ج.م
                     </td>
                     <td className="p-3 font-black text-amber-300 bg-amber-950/90 font-mono">
-                      {totalPeriodNetRequired.toLocaleString()} ج.م
+                      {totalPeriodPendingCustody.toLocaleString()} ج.م
+                    </td>
+                    <td className="p-3 text-center font-black text-rose-400 bg-rose-950/80 font-mono">
+                      -{totalPeriodPendingCommission.toLocaleString()} ج.م
+                    </td>
+                    <td className="p-3 font-black text-blue-200 bg-blue-950 font-mono">
+                      {totalPeriodPendingNetRequired.toLocaleString()} ج.م
                     </td>
                     <td className="p-3 text-center font-black text-emerald-400">
                       %{overallSuccessRate}
