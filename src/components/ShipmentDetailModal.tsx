@@ -13,6 +13,7 @@ interface ShipmentDetailModalProps {
   couriers?: CourierInfo[];
   isHighlighted?: boolean;
   currentRole?: AppUserRole;
+  onToggleMerchantSettlement?: (shipmentId: string, isSettled: boolean) => void;
 }
 
 export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
@@ -25,6 +26,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   couriers = [],
   isHighlighted,
   currentRole = 'merchant',
+  onToggleMerchantSettlement,
 }) => {
   if (!shipment) return null;
 
@@ -361,6 +363,51 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                   <p>المبلغ المحصل من العميل (عهدة المندوب): <span className="font-bold">{shipment.refusedDetails.amountCollected} ج.م</span></p>
                   <p>خصم مصاريف الشحن المقتطعة من التاجر: <span className="font-bold text-rose-700">{shipment.refusedDetails.merchantDeductedAmount ?? Math.max(0, shipment.financials.shippingFee - shipment.refusedDetails.amountCollected)} ج.م</span></p>
                   {shipment.refusedDetails.reason && <p className="text-[11px] opacity-80">السبب: {shipment.refusedDetails.reason}</p>}
+                </div>
+              )}
+
+              {/* Merchant Payout Settlement Details */}
+              {(shipment.status === 'delivered' || shipment.status === 'partial_delivery' || shipment.status === 'refused' || shipment.status === 'returned') && (
+                <div className={`p-3 rounded-xl border text-xs space-y-2 ${
+                  shipment.isMerchantSettled || shipment.financials.paidStatus === 'settled'
+                    ? 'bg-blue-50/80 border-blue-200 text-blue-950'
+                    : 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                }`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {shipment.isMerchantSettled || shipment.financials.paidStatus === 'settled' ? (
+                        <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                      ) : (
+                        <ArrowRight className="w-4 h-4 text-emerald-600 shrink-0 rotate-45" />
+                      )}
+                      <div>
+                        <span className="font-black text-xs block">
+                          {shipment.isMerchantSettled || shipment.financials.paidStatus === 'settled'
+                            ? 'تم تحويل واستلام المستحقات للتاجر (تم الصرف) ✅'
+                            : 'جاهز للسحب والمطالبة الفورية ⚡'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-semibold">
+                          {shipment.isMerchantSettled || shipment.financials.paidStatus === 'settled'
+                            ? (shipment.financials.settlementDate ? `تم التحويل بتاريخ: ${new Date(shipment.financials.settlementDate).toLocaleDateString('ar-EG')}` : 'تمت تصفية وتحويل أرباح هذا الأوردر بنجاح')
+                            : 'متاح للتاجر طلب تحويل رصيد هذا الأوردر في أي وقت'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {onToggleMerchantSettlement && (currentRole === 'admin' || currentRole === 'hub_manager') && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleMerchantSettlement(shipment.id, !(shipment.isMerchantSettled || shipment.financials.paidStatus === 'settled'))}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-black border transition-all cursor-pointer whitespace-nowrap ${
+                          shipment.isMerchantSettled || shipment.financials.paidStatus === 'settled'
+                            ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-xs'
+                        }`}
+                      >
+                        {shipment.isMerchantSettled || shipment.financials.paidStatus === 'settled' ? 'إعادة كـ جاهز للسحب' : 'صرف المستحقات الآن 💰'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 

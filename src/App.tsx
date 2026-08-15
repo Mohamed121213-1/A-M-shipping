@@ -1514,7 +1514,7 @@ export default function App() {
   };
 
   // Payout Request Handler
-  const handleRequestPayout = (amount: number, method: string) => {
+  const handleRequestPayout = (amount: number, method: string, selectedShipmentIds?: string[]) => {
     if (amount <= 0) return;
 
     let updatedWallet: MerchantWallet = {
@@ -1527,6 +1527,68 @@ export default function App() {
     setWallet(updatedWallet);
     try {
       localStorage.setItem('bosta_wallet', JSON.stringify(updatedWallet));
+    } catch (e) {
+      console.error(e);
+    }
+
+    const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const settlementIso = new Date().toISOString();
+    let remainingToSettle = amount;
+
+    // Update shipments so that delivered/collected orders are marked as settled (paid to merchant)
+    const nextShipments = shipments.map((s) => {
+      const isDeliveredOrDone = ['delivered', 'partial_delivery', 'refused', 'returned'].includes(s.status);
+      const isAlreadySettled = Boolean(s.isMerchantSettled || s.financials.paidStatus === 'settled');
+
+      if (isDeliveredOrDone && !isAlreadySettled) {
+        let shouldSettle = false;
+        if (selectedShipmentIds && selectedShipmentIds.length > 0) {
+          shouldSettle = selectedShipmentIds.includes(s.id);
+        } else {
+          // FIFO order based on amount
+          if (remainingToSettle > 0) {
+            shouldSettle = true;
+            let net = s.financials.netPayout ?? (s.financials.codAmount - s.financials.shippingFee);
+            if (s.status === 'partial_delivery' && s.partialDetails?.partialCodAmount) {
+              net = Math.max(0, s.partialDetails.partialCodAmount - s.financials.shippingFee);
+            }
+            remainingToSettle -= Math.max(0, net);
+          }
+        }
+
+        if (shouldSettle) {
+          const updatedTimeline = [
+            ...s.timeline,
+            {
+              id: `tl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              status: s.status,
+              title: '💸 تم تسليم وصرف المستحقات للتاجر',
+              description: `تم تحويل وصرف مستحقات الشحنة للتاجر بنجاح عبر ${method.toUpperCase()} وتصفية الحساب.`,
+              timestamp: timeStr,
+              actorRole: 'system' as const,
+            },
+          ];
+
+          return {
+            ...s,
+            isMerchantSettled: true,
+            merchantSettledAt: settlementIso,
+            updatedAt: settlementIso,
+            timeline: updatedTimeline,
+            financials: {
+              ...s.financials,
+              paidStatus: 'settled' as const,
+              settlementDate: settlementIso,
+            },
+          };
+        }
+      }
+      return s;
+    });
+
+    setShipments(nextShipments);
+    try {
+      localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
     } catch (e) {
       console.error(e);
     }
@@ -1562,8 +1624,107 @@ export default function App() {
       console.error(e);
     }
 
-    broadcastDataChange({ wallet: updatedWallet, companyTransactions: nextCompanyTxns });
-    showToast(`💸 تم تحويل وتسليم مبلغ ${amount.toLocaleString()} ج.م للتاجر عبر ${method.toUpperCase()} وتسجيل الصادر بخزينة الشركة!`);
+    broadcastDataChange({ shipments: nextShipments, wallet: updatedWallet, companyTransactions: nextCompanyTxns });
+    showToast(`💸 تم تحويل وتسليم مبلغ ${amount.toLocaleString()} ج.م للتاجر عبر ${method.toUpperCase()} وتحديث حالة الأوردرات إلى "تم استلام التاجر للمستحقات"!`);
+  };
+
+  // Toggle Single Shipment Merchant Settlement
+  const handleToggleMerchantSettlement = (shipmentId: string, isSettled: boolean) => {
+    const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const settlementIso = new Date().toISOString();
+
+    const nextShipments = shipments.map((s) => {
+      if (s.id !== shipmentId) return s;
+
+      const updatedTimeline = isSettled
+        ? [
+            ...s.timeline,
+            {
+              id: `tl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              status: s.status,
+              title: '💸 تم تسليم وصرف المستحقات للتاجر',
+              description: `تم تأكيد صرف وتسليم مستحقات الشحنة للتاجر يدوياً وتصفية الحساب.`,
+              timestamp: timeStr,
+              actorRole: 'system' as const,
+            },
+          ]
+        : s.timeline;
+
+      return {
+        ...s,
+        isMerchantSettled: isSettled,
+        merchantSettledAt: isSettled ? settlementIso : undefined,
+        updatedAt: settlementIso,
+        timeline: updatedTimeline,
+        financials: {
+          ...s.financials,
+          paidStatus: isSettled ? ('settled' as const) : ('collected' as const),
+          settlementDate: isSettled ? settlementIso : undefined,
+        },
+      };
+    });
+
+    setShipments(nextShipments);
+    try {
+      localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
+    } catch (e) {
+      console.error(e);
+    }
+
+    broadcastDataChange({ shipments: nextShipments });
+    showToast(isSettled ? '✅ تم تحديث حالة الأوردر إلى "تم استلام التاجر للمستحقات"' : '↩️ تم إعادة حالة الأوردر إلى "جاهز للسحب والمطالبة"');
+  };
+
+  // Settle All Ready Shipments to Merchant
+  const handleSettleAllMerchantShipments = () => {
+    const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const settlementIso = new Date().toISOString();
+    let settledCount = 0;
+
+    const nextShipments = shipments.map((s) => {
+      const isDeliveredOrDone = ['delivered', 'partial_delivery', 'refused', 'returned'].includes(s.status);
+      const isAlreadySettled = Boolean(s.isMerchantSettled || s.financials.paidStatus === 'settled');
+
+      if (isDeliveredOrDone && !isAlreadySettled) {
+        settledCount += 1;
+
+        const updatedTimeline = [
+          ...s.timeline,
+          {
+            id: `tl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            status: s.status,
+            title: '💸 تم تسليم وصرف المستحقات للتاجر',
+            description: `تم تأكيد صرف وتسليم مستحقات الشحنة للتاجر بنجاح وتصفية الحساب.`,
+            timestamp: timeStr,
+            actorRole: 'system' as const,
+          },
+        ];
+
+        return {
+          ...s,
+          isMerchantSettled: true,
+          merchantSettledAt: settlementIso,
+          updatedAt: settlementIso,
+          timeline: updatedTimeline,
+          financials: {
+            ...s.financials,
+            paidStatus: 'settled' as const,
+            settlementDate: settlementIso,
+          },
+        };
+      }
+      return s;
+    });
+
+    setShipments(nextShipments);
+    try {
+      localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
+    } catch (e) {
+      console.error(e);
+    }
+
+    broadcastDataChange({ shipments: nextShipments });
+    showToast(`✅ تم تحويل كافة الشحنات الجاهزة (${settledCount} شحنة) إلى "تم استلام التاجر للمستحقات" بنجاح!`);
   };
 
   // Admin CRUD Handlers
@@ -1918,6 +2079,7 @@ export default function App() {
                     onClearAllData={handleClearAllData}
                     onApproveShipment={handleApproveShipment}
                     onApproveAllPending={handleApproveAllPending}
+                    onToggleMerchantSettlement={handleToggleMerchantSettlement}
                     currentRole="merchant"
                     couriers={couriers}
                     systemUsers={users}
@@ -1935,6 +2097,8 @@ export default function App() {
                     currentUser={currentUser}
                     onSettleCourierCustody={handleSettleCourierCustody}
                     onUpdateWallet={handleUpdateWallet}
+                    onToggleMerchantSettlement={handleToggleMerchantSettlement}
+                    onSettleAllMerchantShipments={handleSettleAllMerchantShipments}
                   />
                 )}
 
@@ -1986,6 +2150,7 @@ export default function App() {
                     onClearAllData={handleClearAllData}
                     onApproveShipment={handleApproveShipment}
                     onApproveAllPending={handleApproveAllPending}
+                    onToggleMerchantSettlement={handleToggleMerchantSettlement}
                     currentRole={currentRole}
                     couriers={couriers}
                     systemUsers={users}
@@ -2049,6 +2214,8 @@ export default function App() {
                     currentUser={currentUser}
                     onSettleCourierCustody={handleSettleCourierCustody}
                     onUpdateWallet={handleUpdateWallet}
+                    onToggleMerchantSettlement={handleToggleMerchantSettlement}
+                    onSettleAllMerchantShipments={handleSettleAllMerchantShipments}
                   />
                 )}
 
@@ -2095,6 +2262,7 @@ export default function App() {
         onUpdateStatus={handleUpdateStatus}
         onDeleteShipment={handleDeleteShipment}
         onAssignCourier={handleAssignCourier}
+        onToggleMerchantSettlement={handleToggleMerchantSettlement}
         onOpenPrintModal={(s) => {
           setSelectedDetailShipment(null);
           setSelectedPrintShipment(s);

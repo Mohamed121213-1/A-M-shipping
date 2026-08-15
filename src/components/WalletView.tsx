@@ -28,12 +28,14 @@ import {
 interface WalletViewProps {
   wallet: MerchantWallet;
   shipments: Shipment[];
-  onRequestPayout: (amount: number, method: string) => void;
+  onRequestPayout: (amount: number, method: string, selectedShipmentIds?: string[]) => void;
   couriers?: CourierInfo[];
   systemUsers?: UserSession[];
   currentUser?: UserSession | null;
   onSettleCourierCustody?: (courierId: string, netAmount?: number, grossAmount?: number, commission?: number) => void;
   onUpdateWallet?: (updatedWallet: MerchantWallet) => void;
+  onToggleMerchantSettlement?: (shipmentId: string, isSettled: boolean) => void;
+  onSettleAllMerchantShipments?: () => void;
 }
 
 export const WalletView: React.FC<WalletViewProps> = ({
@@ -45,6 +47,8 @@ export const WalletView: React.FC<WalletViewProps> = ({
   currentUser = null,
   onSettleCourierCustody,
   onUpdateWallet,
+  onToggleMerchantSettlement,
+  onSettleAllMerchantShipments,
 }) => {
   const isAdmin = currentUser ? currentUser.role === 'admin' : false;
   const [activeSubTab, setActiveSubTab] = useState<'merchant' | 'returns' | 'couriers'>('merchant');
@@ -52,6 +56,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
   const [payoutMethod, setPayoutMethod] = useState<'instapay' | 'vodafone' | 'bank'>('instapay');
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState('');
   const [settlementSuccessMsg, setSettlementSuccessMsg] = useState<string | null>(null);
+  const [merchantLedgerFilter, setMerchantLedgerFilter] = useState<'all' | 'unsettled' | 'settled'>('all');
 
   // Edit Wallet State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -118,6 +123,20 @@ export const WalletView: React.FC<WalletViewProps> = ({
   const collectedShipments = shipments.filter(
     (s) => s.status === 'delivered' || s.status === 'partial_delivery' || s.status === 'refused' || s.status === 'returned'
   );
+
+  const unsettledMerchantShipments = collectedShipments.filter(
+    (s) => !s.isMerchantSettled && s.financials?.paidStatus !== 'settled'
+  );
+
+  const settledMerchantShipments = collectedShipments.filter(
+    (s) => Boolean(s.isMerchantSettled || s.financials?.paidStatus === 'settled')
+  );
+
+  const displayedMerchantShipments = merchantLedgerFilter === 'unsettled'
+    ? unsettledMerchantShipments
+    : merchantLedgerFilter === 'settled'
+    ? settledMerchantShipments
+    : collectedShipments;
 
   // Unsettled collected shipments for courier custody
   const unsettledCollectedShipments = shipments.filter(
@@ -229,8 +248,8 @@ export const WalletView: React.FC<WalletViewProps> = ({
   const totalCouriersNetRequired = courierFinancials
     .reduce((sum, cf) => sum + cf.netRequired, 0);
 
-  // Calculate total net payouts earned by merchant across all completed/refused shipments
-  const totalEarnedMerchantNetPayout = shipments.reduce((sum, s) => {
+  // Calculate total net payouts earned by merchant across all unsettled completed/refused shipments (Ready for withdrawal)
+  const unsettledEarnedNetPayout = unsettledMerchantShipments.reduce((sum, s) => {
     if (s.status === 'delivered') {
       return sum + (s.financials.netPayout ?? (s.financials.codAmount - s.financials.shippingFee));
     }
@@ -252,7 +271,31 @@ export const WalletView: React.FC<WalletViewProps> = ({
     return sum;
   }, 0);
 
-  const expectedAvailableBalance = Math.max(0, totalEarnedMerchantNetPayout - wallet.totalPaidOut);
+  // Settled payouts (Paid out to merchant)
+  const settledEarnedNetPayout = settledMerchantShipments.reduce((sum, s) => {
+    if (s.status === 'delivered') {
+      return sum + (s.financials.netPayout ?? (s.financials.codAmount - s.financials.shippingFee));
+    }
+    if (s.status === 'partial_delivery') {
+      const collected = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
+      return sum + (s.financials.netPayout ?? Math.max(0, collected - s.financials.shippingFee));
+    }
+    if (s.status === 'refused' || s.status === 'returned') {
+      if (s.financials.netPayout !== undefined) {
+        return sum + s.financials.netPayout;
+      }
+      if (s.refusedDetails?.merchantDeductedAmount !== undefined) {
+        return sum - s.refusedDetails.merchantDeductedAmount;
+      }
+      if (s.refusedDetails?.shippingFeePaid === false) {
+        return sum - s.financials.shippingFee;
+      }
+    }
+    return sum;
+  }, 0);
+
+  const totalEarnedMerchantNetPayout = unsettledEarnedNetPayout + settledEarnedNetPayout;
+  const expectedAvailableBalance = Math.max(0, unsettledEarnedNetPayout);
 
   const handleSyncPendingCodWithCouriers = () => {
     if (onUpdateWallet) {
@@ -678,43 +721,108 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
           {/* Delivered COD Ledger Table & Mobile Cards */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
-            <div className="p-4 border-b border-slate-200 font-extrabold text-sm text-slate-900 flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-emerald-600" />
-                سجل تحويلات وحالة تسوية الشحنات:
-              </span>
-              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                {collectedShipments.length} شحنة
-              </span>
+            <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900">سجل تحويلات وحالة تسوية مستحقات الشحنات</h3>
+                  <p className="text-[11px] text-slate-500 font-bold">متابعة الأوردرات الجاهزة للسحب والتي تم صرف مستحقاتها للتاجر</p>
+                </div>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex items-center flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMerchantLedgerFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${
+                    merchantLedgerFilter === 'all'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  الكل ({collectedShipments.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMerchantLedgerFilter('unsettled')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-1.5 ${
+                    merchantLedgerFilter === 'unsettled'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                  }`}
+                >
+                  <ArrowDownLeft className="w-3.5 h-3.5" />
+                  <span>جاهز للسحب والمطالبة ({unsettledMerchantShipments.length})</span>
+                  <span className="text-[10px] opacity-85">[{unsettledEarnedNetPayout.toLocaleString()} ج.م]</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMerchantLedgerFilter('settled')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-1.5 ${
+                    merchantLedgerFilter === 'settled'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>تم استلام التاجر للمستحقات ({settledMerchantShipments.length})</span>
+                  <span className="text-[10px] opacity-85">[{settledEarnedNetPayout.toLocaleString()} ج.م]</span>
+                </button>
+
+                {isAdmin && onSettleAllMerchantShipments && unsettledMerchantShipments.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={onSettleAllMerchantShipments}
+                    className="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700 shadow-xs transition-all flex items-center gap-1 cursor-pointer mr-auto"
+                  >
+                    <HandCoins className="w-3.5 h-3.5" />
+                    <span>صرف كافة الشحنات الجاهزة دفعة واحدة 💰</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Mobile Cards View (< md) - Zero overlapping, perfectly formatted */}
             <div className="block md:hidden divide-y divide-slate-100">
-              {collectedShipments.length === 0 ? (
+              {displayedMerchantShipments.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-500 font-bold">
-                  لا توجد شحنات مكتملة أو محصلة في السجل حالياً
+                  لا توجد شحنات مطابقة للفلتر المحدد حالياً
                 </div>
               ) : (
-                collectedShipments.map((s) => {
+                displayedMerchantShipments.map((s) => {
                   let codVal = s.financials.codAmount;
                   let feeVal = s.financials.shippingFee;
                   let netPayoutVal = s.financials.netPayout ?? (codVal - feeVal);
-                  let noteText = 'جاهز للسحب والمطالبة';
-                  let badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-200';
-                  let icon = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
+                  const isPaidToMerchant = Boolean(s.isMerchantSettled || s.financials?.paidStatus === 'settled');
+
+                  let noteText = isPaidToMerchant ? 'تم استلام التاجر للمستحقات (تم الصرف) ✅' : 'جاهز للسحب والمطالبة ⚡';
+                  let subNote = isPaidToMerchant
+                    ? (s.financials?.settlementDate ? `تم الصرف بتاريخ: ${new Date(s.financials.settlementDate).toLocaleDateString('ar-EG')}` : 'تم تحويل المستحقات للتاجر')
+                    : 'متاح للسحب الفوري في المحفظة';
+                  let badgeStyle = isPaidToMerchant
+                    ? 'bg-blue-50 text-blue-900 border-blue-200'
+                    : 'bg-emerald-50 text-emerald-900 border-emerald-300';
+                  let icon = isPaidToMerchant
+                    ? <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    : <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
 
                   if (s.status === 'partial_delivery') {
                     codVal = s.partialDetails?.partialCodAmount ?? codVal;
                     netPayoutVal = s.financials.netPayout ?? Math.max(0, codVal - feeVal);
-                    noteText = `استلام جزئي (كاش محصل ${codVal} ج.م)`;
-                    badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
-                    icon = <RotateCcw className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+                    if (!isPaidToMerchant) {
+                      noteText = `استلام جزئي (كاش محصل ${codVal} ج.م) — جاهز للسحب ⚡`;
+                      subNote = 'متاح للسحب الفوري في المحفظة';
+                      badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
+                      icon = <RotateCcw className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+                    }
                   } else if (s.status === 'refused' || s.status === 'returned') {
                     const collected = s.refusedDetails?.amountCollected || 0;
                     if (s.refusedDetails?.shippingFeePaid || collected >= feeVal) {
                       codVal = feeVal;
                       netPayoutVal = 0;
                       noteText = 'العميل دفع كامل الشحن ورجع (لا خصم على التاجر ✅)';
+                      subNote = 'لا يوجد مستحقات أو خصومات';
                       badgeStyle = 'bg-emerald-50 text-emerald-950 border-emerald-300';
                       icon = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
                     } else if (s.refusedDetails?.partialShippingFeePaid || collected > 0) {
@@ -722,12 +830,14 @@ export const WalletView: React.FC<WalletViewProps> = ({
                       const deducted = s.refusedDetails?.merchantDeductedAmount ?? (feeVal - collected);
                       netPayoutVal = -deducted;
                       noteText = `دفع جزء (${collected} ج.م) — خصم متبقي (${deducted} ج.م) من التاجر`;
+                      subNote = `تم خصم قيمة الشحن المتبقية من الحساب`;
                       badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
                       icon = <RotateCcw className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
                     } else {
                       codVal = 0;
                       netPayoutVal = -feeVal;
                       noteText = `العميل لم يدفع شحن — (خصم ${feeVal} ج.م من التاجر ❌)`;
+                      subNote = `تم خصم مصاريف الشحن لعدم تحصيلها`;
                       badgeStyle = 'bg-rose-50 text-rose-950 border-rose-300';
                       icon = <X className="w-3.5 h-3.5 text-rose-600 shrink-0" />;
                     }
@@ -764,7 +874,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
                         <div className="bg-white p-1.5 rounded-lg border border-slate-200/60">
                           <span className="text-[10px] text-slate-500 block font-bold">صافي المستحق</span>
-                          <span className={`text-xs font-black ${netPayoutVal < 0 ? 'text-rose-600' : netPayoutVal === 0 ? 'text-slate-600' : 'text-emerald-600'}`}>
+                          <span className={`text-xs font-black ${netPayoutVal < 0 ? 'text-rose-600' : netPayoutVal === 0 ? 'text-slate-600' : isPaidToMerchant ? 'text-blue-700' : 'text-emerald-600'}`}>
                             {netPayoutVal > 0 ? `+${netPayoutVal.toLocaleString()}` : `${netPayoutVal.toLocaleString()}`} ج.م
                           </span>
                         </div>
@@ -773,11 +883,41 @@ export const WalletView: React.FC<WalletViewProps> = ({
                       {/* Settlement Status Banner */}
                       <div className="space-y-1">
                         <span className="text-[10px] font-extrabold text-slate-500 block">حالة التسوية والمستحقات:</span>
-                        <div className={`${badgeStyle} p-2 rounded-xl text-xs font-black flex items-center gap-2 border leading-snug`}>
-                          {icon}
-                          <span className="text-[11px] leading-relaxed">{noteText}</span>
+                        <div className={`${badgeStyle} p-2.5 rounded-xl text-xs font-black flex flex-col gap-1 border leading-snug`}>
+                          <div className="flex items-center gap-2">
+                            {icon}
+                            <span className="text-[11px] leading-relaxed">{noteText}</span>
+                          </div>
+                          {subNote && (
+                            <span className="text-[10px] opacity-75 font-semibold pr-5">{subNote}</span>
+                          )}
                         </div>
                       </div>
+
+                      {/* Admin Quick Action Button */}
+                      {isAdmin && onToggleMerchantSettlement && (
+                        <div className="flex items-center justify-end pt-1">
+                          {!isPaidToMerchant ? (
+                            <button
+                              type="button"
+                              onClick={() => onToggleMerchantSettlement(s.id, true)}
+                              className="text-xs font-black bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <HandCoins className="w-3.5 h-3.5" />
+                              <span>صرف المستحقات للتاجر 💰</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => onToggleMerchantSettlement(s.id, false)}
+                              className="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>إعادة كـ جاهز للسحب ↩️</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -794,22 +934,33 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     <th className="p-3">مبلغ التحصيل (COD)</th>
                     <th className="p-3">قيمة الشحن</th>
                     <th className="p-3">مستحقات التاجر (المبلغ - الشحن)</th>
-                    <th className="p-3">حالة التسوية</th>
+                    <th className="p-3">حالة تسوية المستحقات</th>
+                    {isAdmin && onToggleMerchantSettlement && <th className="p-3 text-center">إجراءات</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {collectedShipments.map((s) => {
+                  {displayedMerchantShipments.map((s) => {
                     let codVal = s.financials.codAmount;
                     let feeVal = s.financials.shippingFee;
                     let netPayoutVal = s.financials.netPayout ?? (codVal - feeVal);
-                    let noteText = 'جاهز للسحب';
-                    let badgeStyle = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                    const isPaidToMerchant = Boolean(s.isMerchantSettled || s.financials?.paidStatus === 'settled');
+
+                    let noteText = isPaidToMerchant ? 'تم استلام التاجر للمستحقات (تم الصرف) ✅' : 'جاهز للسحب والمطالبة ⚡';
+                    let subNote = isPaidToMerchant
+                      ? (s.financials?.settlementDate ? `تم الصرف في ${new Date(s.financials.settlementDate).toLocaleDateString('ar-EG')}` : 'تم تحويل المستحقات للتاجر')
+                      : 'متاح للسحب الفوري بالمحفظة';
+                    let badgeStyle = isPaidToMerchant
+                      ? 'bg-blue-100 text-blue-900 border-blue-300'
+                      : 'bg-emerald-100 text-emerald-900 border-emerald-300';
 
                     if (s.status === 'partial_delivery') {
                       codVal = s.partialDetails?.partialCodAmount ?? codVal;
                       netPayoutVal = s.financials.netPayout ?? Math.max(0, codVal - feeVal);
-                      noteText = `استلام جزئي (${codVal} ج.م)`;
-                      badgeStyle = 'bg-amber-100 text-amber-900 border-amber-300';
+                      if (!isPaidToMerchant) {
+                        noteText = `استلام جزئي (${codVal} ج.م) — جاهز للسحب ⚡`;
+                        subNote = 'متاح للسحب الفوري بالمحفظة';
+                        badgeStyle = 'bg-amber-100 text-amber-900 border-amber-300';
+                      }
                     } else if (s.status === 'refused' || s.status === 'returned') {
                       const collected = s.refusedDetails?.amountCollected || 0;
                       if (s.refusedDetails?.shippingFeePaid || collected >= feeVal) {
@@ -817,35 +968,65 @@ export const WalletView: React.FC<WalletViewProps> = ({
                         feeVal = feeVal;
                         netPayoutVal = 0;
                         noteText = 'العميل دفع الشحن ورجع (لا خصم على التاجر ✅)';
+                        subNote = 'لا خصومات';
                         badgeStyle = 'bg-emerald-100 text-emerald-950 border-emerald-300';
                       } else if (s.refusedDetails?.partialShippingFeePaid || collected > 0) {
                         codVal = collected;
                         const deducted = s.refusedDetails?.merchantDeductedAmount ?? (feeVal - collected);
                         netPayoutVal = -deducted;
                         noteText = `دفع جزء (${collected} ج.م) — خصم المتبقي (${deducted} ج.م) من التاجر`;
+                        subNote = 'تم خصم متبقي الشحن';
                         badgeStyle = 'bg-amber-100 text-amber-900 border-amber-300';
                       } else {
                         codVal = 0;
                         netPayoutVal = -feeVal;
                         noteText = `العميل لم يدفع شحن — (خصم ${feeVal} ج.م من التاجر ❌)`;
+                        subNote = 'تم خصم مصاريف الشحن';
                         badgeStyle = 'bg-rose-100 text-rose-950 border-rose-300';
                       }
                     }
 
                     return (
-                      <tr key={s.id} className="hover:bg-slate-50/80">
-                        <td className="p-3 font-mono font-black text-slate-900 whitespace-nowrap">{s.trackingNumber}</td>
+                      <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3 font-mono font-black text-slate-900 whitespace-nowrap">#{s.trackingNumber}</td>
                         <td className="p-3 font-bold text-slate-800">{s.recipient.name}</td>
                         <td className="p-3 font-extrabold text-slate-900 whitespace-nowrap">{codVal.toLocaleString()} ج.م</td>
                         <td className="p-3 text-red-600 font-bold whitespace-nowrap">-{feeVal.toLocaleString()} ج.م</td>
-                        <td className={`p-3 font-black whitespace-nowrap ${netPayoutVal < 0 ? 'text-rose-600 font-bold' : netPayoutVal === 0 ? 'text-slate-600' : 'text-emerald-600'}`}>
+                        <td className={`p-3 font-black whitespace-nowrap ${netPayoutVal < 0 ? 'text-rose-600 font-bold' : netPayoutVal === 0 ? 'text-slate-600' : isPaidToMerchant ? 'text-blue-700' : 'text-emerald-600'}`}>
                           {netPayoutVal > 0 ? `+${netPayoutVal.toLocaleString()}` : `${netPayoutVal.toLocaleString()}`} ج.م
                         </td>
                         <td className="p-3">
-                          <span className={`${badgeStyle} text-[10px] font-extrabold px-2.5 py-1 rounded-full border inline-block whitespace-nowrap`}>
-                            {noteText}
-                          </span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className={`${badgeStyle} text-[11px] font-extrabold px-3 py-1 rounded-lg border inline-flex items-center gap-1.5 whitespace-nowrap w-fit`}>
+                              {isPaidToMerchant ? <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600" />}
+                              <span>{noteText}</span>
+                            </span>
+                            {subNote && <span className="text-[10px] text-slate-500 font-bold pr-1">{subNote}</span>}
+                          </div>
                         </td>
+                        {isAdmin && onToggleMerchantSettlement && (
+                          <td className="p-3 text-center whitespace-nowrap">
+                            {!isPaidToMerchant ? (
+                              <button
+                                type="button"
+                                onClick={() => onToggleMerchantSettlement(s.id, true)}
+                                className="text-xs font-black bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-xl shadow-2xs transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <HandCoins className="w-3.5 h-3.5" />
+                                <span>صرف المستحقات 💰</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onToggleMerchantSettlement(s.id, false)}
+                                className="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-xl transition-all inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>إعادة كجاهز ↩️</span>
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
