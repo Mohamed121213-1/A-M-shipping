@@ -22,8 +22,13 @@ import {
   AlertTriangle,
   RefreshCw,
   FileSpreadsheet,
-  Database
+  Database,
+  Bell,
+  Send,
+  Smartphone,
+  CheckCircle2
 } from 'lucide-react';
+import { EnableNotifications } from './EnableNotifications';
 import { 
   UserSession, 
   AppUserRole, 
@@ -89,7 +94,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
   onOpenBackupModal,
 }) => {
   const pendingShipments = shipments.filter((s) => s.status === 'pending_approval');
-  const [activeTab, setActiveTab] = useState<'approval' | 'users' | 'couriers' | 'hubs' | 'rates' | 'wallet' | 'danger'>(
+  const [activeTab, setActiveTab] = useState<'approval' | 'users' | 'couriers' | 'hubs' | 'rates' | 'wallet' | 'notifications' | 'danger'>(
     pendingShipments.length > 0 ? 'approval' : 'users'
   );
 
@@ -560,6 +565,18 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
         >
           <Wallet className="w-4 h-4" />
           <span>ماليات ورصيد التاجر</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('notifications')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'notifications'
+              ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Bell className="w-4 h-4 text-amber-500" />
+          <span>إشعارات الهاتف (Web Push)</span>
         </button>
 
         <button
@@ -1432,6 +1449,76 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                 {wallet.totalPaidOut.toLocaleString()} ج.م
               </span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: WEB PUSH NOTIFICATIONS CENTER */}
+      {activeTab === 'notifications' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-red-50 text-red-600 border border-red-200 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                  PWA Web Push
+                </span>
+                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                  يعمل والتطبيق مغلق
+                </span>
+              </div>
+              <h2 className="text-xl font-black text-slate-900 mt-1 flex items-center gap-2">
+                <Bell className="w-5 h-5 text-red-600" />
+                مركز إدارة واختبار الإشعارات الفورية (Web Push Notifications)
+              </h2>
+              <p className="text-xs text-slate-500 font-medium">
+                توجيه إشعارات فورية لهواتف الكباتن والتجار والمشرفين حتى لو كان الهاتف مقفولاً أو المتصفح مغلقاً.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Subscribe/Test Card */}
+          <div className="p-4 bg-slate-950 text-white rounded-2xl border border-slate-800">
+            <EnableNotifications
+              userId="admin-master"
+              role="admin"
+              variant="card"
+            />
+          </div>
+
+          {/* Technical Guide for iPhone & Android */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-extrabold text-sm text-slate-900">طريقة التثبيت على أجهزة iPhone / iPad (iOS)</h3>
+              </div>
+              <ul className="text-xs text-slate-600 space-y-2 list-disc list-inside leading-relaxed">
+                <li>على نظام iOS (Safari)، يشترط فتح الموقع في متصفح Safari.</li>
+                <li>الضغط على زر <strong>المشاركة (Share)</strong> أسفل الشاشة.</li>
+                <li>اختيار <strong>"إضافة إلى الشاشة الرئيسية" (Add to Home Screen)</strong>.</li>
+                <li>فتح التطبيق من الأيقونة على الشاشة والضغط على زر <strong>تفعيل الإشعارات</strong>.</li>
+              </ul>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-extrabold text-sm text-slate-900">طريقة العمل على أجهزة Android و Chrome</h3>
+              </div>
+              <ul className="text-xs text-slate-600 space-y-2 list-disc list-inside leading-relaxed">
+                <li>يعمل مباشرة بمجرد الضغط على زر <strong>تفعيل الإشعارات</strong> والموافقة على إذن المتصفح.</li>
+                <li>يمكن تثبيت التطبيق بضغطة زر ليصبح كتطبيق أندرويد مستقل APK عبر PWA.</li>
+                <li>يقوم الـ Service Worker في الخلفية باستقبال التنبيهات وإظهار الإشعار الصوتي فوراً.</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Server Details */}
+          <div className="bg-amber-50/70 border border-amber-200/80 p-4 rounded-2xl text-xs text-amber-950 space-y-1">
+            <span className="font-black block">⚙️ مواصفات نظام الـ Push المدمج بالسيرفر:</span>
+            <p>
+              السيرفر مزود بمكتبة <code>web-push</code> القياسية مع توليد تلقائي لمفاتيح VAPID الآمنة ومخزن للاشتراكات في الذاكرة ومزامنة فورية.
+            </p>
           </div>
         </div>
       )}

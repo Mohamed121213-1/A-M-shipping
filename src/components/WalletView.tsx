@@ -32,7 +32,7 @@ interface WalletViewProps {
   couriers?: CourierInfo[];
   systemUsers?: UserSession[];
   currentUser?: UserSession | null;
-  onSettleCourierCustody?: (courierId: string) => void;
+  onSettleCourierCustody?: (courierId: string, netAmount?: number, grossAmount?: number, commission?: number) => void;
   onUpdateWallet?: (updatedWallet: MerchantWallet) => void;
 }
 
@@ -302,7 +302,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
   const handleConfirmCourierSettlement = (courierId: string, courierName: string, netAmount: number, grossAmount: number, commission: number) => {
     if (onSettleCourierCustody) {
-      onSettleCourierCustody(courierId);
+      onSettleCourierCustody(courierId, netAmount, grossAmount, commission);
     }
     setSettlementSuccessMsg(`تم استلام وتوريد صافي العهدة النقدية بمبلغ ${netAmount.toLocaleString()} ج.م من ${courierName} بنجاح (بعد خصم عمولته المستحقة ${commission.toLocaleString()} ج.م من أصل ${grossAmount.toLocaleString()} ج.م كاش محصل)، وتصفير حسابه وتصفية الشحنات!`);
     setTimeout(() => setSettlementSuccessMsg(null), 5000);

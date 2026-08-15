@@ -24,6 +24,7 @@ import {
   Database
 } from 'lucide-react';
 import { AppUserRole, MerchantWallet, UserSession, CourierNotification } from '../types';
+import { EnableNotifications } from './EnableNotifications';
 
 interface HeaderProps {
   currentRole: AppUserRole;
@@ -477,6 +478,16 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                       <X className="w-4 h-4" />
                     </button>
+                  </div>
+
+                  {/* Web Push Subscription Quick Action */}
+                  <div className="mb-3 p-2 bg-slate-800/90 rounded-xl border border-slate-700">
+                    <EnableNotifications
+                      userId={currentUser?.id}
+                      role={currentUser?.role}
+                      courierId={currentUser?.role === 'courier' ? currentUser?.id : undefined}
+                      variant="compact"
+                    />
                   </div>
 
                   <div className="max-h-72 overflow-y-auto space-y-2">

@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 import { BatchWhatsAppModal } from './BatchWhatsAppModal';
+import { EnableNotifications } from './EnableNotifications';
 import { playNotificationSound, requestNotificationPermission, sendDeviceNotification } from '../utils/deviceNotifications';
 
 interface CourierAppViewProps {
@@ -45,7 +46,7 @@ interface CourierAppViewProps {
   onMarkNotificationRead?: (notificationId: string) => void;
   currentUser?: UserSession | null;
   couriers?: CourierInfo[];
-  onSettleCourierCustody?: (courierId: string) => void;
+  onSettleCourierCustody?: (courierId: string, netAmount?: number, grossAmount?: number, commission?: number) => void;
 }
 
 export const CourierAppView: React.FC<CourierAppViewProps> = ({
@@ -340,9 +341,9 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   };
 
   const handleHandoverCashToHub = () => {
-    if (cashToHandover <= 0) return;
+    if (cashToHandover <= 0 && totalCodCollectedToday <= 0) return;
     if (onSettleCourierCustody) {
-      onSettleCourierCustody(activeCourier.id);
+      onSettleCourierCustody(activeCourier.id, cashToHandover, totalCodCollectedToday, courierCommissionEarned);
     }
     setIsHandoverSuccess(true);
     setTimeout(() => setIsHandoverSuccess(false), 4000);
@@ -460,6 +461,14 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
               <X className="w-4 h-4" />
             </button>
           </div>
+
+          {/* Web Push Notification Enable Card */}
+          <EnableNotifications
+            userId={currentUser?.id || activeCourier.id}
+            role="courier"
+            courierId={activeCourier.id}
+            variant="card"
+          />
 
           <div className="max-h-60 overflow-y-auto space-y-2">
             {courierNotifs.length === 0 ? (

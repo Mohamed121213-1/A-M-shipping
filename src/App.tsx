@@ -1373,11 +1373,20 @@ export default function App() {
   };
 
   // Courier Custody Settlement Handler
-  const handleSettleCourierCustody = (courierId: string) => {
+  const handleSettleCourierCustody = (
+    courierId: string,
+    customNetAmount?: number,
+    customGrossAmount?: number,
+    customCommission?: number
+  ) => {
     const targetCourier = couriers.find((c) => c.id === courierId);
     const courierName = targetCourier ? targetCourier.name : 'المندوب';
 
     let totalCollected = 0;
+    let totalCommission = 0;
+
+    const commType = targetCourier?.commissionType || 'fixed';
+    const commVal = targetCourier?.commissionValue ?? 20;
 
     const nextShipments = shipments.map((s) => {
       if (!s.assignedCourier) return s;
@@ -1400,6 +1409,23 @@ export default function App() {
 
         totalCollected += collectedForThisShipment;
 
+        // Calculate commission for this shipment
+        let commissionForThisShipment = 0;
+        if (
+          s.status === 'delivered' ||
+          s.status === 'partial_delivery' ||
+          ((s.status === 'refused' || s.status === 'returned') && ((s.refusedDetails?.amountCollected || 0) > 0 || s.refusedDetails?.shippingFeePaid))
+        ) {
+          if (s.financials.courierFee !== undefined && s.financials.courierFee > 0) {
+            commissionForThisShipment = s.financials.courierFee;
+          } else if (commType === 'percentage') {
+            commissionForThisShipment = ((s.financials.shippingFee || 0) * commVal) / 100;
+          } else {
+            commissionForThisShipment = commVal;
+          }
+        }
+        totalCommission += commissionForThisShipment;
+
         const timeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
         const updatedTimeline = [
           ...s.timeline,
@@ -1407,7 +1433,7 @@ export default function App() {
             id: `tl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             status: s.status,
             title: '💰 تم تسوية وتوريد العهدة كاش للشركة',
-            description: `تم استلام العهدة النقدية (${collectedForThisShipment} ج.م) وتوريدها للخزينة وتصفير حساب المندوب.`,
+            description: `تم استلام وتوريد صافي العهدة النقدية وتصفية عمولة المندوب (${commissionForThisShipment.toLocaleString()} ج.م) وتوريد الكاش للخزينة وتصفير الحساب.`,
             timestamp: timeStr,
             actorRole: 'system' as const,
           },
@@ -1427,13 +1453,17 @@ export default function App() {
 
     setShipments(nextShipments);
 
+    const grossAmount = customGrossAmount !== undefined && customGrossAmount > 0 ? customGrossAmount : totalCollected;
+    const finalCommission = customCommission !== undefined && customCommission >= 0 ? customCommission : totalCommission;
+    const netToTreasury = customNetAmount !== undefined && customNetAmount >= 0 ? customNetAmount : Math.max(0, grossAmount - finalCommission);
+
     let updatedWallet = wallet;
     let nextCompanyTxns = companyTransactions;
 
-    if (totalCollected > 0) {
+    if (grossAmount > 0 || netToTreasury > 0) {
       updatedWallet = {
         ...wallet,
-        pendingCod: Math.max(0, wallet.pendingCod - totalCollected),
+        pendingCod: Math.max(0, wallet.pendingCod - netToTreasury),
       };
       setWallet(updatedWallet);
       try {
@@ -1442,18 +1472,18 @@ export default function App() {
         console.error(e);
       }
 
-      // Automatically add income transaction to Company Treasury for incoming custody
+      // Automatically add income transaction to Company Treasury for incoming custody (NET AFTER COMMISSION DEDUCTION)
       const courierCustodyTxn: CompanyTransaction = {
         id: `TXN-IN-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
         type: 'income',
-        title: `توريد عهدة كاش من المندوب (${courierName})`,
-        amount: totalCollected,
+        title: `توريد صافي عهدة كاش من المندوب (${courierName})`,
+        amount: netToTreasury,
         category: 'تحصيل كاش COD',
         date: new Date().toISOString().split('T')[0],
         paymentMethod: 'cash',
         relatedCourier: courierName,
         createdBy: currentUser?.name || 'النظام',
-        notes: `استلام وتوريد عهدة شحنات كاش محصلة من المندوب إلى خزينة الشركة الرئيسيّة`,
+        notes: `استلام وتوريد صافي عهدة كاش (${netToTreasury.toLocaleString()} ج.م) بعد خصم عمولة المندوب المستحقة (${finalCommission.toLocaleString()} ج.م) من إجمالي المحصل (${grossAmount.toLocaleString()} ج.م) إلى خزينة الشركة وتصفية الشحنات.`,
         createdAt: new Date().toISOString(),
       };
 
@@ -1480,7 +1510,7 @@ export default function App() {
     );
 
     broadcastDataChange({ shipments: nextShipments, wallet: updatedWallet, companyTransactions: nextCompanyTxns });
-    showToast(`💰 تم استلام وتوريد المبلغ ${totalCollected.toLocaleString()} ج.م من ${courierName} وتسجيل المعاملة بخزينة الشركة وتصفير الحساب!`);
+    showToast(`💰 تم استلام وتوريد صافي العهدة (${netToTreasury.toLocaleString()} ج.م) بعد خصم عمولة المندوب (${finalCommission.toLocaleString()} ج.م) من ${courierName} وتسجيلها في حسابات وخزينة الشركة وتصفير الحساب!`);
   };
 
   // Payout Request Handler
@@ -1903,6 +1933,7 @@ export default function App() {
                     couriers={couriers}
                     systemUsers={users}
                     currentUser={currentUser}
+                    onSettleCourierCustody={handleSettleCourierCustody}
                     onUpdateWallet={handleUpdateWallet}
                   />
                 )}
