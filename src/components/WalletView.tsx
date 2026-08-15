@@ -607,18 +607,18 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     <p className="text-3xl font-black mt-2">
                       {wallet.pendingCod.toLocaleString()} <span className="text-base font-bold">ج.م</span>
                     </p>
-                    <div className="mt-2 text-[11px] font-bold text-amber-100 bg-amber-900/30 border border-amber-300/30 p-2 rounded-xl space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span>إجمالي الكاش باليد مع الكباتن:</span>
-                        <span className="font-mono font-black">{totalCouriersCashHeld.toLocaleString()} ج.م</span>
+                    <div className="mt-2 text-[11px] font-bold text-amber-100 bg-amber-900/40 border border-amber-300/30 p-2.5 rounded-xl space-y-1.5 leading-relaxed">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate">إجمالي الكاش باليد مع الكباتن:</span>
+                        <span className="font-mono font-black shrink-0">{totalCouriersCashHeld.toLocaleString()} ج.م</span>
                       </div>
-                      <div className="flex items-center justify-between text-amber-200">
-                        <span>خصم عمولة الكباتن المستحقة:</span>
-                        <span className="font-mono font-black">-{totalCouriersCommission.toLocaleString()} ج.م</span>
+                      <div className="flex items-center justify-between gap-2 text-amber-200">
+                        <span className="truncate">خصم عمولة الكباتن المستحقة:</span>
+                        <span className="font-mono font-black shrink-0">-{totalCouriersCommission.toLocaleString()} ج.م</span>
                       </div>
-                      <div className="flex items-center justify-between text-white font-extrabold border-t border-amber-300/20 pt-1">
-                        <span>الصافي المطلوب تسليمه للخزينة:</span>
-                        <span className="font-mono font-black text-amber-200">{totalCouriersNetRequired.toLocaleString()} ج.م</span>
+                      <div className="flex items-center justify-between gap-2 text-white font-extrabold border-t border-amber-300/20 pt-1.5">
+                        <span className="truncate">الصافي المطلوب تسليمه للخزينة:</span>
+                        <span className="font-mono font-black text-amber-200 shrink-0">{totalCouriersNetRequired.toLocaleString()} ج.م</span>
                       </div>
                     </div>
                   </>
@@ -676,16 +676,118 @@ export const WalletView: React.FC<WalletViewProps> = ({
             </form>
           </div>
 
-          {/* Delivered COD Ledger Table */}
+          {/* Delivered COD Ledger Table & Mobile Cards */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
             <div className="p-4 border-b border-slate-200 font-extrabold text-sm text-slate-900 flex items-center justify-between">
-              <span>سجل تحويلات الشحنات المسلمة (Delivered COD Ledger):</span>
-              <span className="text-xs font-bold text-slate-500">{collectedShipments.length} شحنة مكتملة</span>
+              <span className="flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-emerald-600" />
+                سجل تحويلات وحالة تسوية الشحنات:
+              </span>
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                {collectedShipments.length} شحنة
+              </span>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Cards View (< md) - Zero overlapping, perfectly formatted */}
+            <div className="block md:hidden divide-y divide-slate-100">
+              {collectedShipments.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 font-bold">
+                  لا توجد شحنات مكتملة أو محصلة في السجل حالياً
+                </div>
+              ) : (
+                collectedShipments.map((s) => {
+                  let codVal = s.financials.codAmount;
+                  let feeVal = s.financials.shippingFee;
+                  let netPayoutVal = s.financials.netPayout ?? (codVal - feeVal);
+                  let noteText = 'جاهز للسحب والمطالبة';
+                  let badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                  let icon = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
+
+                  if (s.status === 'partial_delivery') {
+                    codVal = s.partialDetails?.partialCodAmount ?? codVal;
+                    netPayoutVal = s.financials.netPayout ?? Math.max(0, codVal - feeVal);
+                    noteText = `استلام جزئي (كاش محصل ${codVal} ج.م)`;
+                    badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
+                    icon = <RotateCcw className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+                  } else if (s.status === 'refused' || s.status === 'returned') {
+                    const collected = s.refusedDetails?.amountCollected || 0;
+                    if (s.refusedDetails?.shippingFeePaid || collected >= feeVal) {
+                      codVal = feeVal;
+                      netPayoutVal = 0;
+                      noteText = 'العميل دفع كامل الشحن ورجع (لا خصم على التاجر ✅)';
+                      badgeStyle = 'bg-emerald-50 text-emerald-950 border-emerald-300';
+                      icon = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
+                    } else if (s.refusedDetails?.partialShippingFeePaid || collected > 0) {
+                      codVal = collected;
+                      const deducted = s.refusedDetails?.merchantDeductedAmount ?? (feeVal - collected);
+                      netPayoutVal = -deducted;
+                      noteText = `دفع جزء (${collected} ج.م) — خصم متبقي (${deducted} ج.م) من التاجر`;
+                      badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
+                      icon = <RotateCcw className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+                    } else {
+                      codVal = 0;
+                      netPayoutVal = -feeVal;
+                      noteText = `العميل لم يدفع شحن — (خصم ${feeVal} ج.م من التاجر ❌)`;
+                      badgeStyle = 'bg-rose-50 text-rose-950 border-rose-300';
+                      icon = <X className="w-3.5 h-3.5 text-rose-600 shrink-0" />;
+                    }
+                  }
+
+                  return (
+                    <div key={s.id} className="p-4 space-y-3 bg-white hover:bg-slate-50/60 transition-colors">
+                      {/* Top Row: AWB + Recipient */}
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-xs text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                            #{s.trackingNumber}
+                          </span>
+                          <span className="text-[11px] font-bold text-slate-500">
+                            {new Date(s.createdAt).toLocaleDateString('ar-EG')}
+                          </span>
+                        </div>
+                        <span className="text-xs font-black text-slate-900 truncate max-w-[140px]">
+                          {s.recipient.name}
+                        </span>
+                      </div>
+
+                      {/* Financials Grid */}
+                      <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 text-center">
+                        <div className="bg-white p-1.5 rounded-lg border border-slate-200/60">
+                          <span className="text-[10px] text-slate-500 block font-bold">التحصيل (COD)</span>
+                          <span className="text-xs font-black text-slate-900">{codVal.toLocaleString()} ج.م</span>
+                        </div>
+
+                        <div className="bg-white p-1.5 rounded-lg border border-slate-200/60">
+                          <span className="text-[10px] text-slate-500 block font-bold">قيمة الشحن</span>
+                          <span className="text-xs font-bold text-red-600">-{feeVal.toLocaleString()} ج.م</span>
+                        </div>
+
+                        <div className="bg-white p-1.5 rounded-lg border border-slate-200/60">
+                          <span className="text-[10px] text-slate-500 block font-bold">صافي المستحق</span>
+                          <span className={`text-xs font-black ${netPayoutVal < 0 ? 'text-rose-600' : netPayoutVal === 0 ? 'text-slate-600' : 'text-emerald-600'}`}>
+                            {netPayoutVal > 0 ? `+${netPayoutVal.toLocaleString()}` : `${netPayoutVal.toLocaleString()}`} ج.م
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Settlement Status Banner */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-extrabold text-slate-500 block">حالة التسوية والمستحقات:</span>
+                        <div className={`${badgeStyle} p-2 rounded-xl text-xs font-black flex items-center gap-2 border leading-snug`}>
+                          {icon}
+                          <span className="text-[11px] leading-relaxed">{noteText}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Desktop Table View (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-right text-xs">
-                <thead className="bg-slate-50 text-slate-600 font-extrabold uppercase border-b border-slate-200">
+                <thead className="bg-slate-50 text-slate-600 font-extrabold uppercase border-b border-slate-200 whitespace-nowrap">
                   <tr>
                     <th className="p-3">رقم البوليصة</th>
                     <th className="p-3">المستلم</th>
@@ -732,15 +834,15 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
                     return (
                       <tr key={s.id} className="hover:bg-slate-50/80">
-                        <td className="p-3 font-mono font-black text-slate-900">{s.trackingNumber}</td>
+                        <td className="p-3 font-mono font-black text-slate-900 whitespace-nowrap">{s.trackingNumber}</td>
                         <td className="p-3 font-bold text-slate-800">{s.recipient.name}</td>
-                        <td className="p-3 font-extrabold text-slate-900">{codVal.toLocaleString()} ج.م</td>
-                        <td className="p-3 text-red-600 font-bold">-{feeVal.toLocaleString()} ج.م</td>
-                        <td className={`p-3 font-black ${netPayoutVal < 0 ? 'text-rose-600 font-bold' : netPayoutVal === 0 ? 'text-slate-600' : 'text-emerald-600'}`}>
-                          {netPayoutVal > 0 ? `+${netPayoutVal.toLocaleString()}` : `${netPayoutVal.toLocaleString()}`} ج.m
+                        <td className="p-3 font-extrabold text-slate-900 whitespace-nowrap">{codVal.toLocaleString()} ج.م</td>
+                        <td className="p-3 text-red-600 font-bold whitespace-nowrap">-{feeVal.toLocaleString()} ج.م</td>
+                        <td className={`p-3 font-black whitespace-nowrap ${netPayoutVal < 0 ? 'text-rose-600 font-bold' : netPayoutVal === 0 ? 'text-slate-600' : 'text-emerald-600'}`}>
+                          {netPayoutVal > 0 ? `+${netPayoutVal.toLocaleString()}` : `${netPayoutVal.toLocaleString()}`} ج.م
                         </td>
                         <td className="p-3">
-                          <span className={`${badgeStyle} text-[10px] font-extrabold px-2.5 py-1 rounded-full border`}>
+                          <span className={`${badgeStyle} text-[10px] font-extrabold px-2.5 py-1 rounded-full border inline-block whitespace-nowrap`}>
                             {noteText}
                           </span>
                         </td>
@@ -806,67 +908,82 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
             <div className="divide-y divide-slate-100">
               {courierFinancials.map(({ courier, deliveredCount, totalCollected, pendingCommission, netRequired, isSettled, deliveredShipments: courierDelivered }) => (
-                <div key={courier.id} className="p-4 sm:p-5 hover:bg-slate-50/80 transition-colors space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div key={courier.id} className="p-4 sm:p-5 hover:bg-slate-50/80 transition-colors space-y-4">
+                  {/* Courier Info Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-3">
                       <img
                         src={courier.photoUrl}
                         alt={courier.name}
-                        className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shadow-2xs"
+                        className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shadow-2xs shrink-0"
                         referrerPolicy="no-referrer"
                       />
-                      <div>
-                        <div className="flex items-center gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="font-extrabold text-sm text-slate-900">{courier.name}</h4>
-                          <span className="text-[10px] font-extrabold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-md border border-slate-200">
+                          <span className="text-[10px] font-extrabold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">
                             {courier.assignedHub}
                           </span>
                         </div>
-                        <p className="text-xs font-bold text-slate-500 mt-0.5">
-                          تليفون: <span className="font-mono text-slate-800 dir-ltr">{courier.phone}</span> • المركبة: {courier.vehicle === 'motocycle' ? 'دراجة نارية' : courier.vehicle === 'van' ? 'فان مغلقة' : 'سيارة'}
+                        <p className="text-xs font-bold text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                          <span>هاتف: <span className="font-mono text-slate-800 dir-ltr">{courier.phone}</span></span>
+                          <span>•</span>
+                          <span>{courier.vehicle === 'motocycle' ? 'دراجة نارية' : courier.vehicle === 'van' ? 'فان مغلقة' : 'سيارة'}</span>
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 pt-2 sm:pt-0">
-                      <div className="text-right bg-amber-50/60 p-2 rounded-xl border border-amber-200/60">
-                        <span className="text-[10px] text-amber-900 block font-bold">إجمالي الكاش المحصل:</span>
-                        <span className="text-sm font-black text-amber-800 font-mono">
-                          {totalCollected.toLocaleString()} ج.م
-                        </span>
-                      </div>
+                    <div className="text-left sm:text-right">
+                      <span className="text-xs font-extrabold text-slate-600 bg-slate-100 px-3 py-1 rounded-xl border border-slate-200 inline-block">
+                        {deliveredCount} شحنات تسليم
+                      </span>
+                    </div>
+                  </div>
 
-                      <div className="text-right bg-rose-50/60 p-2 rounded-xl border border-rose-200/60">
-                        <span className="text-[10px] text-rose-900 block font-bold">خصم عمولة المندوب:</span>
-                        <span className="text-sm font-black text-rose-700 font-mono">
-                          -{pendingCommission.toLocaleString()} ج.م
-                        </span>
-                      </div>
+                  {/* Financial Settlement Stats - Clean responsive grid on mobile and desktop */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    <div className="bg-amber-50/70 p-3 rounded-2xl border border-amber-200/80 text-right">
+                      <span className="text-[10px] text-amber-900 block font-bold">إجمالي الكاش المحصل:</span>
+                      <span className="text-base font-black text-amber-800 font-mono block mt-0.5">
+                        {totalCollected.toLocaleString()} ج.م
+                      </span>
+                    </div>
 
-                      <div className="text-right bg-blue-50/80 p-2 rounded-xl border border-blue-200/80">
-                        <span className="text-[10px] text-blue-950 block font-bold">الصافي المطلوب توريده:</span>
+                    <div className="bg-rose-50/70 p-3 rounded-2xl border border-rose-200/80 text-right">
+                      <span className="text-[10px] text-rose-900 block font-bold">خصم عمولة المندوب:</span>
+                      <span className="text-base font-black text-rose-700 font-mono block mt-0.5">
+                        -{pendingCommission.toLocaleString()} ج.م
+                      </span>
+                    </div>
+
+                    <div className="col-span-2 sm:col-span-1 bg-blue-50/90 p-3 rounded-2xl border border-blue-200 text-right flex flex-col justify-between">
+                      <span className="text-[10px] text-blue-950 block font-bold">الصافي المطلوب توريده:</span>
+                      <div className="flex items-baseline justify-between mt-0.5">
                         <span className="text-lg font-black text-blue-900 font-mono">
                           {netRequired.toLocaleString()} ج.م
                         </span>
-                        <span className="text-[9px] text-slate-500 block font-bold">({deliveredCount} شحنة تسليم)</span>
+                        <span className="text-[10px] text-blue-700 font-bold">بعد خصم العمولة</span>
                       </div>
-
-                      {isSettled ? (
-                        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>تم توريد العهدة للخزينة</span>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleConfirmCourierSettlement(courier.id, courier.name, netRequired, totalCollected, pendingCommission)}
-                          disabled={netRequired < 0 && totalCollected <= 0}
-                          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <HandCoins className="w-4 h-4" />
-                          <span>استلام الصافي ({netRequired.toLocaleString()} ج.م) توريد</span>
-                        </button>
-                      )}
                     </div>
+                  </div>
+
+                  {/* Settlement Action Bar */}
+                  <div className="pt-1">
+                    {isSettled ? (
+                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl text-xs font-black flex items-center justify-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>تم توريد العهدة النقدية بالكامل وتصفير حساب الكابتن للخزينة ✅</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleConfirmCourierSettlement(courier.id, courier.name, netRequired, totalCollected, pendingCommission)}
+                        disabled={netRequired < 0 && totalCollected <= 0}
+                        className="w-full bg-amber-500 hover:bg-amber-600 active:scale-[0.99] disabled:opacity-40 text-slate-950 font-black text-xs py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <HandCoins className="w-4 h-4" />
+                        <span>تأكيد استلام وتوريد الصافي للخزينة ({netRequired.toLocaleString()} ج.م)</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* Delivered Orders Details for this courier */}
@@ -875,16 +992,16 @@ export const WalletView: React.FC<WalletViewProps> = ({
                       <div className="text-[11px] font-extrabold text-slate-700">تفاصيل شحنات العهدة للكابتن:</div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                         {courierDelivered.map((ship) => (
-                          <div key={ship.id} className="bg-white p-2.5 rounded-lg border border-slate-200 text-xs flex items-center justify-between">
-                            <div>
+                          <div key={ship.id} className="bg-white p-2.5 rounded-xl border border-slate-200 text-xs flex items-center justify-between gap-2">
+                            <div className="min-w-0">
                               <span className="font-mono font-extrabold text-red-600 block">#{ship.trackingNumber}</span>
-                              <span className="text-[11px] font-bold text-slate-800">{ship.recipient.name}</span>
+                              <span className="text-[11px] font-bold text-slate-800 truncate block">{ship.recipient.name}</span>
                             </div>
-                            <span className="font-black text-emerald-600">
+                            <span className="font-black text-emerald-600 shrink-0 text-left">
                               {(ship.status === 'refused' || ship.status === 'returned') && ship.refusedDetails?.shippingFeePaid
-                                ? `${ship.refusedDetails.amountCollected || ship.financials.shippingFee} ج.م (شحن)`
+                                ? `${ship.refusedDetails.amountCollected || ship.financials.shippingFee} ج.م`
                                 : ship.status === 'partial_delivery'
-                                ? `${ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount} ج.م (جزئي)`
+                                ? `${ship.partialDetails?.partialCodAmount ?? ship.financials.codAmount} ج.م`
                                 : `${ship.financials.codAmount} ج.م`}
                             </span>
                           </div>

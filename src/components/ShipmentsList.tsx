@@ -695,126 +695,105 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
         </div>
       </div>
 
-      {/* Shipments Table */}
+      {/* Shipments List: Mobile Cards (< lg) + Desktop Table (>= lg) */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-xs min-w-[800px]">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold uppercase">
-              <tr>
-                <th className="p-3 text-center">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.length === filteredShipments.length && filteredShipments.length > 0}
-                    onChange={toggleSelectAll}
-                    className="w-4 h-4 text-red-600 rounded border-slate-300"
-                  />
-                </th>
-                <th className="p-3">رقم البوليصة (AWB)</th>
-                <th className="p-3 bg-red-50/50 text-red-900 border-x border-red-100">
-                  <span className="flex items-center gap-1 font-black">
-                    <Store className="w-3.5 h-3.5 text-red-600" />
-                    التاجر (المرسل)
-                  </span>
-                </th>
-                <th className="p-3">المستلم والعنوان</th>
-                <th className="p-3">المحافظة والمستودع</th>
-                <th className="p-3">المندوب المخصص</th>
-                <th className="p-3">المبلغ (COD)</th>
-                <th className="p-3">المعايينة والنوع</th>
-                <th className="p-3">حالة الشحنة</th>
-                <th className="p-3 text-center">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredShipments.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="p-12 text-center bg-slate-50/50">
-                    <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-3">
-                      <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center border border-red-100 shadow-xs">
-                        <Package className="w-7 h-7" />
+        {filteredShipments.length === 0 ? (
+          <div className="p-12 text-center bg-slate-50/50">
+            <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-3">
+              <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center border border-red-100 shadow-xs">
+                <Package className="w-7 h-7" />
+              </div>
+              <h4 className="font-extrabold text-base text-slate-900">
+                {shipments.length === 0 ? 'لا توجد شحنات مسجلة حالياً' : 'لم نجد شحنات تضاهي البحث والتصفية'}
+              </h4>
+              <p className="text-xs text-slate-500 max-w-xs">
+                {shipments.length === 0
+                  ? 'تم مسح كافة البيانات. يمكنك الآن البدء بإضافة شحنات جديدة أو استعادة عينة تجريبية.'
+                  : 'جرّب تغيير عبارات البحث، أو تصفية المحافظات والتجار لاستعراض الشحنات.'}
+              </p>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  onClick={onOpenCreateModal}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  إنشاء شحنة جديدة
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Mobile Cards View (< lg) */}
+            <div className="block lg:hidden divide-y divide-slate-100">
+              {filteredShipments.map((s) => {
+                const isHighlighted = s.id === highlightedShipmentId;
+                return (
+                  <div
+                    key={s.id}
+                    className={`p-4 space-y-3 transition-all ${
+                      isHighlighted
+                        ? 'bg-amber-100/90 border-y-2 border-amber-500 ring-4 ring-amber-400/60 animate-pulse font-bold shadow-lg scale-[1.002] z-10'
+                        : 'bg-white hover:bg-slate-50/70'
+                    }`}
+                  >
+                    {/* Header: AWB + Date + Status */}
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(s.id)}
+                          onChange={() => toggleSelectOne(s.id)}
+                          className="w-4 h-4 text-red-600 rounded border-slate-300 shrink-0"
+                        />
+                        <div>
+                          <span
+                            onClick={() => onOpenDetailModal(s)}
+                            className="font-mono font-black text-sm text-slate-900 hover:text-red-600 transition-colors block cursor-pointer"
+                          >
+                            #{s.trackingNumber}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-sans block mt-0.5">
+                            {new Date(s.createdAt).toLocaleDateString('ar-EG')}
+                          </span>
+                        </div>
                       </div>
-                      <h4 className="font-extrabold text-base text-slate-900">
-                        {shipments.length === 0 ? 'لا توجد شحنات مسجلة حالياً' : 'لم نجد شحنات تضاهي البحث والتصفية'}
-                      </h4>
-                      <p className="text-xs text-slate-500 max-w-xs">
-                        {shipments.length === 0
-                          ? 'تم مسح كافة البيانات. يمكنك الآن البدء بإضافة شحنات جديدة أو استعادة عينة تجريبية.'
-                          : 'جرّب تغيير عبارات البحث، أو تصفية المحافظات والتجار لاستعراض الشحنات.'}
-                      </p>
-                      <div className="flex items-center gap-2 pt-2">
-                        <button
-                          onClick={onOpenCreateModal}
-                          className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-                        >
-                          <Plus className="w-4 h-4" />
-                          إنشاء شحنة جديدة
-                        </button>
+
+                      <div className="text-left shrink-0">
+                        {getStatusBadge(s)}
                       </div>
                     </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredShipments.map((s) => {
-                  const isHighlighted = s.id === highlightedShipmentId;
-                  return (
-                    <tr
-                      key={s.id}
-                      className={`transition-all ${
-                        isHighlighted
-                          ? 'bg-amber-100/90 border-y-2 border-amber-500 ring-4 ring-amber-400/60 animate-pulse font-bold shadow-lg scale-[1.002] z-10'
-                          : 'hover:bg-slate-50/80'
-                      }`}
-                    >
-                    <td className="p-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(s.id)}
-                        onChange={() => toggleSelectOne(s.id)}
-                        className="w-4 h-4 text-red-600 rounded border-slate-300"
-                      />
-                    </td>
-                    <td className="p-3 font-mono font-black text-slate-900">
-                      <span 
-                        onClick={() => onOpenDetailModal(s)}
-                        className="cursor-pointer hover:text-red-600 transition-colors block text-sm"
-                      >
-                        {s.trackingNumber}
-                      </span>
-                      <span className="block text-[10px] text-slate-400 font-sans font-normal mt-0.5">
-                        {new Date(s.createdAt).toLocaleDateString('ar-EG')}
-                      </span>
-                    </td>
-                    <td className="p-3 bg-red-50/20 border-x border-red-100/60">
-                      <div className="inline-flex items-center gap-1.5 font-extrabold text-slate-900 text-xs bg-white border border-red-200 px-2.5 py-1 rounded-lg shadow-2xs">
-                        <Store className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                        <span>{s.sender?.storeName || 'تاجر عام'}</span>
-                      </div>
-                      {s.sender?.contactName && (
-                        <span className="block text-[10px] text-slate-500 mt-0.5 font-bold">
-                          المسؤول: {s.sender.contactName} ({s.sender.phone})
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <p className="font-extrabold text-slate-900">{s.recipient.name}</p>
-                      <p className="text-[11px] text-slate-500 font-mono" dir="ltr">{s.recipient.phone}</p>
-                      <p className="text-[11px] text-slate-600 truncate max-w-[200px]">{s.recipient.streetAddress}</p>
-                    </td>
-                    <td className="p-3">
-                      <span className="font-bold text-slate-800 block">{s.recipient.governorate}</span>
-                      <span className="text-[11px] text-slate-500 block truncate max-w-[150px]">{s.assignedHub}</span>
-                    </td>
-                    <td className="p-3">
-                      {s.assignedCourier ? (
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-bold shrink-0">
-                            <Truck className="w-3 h-3" />
-                          </span>
-                          <span className="font-bold text-slate-800 text-xs truncate max-w-[110px]">{s.assignedCourier.name}</span>
+
+                    {/* Merchant & Recipient */}
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="inline-flex items-center gap-1 font-extrabold text-slate-800 bg-red-50/60 border border-red-200/80 px-2 py-0.5 rounded-md text-[11px] truncate max-w-[170px]">
+                          <Store className="w-3 h-3 text-red-600 shrink-0" />
+                          <span className="truncate">{s.sender?.storeName || 'تاجر عام'}</span>
                         </div>
-                      ) : (
-                        <span className="text-[10px] text-slate-400 font-medium block mb-1">غير مسند</span>
-                      )}
+                        <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 shrink-0">
+                          {s.recipient.governorate}
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-extrabold text-slate-900 text-xs">{s.recipient.name}</span>
+                          <span className="font-mono text-slate-600 text-[11px] dir-ltr font-bold">{s.recipient.phone}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 truncate">{s.recipient.streetAddress}</p>
+                      </div>
+                    </div>
+
+                    {/* Courier Assignment */}
+                    <div className="flex items-center justify-between gap-2 text-xs bg-slate-50/50 p-2 rounded-xl border border-slate-200/60">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Truck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span className="font-bold text-slate-700 truncate">
+                          المندوب: <span className="text-slate-900 font-black">{s.assignedCourier?.name || 'غير مسند'}</span>
+                        </span>
+                      </div>
+
                       {onAssignCourier && (currentRole === 'admin' || currentRole === 'hub_manager') && (
                         <select
                           value={s.assignedCourier?.id || ''}
@@ -824,105 +803,80 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                             const found = couriers.find((c) => c.id === val || (c.phone && c.phone === val));
                             if (found) onAssignCourier(s.id, found);
                           }}
-                          className="text-[10px] p-1 bg-slate-100 border border-slate-200 rounded text-slate-700 font-bold block w-full focus:bg-white cursor-pointer"
+                          className="text-[10px] p-1 bg-white border border-slate-200 rounded-lg text-slate-700 font-bold max-w-[130px] shrink-0 cursor-pointer"
                         >
-                          <option value="">-- تعيين مندوب --</option>
+                          <option value="">تعيين...</option>
                           {couriers.map((c, idx) => {
-                            const optVal = c.id || c.phone || `cour-opt-${idx}`;
+                            const optVal = c.id || c.phone || `cour-opt-m-${idx}`;
                             return (
                               <option key={optVal} value={optVal}>
-                                {c.name} {c.phone ? `(${c.phone})` : ''}
+                                {c.name}
                               </option>
                             );
                           })}
                         </select>
                       )}
-                      {currentRole === 'merchant' && !s.assignedCourier && (
-                        <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-medium block text-center mt-1">
-                          بانتظار التعيين
+                    </div>
+
+                    {/* Financials */}
+                    <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                      <div className="bg-red-50/60 border border-red-200/70 p-2 rounded-xl text-right">
+                        <span className="text-[10px] text-red-900 font-bold block">مبلغ التحصيل (COD):</span>
+                        <span className="font-black text-sm text-red-600 font-mono block mt-0.5">
+                          {s.financials.codAmount.toLocaleString()} ج.م
                         </span>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <span className="font-extrabold text-red-600 block text-sm">
-                        {s.financials.codAmount.toLocaleString()} ج.م
-                      </span>
-                      <span className={`text-[10px] font-extrabold block ${s.financials.netPayout < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
-                        {s.financials.netPayout < 0 
-                          ? `الصافي: خصم ${Math.abs(s.financials.netPayout).toLocaleString()} ج.م` 
-                          : `الصافي: ${s.financials.netPayout.toLocaleString()} ج.م`}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border inline-block ${
-                        s.packageDetails.allowOpening
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}>
-                        {s.packageDetails.allowOpening ? 'معاينة مسموحة' : 'ممنوع الفتح'}
-                      </span>
-                      <span className="text-[10px] text-slate-500 block mt-0.5">
-                        {s.packageDetails.weightKg} كجم ({s.packageDetails.itemsCount} قطعة)
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      {getStatusBadge(s)}
-                      {s.noResponseDetails?.isNoResponse && (
-                        <div className="mt-1.5">
-                          {s.noResponseDetails.merchantResponse ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-md">
-                              <Check className="w-3 h-3 text-emerald-600 shrink-0" />
-                              <span>تم رد التاجر للمندوب: "{s.noResponseDetails.merchantResponse.responseNote}"</span>
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setSelectedShipmentForRespond(s);
-                                setMerchantResponseNote('تواصلت مع العميل، وأكد لي جاهزيته للاستلام اليوم');
-                                setIsMerchantRespondModalOpen(true);
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] font-black text-amber-950 bg-amber-400 hover:bg-amber-300 border border-amber-500 px-2.5 py-1 rounded-lg shadow-xs transition-all animate-pulse cursor-pointer"
-                              title="المندوب أبلغ أن العميل لا يرد، انقر لإبلاغ المندوب بأنك تواصلت مع العميل"
-                            >
-                              <PhoneCall className="w-3.5 h-3.5" />
-                              <span>تنبيه: العميل مبيردش (اضغط للرد)</span>
-                            </button>
-                          )}
+                      </div>
+
+                      <div className="bg-slate-50 border border-slate-200 p-2 rounded-xl text-right">
+                        <span className="text-[10px] text-slate-500 font-bold block">صافي التاجر:</span>
+                        <span className={`font-black text-sm font-mono block mt-0.5 ${s.financials.netPayout < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {s.financials.netPayout < 0 ? `${s.financials.netPayout.toLocaleString()}` : `+${s.financials.netPayout.toLocaleString()}`} ج.م
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Failed Attempt Warning Banner */}
+                    {s.noResponseDetails?.isNoResponse && (
+                      <div className="bg-amber-50 border border-amber-200 p-2 rounded-xl space-y-1">
+                        <div className="flex items-center justify-between text-amber-950 text-xs font-black">
+                          <span className="flex items-center gap-1">
+                            <PhoneOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            تنبيه: العميل لا يرد على المندوب
+                          </span>
                         </div>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        {s.noResponseDetails?.isNoResponse && !s.noResponseDetails.merchantResponse && (
+                        {!s.noResponseDetails.merchantResponse && (
                           <button
                             onClick={() => {
                               setSelectedShipmentForRespond(s);
                               setMerchantResponseNote('تواصلت مع العميل، وأكد لي جاهزيته للاستلام اليوم');
                               setIsMerchantRespondModalOpen(true);
                             }}
-                            title="رد على المندوب"
-                            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[11px] px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                            className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs py-1.5 px-3 rounded-lg flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
                           >
                             <PhoneCall className="w-3.5 h-3.5" />
-                            <span>كلمته (رد)</span>
+                            <span>اضغط هنا لتأكيد التواصل مع العميل</span>
                           </button>
                         )}
+                      </div>
+                    )}
 
+                    {/* Actions Bar */}
+                    <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-100">
+                      <div className="flex items-center gap-1">
                         {s.status === 'pending_approval' && onApproveShipment && currentRole === 'admin' && (
                           <button
                             onClick={() => onApproveShipment(s.id)}
-                            title="تأكيد وموافقة الأوردر"
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs cursor-pointer"
                           >
                             <Check className="w-3.5 h-3.5" />
-                            قبول الأوردر
+                            قبول
                           </button>
                         )}
 
                         <button
                           onClick={() => setWhatsappShipment(s)}
-                          title="إرسال رسالة واتساب للعميل"
-                          className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                          title="واتساب للعميل"
+                          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors"
                         >
                           <MessageSquare className="w-4 h-4" />
                         </button>
@@ -930,41 +884,283 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                         <button
                           onClick={() => onOpenPrintModal(s)}
                           title="طباعة البوليصة"
-                          className="p-1.5 text-slate-600 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="p-2 text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
                         >
                           <Printer className="w-4 h-4" />
                         </button>
+                      </div>
 
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => onOpenDetailModal(s)}
-                          title="عرض التفاصيل والتاريخ"
-                          className="p-1.5 text-slate-600 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                          className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3.5 h-3.5" />
+                          التفاصيل
                         </button>
 
                         {onDeleteShipment && (currentRole === 'admin' || s.status === 'pending_approval' || s.status === 'created') && (
                           <button
                             onClick={() => {
-                              if (window.confirm(`هل أنت تأكد من حذف الأوردر رقم (${s.trackingNumber}) نهائياً؟`)) {
+                              if (window.confirm(`هل أنت متأكد من حذف الأوردر رقم (${s.trackingNumber}) نهائياً؟`)) {
                                 onDeleteShipment(s.id);
                               }
                             }}
                             title="حذف الأوردر"
-                            className="p-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 );
-              })
-              )}
-            </tbody>
-          </table>
-        </div>
+              })}
+            </div>
+
+            {/* Desktop Table View (>= lg) */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-right text-xs min-w-[850px]">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold uppercase whitespace-nowrap">
+                  <tr>
+                    <th className="p-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.length === filteredShipments.length && filteredShipments.length > 0}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4 text-red-600 rounded border-slate-300"
+                      />
+                    </th>
+                    <th className="p-3">رقم البوليصة (AWB)</th>
+                    <th className="p-3 bg-red-50/50 text-red-900 border-x border-red-100">
+                      <span className="flex items-center gap-1 font-black">
+                        <Store className="w-3.5 h-3.5 text-red-600" />
+                        التاجر (المرسل)
+                      </span>
+                    </th>
+                    <th className="p-3">المستلم والعنوان</th>
+                    <th className="p-3">المحافظة والمستودع</th>
+                    <th className="p-3">المندوب المخصص</th>
+                    <th className="p-3">المبلغ (COD)</th>
+                    <th className="p-3">المعاينة والنوع</th>
+                    <th className="p-3">حالة الشحنة</th>
+                    <th className="p-3 text-center">إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredShipments.map((s) => {
+                    const isHighlighted = s.id === highlightedShipmentId;
+                    return (
+                      <tr
+                        key={s.id}
+                        className={`transition-all ${
+                          isHighlighted
+                            ? 'bg-amber-100/90 border-y-2 border-amber-500 ring-4 ring-amber-400/60 animate-pulse font-bold shadow-lg scale-[1.002] z-10'
+                            : 'hover:bg-slate-50/80'
+                        }`}
+                      >
+                        <td className="p-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(s.id)}
+                            onChange={() => toggleSelectOne(s.id)}
+                            className="w-4 h-4 text-red-600 rounded border-slate-300"
+                          />
+                        </td>
+                        <td className="p-3 font-mono font-black text-slate-900 whitespace-nowrap">
+                          <span 
+                            onClick={() => onOpenDetailModal(s)}
+                            className="cursor-pointer hover:text-red-600 transition-colors block text-sm"
+                          >
+                            {s.trackingNumber}
+                          </span>
+                          <span className="block text-[10px] text-slate-400 font-sans font-normal mt-0.5">
+                            {new Date(s.createdAt).toLocaleDateString('ar-EG')}
+                          </span>
+                        </td>
+                        <td className="p-3 bg-red-50/20 border-x border-red-100/60">
+                          <div className="inline-flex items-center gap-1.5 font-extrabold text-slate-900 text-xs bg-white border border-red-200 px-2.5 py-1 rounded-lg shadow-2xs">
+                            <Store className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            <span>{s.sender?.storeName || 'تاجر عام'}</span>
+                          </div>
+                          {s.sender?.contactName && (
+                            <span className="block text-[10px] text-slate-500 mt-0.5 font-bold">
+                              المسؤول: {s.sender.contactName} ({s.sender.phone})
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <p className="font-extrabold text-slate-900">{s.recipient.name}</p>
+                          <p className="text-[11px] text-slate-500 font-mono" dir="ltr">{s.recipient.phone}</p>
+                          <p className="text-[11px] text-slate-600 truncate max-w-[200px]">{s.recipient.streetAddress}</p>
+                        </td>
+                        <td className="p-3">
+                          <span className="font-bold text-slate-800 block">{s.recipient.governorate}</span>
+                          <span className="text-[11px] text-slate-500 block truncate max-w-[150px]">{s.assignedHub}</span>
+                        </td>
+                        <td className="p-3">
+                          {s.assignedCourier ? (
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                <Truck className="w-3 h-3" />
+                              </span>
+                              <span className="font-bold text-slate-800 text-xs truncate max-w-[110px]">{s.assignedCourier.name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-medium block mb-1">غير مسند</span>
+                          )}
+                          {onAssignCourier && (currentRole === 'admin' || currentRole === 'hub_manager') && (
+                            <select
+                              value={s.assignedCourier?.id || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (!val) return;
+                                const found = couriers.find((c) => c.id === val || (c.phone && c.phone === val));
+                                if (found) onAssignCourier(s.id, found);
+                              }}
+                              className="text-[10px] p-1 bg-slate-100 border border-slate-200 rounded text-slate-700 font-bold block w-full focus:bg-white cursor-pointer"
+                            >
+                              <option value="">-- تعيين مندوب --</option>
+                              {couriers.map((c, idx) => {
+                                const optVal = c.id || c.phone || `cour-opt-${idx}`;
+                                return (
+                                  <option key={optVal} value={optVal}>
+                                    {c.name} {c.phone ? `(${c.phone})` : ''}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          )}
+                          {currentRole === 'merchant' && !s.assignedCourier && (
+                            <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-medium block text-center mt-1">
+                              بانتظار التعيين
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <span className="font-extrabold text-red-600 block text-sm">
+                            {s.financials.codAmount.toLocaleString()} ج.م
+                          </span>
+                          <span className={`text-[10px] font-extrabold block ${s.financials.netPayout < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                            {s.financials.netPayout < 0 
+                              ? `الصافي: خصم ${Math.abs(s.financials.netPayout).toLocaleString()} ج.م` 
+                              : `الصافي: ${s.financials.netPayout.toLocaleString()} ج.م`}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border inline-block ${
+                            s.packageDetails.allowOpening
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {s.packageDetails.allowOpening ? 'معاينة مسموحة' : 'ممنوع الفتح'}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block mt-0.5">
+                            {s.packageDetails.weightKg} كجم ({s.packageDetails.itemsCount} قطعة)
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          {getStatusBadge(s)}
+                          {s.noResponseDetails?.isNoResponse && (
+                            <div className="mt-1.5">
+                              {s.noResponseDetails.merchantResponse ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-md">
+                                  <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  <span>تم رد التاجر للمندوب: "{s.noResponseDetails.merchantResponse.responseNote}"</span>
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setSelectedShipmentForRespond(s);
+                                    setMerchantResponseNote('تواصلت مع العميل، وأكد لي جاهزيته للاستلام اليوم');
+                                    setIsMerchantRespondModalOpen(true);
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[11px] font-black text-amber-950 bg-amber-400 hover:bg-amber-300 border border-amber-500 px-2.5 py-1 rounded-lg shadow-xs transition-all animate-pulse cursor-pointer"
+                                  title="المندوب أبلغ أن العميل لا يرد، انقر لإبلاغ المندوب بأنك تواصلت مع العميل"
+                                >
+                                  <PhoneCall className="w-3.5 h-3.5" />
+                                  <span>تنبيه: العميل مبيردش (اضغط للرد)</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {s.noResponseDetails?.isNoResponse && !s.noResponseDetails.merchantResponse && (
+                              <button
+                                onClick={() => {
+                                  setSelectedShipmentForRespond(s);
+                                  setMerchantResponseNote('تواصلت مع العميل، وأكد لي جاهزيته للاستلام اليوم');
+                                  setIsMerchantRespondModalOpen(true);
+                                }}
+                                title="رد على المندوب"
+                                className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[11px] px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                              >
+                                <PhoneCall className="w-3.5 h-3.5" />
+                                <span>كلمته (رد)</span>
+                              </button>
+                            )}
+
+                            {s.status === 'pending_approval' && onApproveShipment && currentRole === 'admin' && (
+                              <button
+                                onClick={() => onApproveShipment(s.id)}
+                                title="تأكيد وموافقة الأوردر"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                قبول الأوردر
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => setWhatsappShipment(s)}
+                              title="إرسال رسالة واتساب للعميل"
+                              className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              onClick={() => onOpenPrintModal(s)}
+                              title="طباعة البوليصة"
+                              className="p-1.5 text-slate-600 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              onClick={() => onOpenDetailModal(s)}
+                              title="عرض التفاصيل والتاريخ"
+                              className="p-1.5 text-slate-600 hover:text-red-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+
+                            {onDeleteShipment && (currentRole === 'admin' || s.status === 'pending_approval' || s.status === 'created') && (
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`هل أنت تأكد من حذف الأوردر رقم (${s.trackingNumber}) نهائياً؟`)) {
+                                    onDeleteShipment(s.id);
+                                  }
+                                }}
+                                title="حذف الأوردر"
+                                className="p-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {/* WhatsApp Modal */}

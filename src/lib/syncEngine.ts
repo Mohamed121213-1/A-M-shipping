@@ -63,12 +63,46 @@ class SyncEngine {
         this.fetchPersistedStateFromServer();
       }, 2000);
 
-      // Re-check state immediately on window focus or online status change
-      window.addEventListener('focus', () => this.fetchPersistedStateFromServer());
+      // Re-check and sync state immediately when phone is unlocked, tab becomes visible, or on focus
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.fetchPersistedStateFromServer();
+          if (!this.sseSource || this.sseSource.readyState !== EventSource.OPEN) {
+            this.initSseStream();
+          }
+        }
+      });
+
+      window.addEventListener('focus', () => {
+        this.fetchPersistedStateFromServer();
+        if (!this.sseSource || this.sseSource.readyState !== EventSource.OPEN) {
+          this.initSseStream();
+        }
+      });
+
+      window.addEventListener('pageshow', () => {
+        this.fetchPersistedStateFromServer();
+      });
+
       window.addEventListener('online', () => {
         this.fetchPersistedStateFromServer();
         this.initSseStream();
       });
+
+      // Listen to Service Worker Background Sync & Push updates
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data?.type === 'BACKGROUND_STATE_SYNC_COMPLETED' && event.data?.state) {
+            this.handleIncomingUpdate({
+              ...event.data.state,
+              timestamp: event.data.timestamp || Date.now(),
+              senderId: 'sw_background_push_sync',
+            });
+          } else if (event.data?.type === 'NOTIFICATION_CLICKED') {
+            this.fetchPersistedStateFromServer();
+          }
+        });
+      }
     }
 
     // 3. Initialize Supabase Realtime Broadcast Channel for cross-device & cross-account syncing

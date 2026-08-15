@@ -415,16 +415,40 @@ function fallbackNotification(
   }
 }
 
-// Register Service Worker for PWA / Mobile Web Push support
+// Register Service Worker for PWA / Mobile Web Push & Background Sync support
 export const registerServiceWorker = (user?: UserSession | null, activeCourierId?: string) => {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     const register = () => {
       navigator.serviceWorker
         .register('/sw.js')
-        .then((reg) => {
+        .then(async (reg) => {
           console.log('ServiceWorker registered with scope:', reg.scope);
           if (Notification.permission === 'granted') {
             subscribeUserToWebPush(user, activeCourierId);
+          }
+
+          // Register Periodic Background Sync if supported (keeps data updated in background on Android/Chrome)
+          if ('periodicSync' in reg) {
+            try {
+              const periodicSync = (reg as any).periodicSync;
+              const tags = await periodicSync.getTags();
+              if (!tags.includes('periodic-app-update')) {
+                await periodicSync.register('periodic-app-update', {
+                  minInterval: 5 * 60 * 1000, // Every 5 minutes
+                });
+                console.log('✅ Periodic background sync registered successfully');
+              }
+            } catch (err) {
+              console.log('Periodic sync not permitted or supported:', err);
+            }
+          }
+
+          // Register one-shot Background Sync if supported
+          if ('sync' in reg) {
+            try {
+              const sync = (reg as any).sync;
+              await sync.register('sync-pending-state');
+            } catch (e) {}
           }
         })
         .catch((err) => {

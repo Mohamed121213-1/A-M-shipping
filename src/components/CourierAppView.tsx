@@ -1044,22 +1044,22 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                   return (
                     <div 
                       key={s.id}
-                      className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/80 flex items-center justify-between"
+                      className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/80 flex items-center justify-between gap-3"
                     >
-                      <div>
-                        <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-xs font-black text-red-400">#{s.trackingNumber}</span>
-                          <span className="text-xs font-bold text-white">{s.recipient.name}</span>
+                          <span className="text-xs font-bold text-white truncate max-w-[140px]">{s.recipient.name}</span>
                         </div>
                         <div className="text-[10px] text-slate-400 mt-0.5">{s.recipient.governorate} - {s.recipient.city}</div>
                       </div>
 
-                      <div className="text-left">
-                        <div className="text-xs font-black text-emerald-400">
+                      <div className="text-left shrink-0">
+                        <div className="text-xs font-black text-emerald-400 font-mono">
                           +{collectedAmt.toLocaleString()} ج.م
                         </div>
-                        <span className="text-[9px] font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/50">
-                          {typeLabel} • بالعهدة
+                        <span className="text-[9px] font-bold text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-md border border-amber-700/50 inline-block whitespace-nowrap mt-0.5">
+                          {typeLabel}
                         </span>
                       </div>
                     </div>
