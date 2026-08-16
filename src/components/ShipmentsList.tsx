@@ -44,6 +44,8 @@ interface ShipmentsListProps {
   onRestoreDemoData?: () => void;
   onApproveShipment?: (shipmentId: string) => void;
   onApproveAllPending?: () => void;
+  onToggleMerchantSettlement?: (shipmentId: string, isSettled: boolean) => void;
+  onMarkReturnedToMerchant?: (shipmentId: string) => void;
   currentRole?: AppUserRole;
   couriers?: CourierInfo[];
   systemUsers?: UserSession[];
@@ -64,6 +66,8 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   onRestoreDemoData,
   onApproveShipment,
   onApproveAllPending,
+  onToggleMerchantSettlement,
+  onMarkReturnedToMerchant,
   currentRole,
   couriers = [],
   systemUsers = [],
@@ -108,6 +112,13 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
         return false;
       }
 
+      // Hide/erase returned orders that have already been handed over to the merchant (isReturnedToMerchant === true)
+      // These are preserved in the Returns tab (سجل المرتجعات المسلمة للتاجر)
+      const isHandedOverReturn = (s.status === 'returned' || s.status === 'refused') && s.isReturnedToMerchant;
+      if (isHandedOverReturn) {
+        return false;
+      }
+
       // Search
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch =
@@ -136,11 +147,11 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
       } else if (statusFilter === 'delivered') {
         matchesStatus = s.status === 'delivered' || s.status === 'partial_delivery';
       } else if (statusFilter === 'paid_returns') {
-        matchesStatus = (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid === true;
+        matchesStatus = (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && s.refusedDetails?.shippingFeePaid === true;
       } else if (statusFilter === 'unpaid_returns') {
-        matchesStatus = (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid === false;
+        matchesStatus = (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && s.refusedDetails?.shippingFeePaid === false;
       } else if (statusFilter === 'refused') {
-        matchesStatus = s.status === 'refused' || s.status === 'returned';
+        matchesStatus = (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant;
       } else if (statusFilter === 'failed') {
         matchesStatus = s.status === 'failed_attempt';
       } else if (statusFilter === 'all') {
@@ -173,20 +184,29 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
     });
   }, [shipments, searchTerm, statusFilter, dateFilter, selectedDate, governorateFilter, merchantFilter, currentRole]);
 
-  // Key KPI Metrics
-  const totalCount = shipments.length;
-  const pendingCount = shipments.filter((s) => s.status === 'pending_approval').length;
-  const activeMainCount = shipments.filter((s) => !['delivered', 'partial_delivery', 'refused', 'returned'].includes(s.status)).length;
-  const deliveredCount = shipments.filter((s) => s.status === 'delivered' || s.status === 'partial_delivery').length;
-  const paidReturnsCount = shipments.filter((s) => (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid === true).length;
-  const unpaidReturnsCount = shipments.filter((s) => (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.shippingFeePaid === false).length;
-  const activeCount = shipments.filter((s) =>
+  // Key KPI Metrics Pool (excluding returns already handed over to the merchant)
+  const activeShipmentsPool = useMemo(() => {
+    return shipments.filter((s) => !((s.status === 'returned' || s.status === 'refused') && s.isReturnedToMerchant));
+  }, [shipments]);
+
+  const totalCount = activeShipmentsPool.length;
+  const pendingCount = activeShipmentsPool.filter((s) => s.status === 'pending_approval').length;
+  const activeMainCount = activeShipmentsPool.filter((s) => !['delivered', 'partial_delivery', 'refused', 'returned'].includes(s.status)).length;
+  const deliveredCount = activeShipmentsPool.filter((s) => s.status === 'delivered' || s.status === 'partial_delivery').length;
+  const paidReturnsCount = activeShipmentsPool.filter((s) => (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && s.refusedDetails?.shippingFeePaid === true).length;
+  const unpaidReturnsCount = activeShipmentsPool.filter((s) => (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && s.refusedDetails?.shippingFeePaid === false).length;
+  const activeCount = activeShipmentsPool.filter((s) =>
     ['created', 'pickup_requested', 'picked_up', 'in_hub', 'out_for_delivery'].includes(s.status)
   ).length;
 
-  const totalCodCollected = shipments
+  const totalCodCollected = activeShipmentsPool
     .filter((s) => s.status === 'delivered' || s.status === 'partial_delivery')
-    .reduce((sum, s) => sum + s.financials.codAmount, 0);
+    .reduce((sum, s) => {
+      if (s.status === 'partial_delivery') {
+        return sum + (s.partialDetails?.partialCodAmount ?? s.financials.codAmount);
+      }
+      return sum + s.financials.codAmount;
+    }, 0);
 
   const successRate = totalCount > 0 ? Math.round((deliveredCount / totalCount) * 100) : 100;
 
@@ -231,21 +251,18 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
         );
       case 'partial_delivery': {
         const totalItems = s.packageDetails?.itemsCount || 1;
-        const acceptedItems = s.partialDetails?.acceptedItemsCount || 0;
+        const acceptedItems = s.partialDetails?.acceptedItemsCount || 1;
         const returnedItems = s.partialDetails?.returnedItemsCount ?? Math.max(0, totalItems - acceptedItems);
         const collectedCod = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
-        const totalOrigCod = s.partialDetails?.originalCodAmount ?? s.financials.codAmount;
-        const remainingCod = s.partialDetails?.remainingCodAmount ?? Math.max(0, totalOrigCod - collectedCod);
         return (
           <div className="space-y-1">
-            <span className="bg-amber-100 text-amber-950 border border-amber-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
-              <RotateCcw className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-              <span>🧩 استلام جزئي</span>
+            <span className="bg-emerald-100 text-emerald-950 border border-emerald-300 font-black text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+              <span>✅ استلام وتسليم ({acceptedItems} قطعة - {collectedCod.toLocaleString()} ج.م)</span>
             </span>
-            <div className="text-[10px] bg-amber-50 border border-amber-200 rounded-md p-1 font-bold text-amber-900 space-y-0.5">
-              <p>📦 تسليم {acceptedItems} قطعة ({collectedCod.toLocaleString()} ج.م)</p>
-              <p className="text-rose-700">↩️ ارتجاع {returnedItems} قطعة ({remainingCod.toLocaleString()} ج.م)</p>
-            </div>
+            <span className="block text-[10px] text-amber-800 font-bold bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded">
+              ↩️ المرتجع ({returnedItems} قطعة) بسجل المرتجعات
+            </span>
           </div>
         );
       }
@@ -821,19 +838,41 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                     {/* Financials */}
                     <div className="grid grid-cols-2 gap-2 text-center text-xs">
                       <div className="bg-red-50/60 border border-red-200/70 p-2 rounded-xl text-right">
-                        <span className="text-[10px] text-red-900 font-bold block">مبلغ التحصيل (COD):</span>
+                        <span className="text-[10px] text-red-900 font-bold block">
+                          {s.status === 'partial_delivery' ? 'المحصل من المستلم:' : 'مبلغ التحصيل (COD):'}
+                        </span>
                         <span className="font-black text-sm text-red-600 font-mono block mt-0.5">
-                          {s.financials.codAmount.toLocaleString()} ج.م
+                          {(s.status === 'partial_delivery' ? (s.partialDetails?.partialCodAmount ?? s.financials.codAmount) : s.financials.codAmount).toLocaleString()} ج.م
                         </span>
                       </div>
 
                       <div className="bg-slate-50 border border-slate-200 p-2 rounded-xl text-right">
                         <span className="text-[10px] text-slate-500 font-bold block">صافي التاجر:</span>
                         <span className={`font-black text-sm font-mono block mt-0.5 ${s.financials.netPayout < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                          {s.financials.netPayout < 0 ? `${s.financials.netPayout.toLocaleString()}` : `+${s.financials.netPayout.toLocaleString()}`} ج.م
+                          {s.status === 'partial_delivery'
+                            ? `+${Math.max(0, (s.partialDetails?.partialCodAmount ?? s.financials.codAmount) - s.financials.shippingFee).toLocaleString()} ج.م`
+                            : s.financials.netPayout < 0 ? `${s.financials.netPayout.toLocaleString()} ج.م` : `+${s.financials.netPayout.toLocaleString()} ج.م`}
                         </span>
                       </div>
                     </div>
+
+                    {/* Return Handover Status Banner (if viewing returns) */}
+                    {(s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && (
+                      <div className="bg-amber-50 border border-amber-200 p-2 rounded-xl flex items-center justify-between text-xs">
+                        <span className="text-amber-900 font-black text-[11px] flex items-center gap-1">
+                          <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                          مرتجع بالمستودع
+                        </span>
+                        {onMarkReturnedToMerchant && (currentRole === 'admin' || currentRole === 'hub_manager') && (
+                          <button
+                            onClick={() => onMarkReturnedToMerchant(s.id)}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] rounded-lg shadow-2xs transition-all cursor-pointer"
+                          >
+                            تسليم المرتجع للتاجر ↩️
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     {/* Failed Attempt Warning Banner */}
                     {s.noResponseDetails?.isNoResponse && (
@@ -1040,12 +1079,16 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                         </td>
                         <td className="p-3">
                           <span className="font-extrabold text-red-600 block text-sm">
-                            {s.financials.codAmount.toLocaleString()} ج.م
+                            {s.status === 'partial_delivery'
+                              ? `${(s.partialDetails?.partialCodAmount ?? s.financials.codAmount).toLocaleString()} ج.م`
+                              : `${s.financials.codAmount.toLocaleString()} ج.م`}
                           </span>
                           <span className={`text-[10px] font-extrabold block ${s.financials.netPayout < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
-                            {s.financials.netPayout < 0 
+                            {s.status === 'partial_delivery'
+                              ? `الصافي: +${Math.max(0, (s.partialDetails?.partialCodAmount ?? s.financials.codAmount) - s.financials.shippingFee).toLocaleString()} ج.م`
+                              : s.financials.netPayout < 0 
                               ? `الصافي: خصم ${Math.abs(s.financials.netPayout).toLocaleString()} ج.م` 
-                              : `الصافي: ${s.financials.netPayout.toLocaleString()} ج.م`}
+                              : `الصافي: +${s.financials.netPayout.toLocaleString()} ج.م`}
                           </span>
                         </td>
                         <td className="p-3">
@@ -1088,6 +1131,17 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                         </td>
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1">
+                            {(s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && onMarkReturnedToMerchant && (currentRole === 'admin' || currentRole === 'hub_manager') && (
+                              <button
+                                onClick={() => onMarkReturnedToMerchant(s.id)}
+                                title="تسليم المرتجع للتاجر"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] px-2 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-2xs cursor-pointer whitespace-nowrap"
+                              >
+                                <RotateCcw className="w-3 h-3 text-emerald-200" />
+                                تسليم للتاجر
+                              </button>
+                            )}
+
                             {s.noResponseDetails?.isNoResponse && !s.noResponseDetails.merchantResponse && (
                               <button
                                 onClick={() => {

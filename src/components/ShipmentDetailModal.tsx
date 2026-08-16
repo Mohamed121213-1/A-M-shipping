@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Shipment, ShipmentStatus, CourierInfo, AppUserRole } from '../types';
-import { X, CheckCircle2, Clock, MapPin, Truck, AlertTriangle, ShieldCheck, Sparkles, Printer, User, Phone, Package, DollarSign, ArrowRight, KeyRound, MessageSquare, Trash2 } from 'lucide-react';
+import { X, CheckCircle2, Clock, MapPin, Truck, AlertTriangle, ShieldCheck, Sparkles, Printer, User, Phone, Package, DollarSign, ArrowRight, KeyRound, MessageSquare, Trash2, RotateCcw } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
 interface ShipmentDetailModalProps {
@@ -14,6 +14,7 @@ interface ShipmentDetailModalProps {
   isHighlighted?: boolean;
   currentRole?: AppUserRole;
   onToggleMerchantSettlement?: (shipmentId: string, isSettled: boolean) => void;
+  onMarkReturnedToMerchant?: (shipmentId: string) => void;
 }
 
 export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
@@ -27,6 +28,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   isHighlighted,
   currentRole = 'merchant',
   onToggleMerchantSettlement,
+  onMarkReturnedToMerchant,
 }) => {
   if (!shipment) return null;
 
@@ -328,11 +330,75 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               </div>
 
               {shipment.partialDetails && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-900 space-y-1">
-                  <p className="font-extrabold flex items-center gap-1">📦 تفاصيل الاستلام الجزئي:</p>
-                  <p>القطع المستلمة: <span className="font-bold">{shipment.partialDetails.acceptedItemsCount}</span> من <span className="font-bold">{shipment.packageDetails.itemsCount}</span></p>
-                  <p>المبلغ المحصل: <span className="font-bold text-emerald-700">{shipment.partialDetails.partialCodAmount} ج.م</span></p>
-                  {shipment.partialDetails.notes && <p className="text-[11px] text-slate-600">ملاحظات: {shipment.partialDetails.notes}</p>}
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 text-xs text-amber-950 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="font-black flex items-center gap-1.5 text-xs text-amber-900">
+                      <span>🧩 تفاصيل الاستلام الجزئي المنفصل:</span>
+                    </p>
+                    <span className="bg-amber-200/80 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-md">
+                      تم فصل الواصل عن المرتجع
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1 text-center font-bold">
+                    <div className="bg-emerald-50 border border-emerald-200 p-2 rounded-lg text-right">
+                      <span className="text-[10px] text-emerald-800 block">الجزء المسلم للعميل (المحصل):</span>
+                      <span className="text-xs font-black text-emerald-700 block mt-0.5">
+                        {shipment.partialDetails.acceptedItemsCount} قطعة ({shipment.partialDetails.partialCodAmount.toLocaleString()} ج.م)
+                      </span>
+                    </div>
+                    <div className="bg-rose-50 border border-rose-200 p-2 rounded-lg text-right">
+                      <span className="text-[10px] text-rose-800 block">الجزء المرتجع (في تبويب المرتجعات):</span>
+                      <span className="text-xs font-black text-rose-700 block mt-0.5">
+                        {shipment.partialDetails.returnedItemsCount ?? Math.max(0, (shipment.packageDetails.itemsCount || 1) - shipment.partialDetails.acceptedItemsCount)} قطعة ({shipment.partialDetails.remainingCodAmount?.toLocaleString() || 0} ج.م)
+                      </span>
+                    </div>
+                  </div>
+                  {shipment.partialDetails.notes && (
+                    <p className="text-[11px] text-amber-900 bg-amber-100/60 p-1.5 rounded-md">
+                      ملاحظات التسليم الجزئي: {shipment.partialDetails.notes}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Physical Return Handover Status Card */}
+              {(shipment.status === 'returned' || shipment.status === 'refused' || shipment.status === 'partial_delivery') && (
+                <div className={`p-3 rounded-xl border text-xs space-y-2 ${
+                  shipment.isReturnedToMerchant
+                    ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
+                    : 'bg-amber-50/90 border-amber-300 text-amber-950'
+                }`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {shipment.isReturnedToMerchant ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <RotateCcw className="w-4 h-4 text-amber-600 shrink-0" />
+                      )}
+                      <div>
+                        <span className="font-black text-xs block">
+                          {shipment.isReturnedToMerchant
+                            ? 'تم تسليم المرتجع للتاجر (ممسوح من الشحنات النشطة) ✅'
+                            : 'المرتجع متواجد بالمستودع (بانتظار تسليمه للتاجر) 📦'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">
+                          {shipment.isReturnedToMerchant
+                            ? (shipment.returnedToMerchantAt ? `تاريخ استلام التاجر: ${new Date(shipment.returnedToMerchantAt).toLocaleDateString('ar-EG')}` : 'تم استلام التاجر للمرتجع بالكامل')
+                            : 'عند الضغط على تسليم المرتجع سيتم إخفاء الشحنة من قائمة الشحنات العامة وحفظها بسجل المرتجعات'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {onMarkReturnedToMerchant && (currentRole === 'admin' || currentRole === 'hub_manager') && !shipment.isReturnedToMerchant && (
+                      <button
+                        type="button"
+                        onClick={() => onMarkReturnedToMerchant(shipment.id)}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer whitespace-nowrap"
+                      >
+                        تسليم المرتجع للتاجر ↩️
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 

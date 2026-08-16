@@ -2080,6 +2080,7 @@ export default function App() {
                     onApproveShipment={handleApproveShipment}
                     onApproveAllPending={handleApproveAllPending}
                     onToggleMerchantSettlement={handleToggleMerchantSettlement}
+                    onMarkReturnedToMerchant={handleMarkReturnedToMerchant}
                     currentRole="merchant"
                     couriers={couriers}
                     systemUsers={users}
@@ -2151,6 +2152,7 @@ export default function App() {
                     onApproveShipment={handleApproveShipment}
                     onApproveAllPending={handleApproveAllPending}
                     onToggleMerchantSettlement={handleToggleMerchantSettlement}
+                    onMarkReturnedToMerchant={handleMarkReturnedToMerchant}
                     currentRole={currentRole}
                     couriers={couriers}
                     systemUsers={users}
@@ -2263,6 +2265,7 @@ export default function App() {
         onDeleteShipment={handleDeleteShipment}
         onAssignCourier={handleAssignCourier}
         onToggleMerchantSettlement={handleToggleMerchantSettlement}
+        onMarkReturnedToMerchant={handleMarkReturnedToMerchant}
         onOpenPrintModal={(s) => {
           setSelectedDetailShipment(null);
           setSelectedPrintShipment(s);
