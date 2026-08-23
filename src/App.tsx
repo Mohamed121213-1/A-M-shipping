@@ -2300,19 +2300,24 @@ export default function App() {
       <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500 mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <img
-              src="/src/assets/images/am_shipping_new_logo_1785454536501.jpg"
-              alt="A&M Shipping Logo"
-              className="w-6 h-6 rounded-md object-cover border border-slate-200"
-              referrerPolicy="no-referrer"
-            />
-            <span className="font-black text-slate-900">A&M<span className="text-red-600">shipping</span></span>
-            <span>© 2026 جميع الحقوق محفوظة لشركة A&Mshipping للشحن واللوجستيات</span>
+            <div className="w-6 h-6 rounded-md bg-slate-900 overflow-hidden border border-slate-700 flex items-center justify-center">
+              <img
+                src="/dropline-logo.jpg"
+                alt="DropLine Logo"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <span className="font-black text-slate-900">Drop<span className="text-red-600">Line</span></span>
+            <span>© 2026 جميع الحقوق محفوظة لمنصة DropLine للشحن واللوجستيات</span>
           </div>
           <div className="flex items-center gap-4 text-slate-400 font-medium">
             <span>الخط الساخن: 19001</span>
             <span>•</span>
-            <span>amshipping.com</span>
+            <span>dropline.eg</span>
           </div>
         </div>
       </footer>

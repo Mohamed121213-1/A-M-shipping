@@ -395,11 +395,18 @@ export const LoginView: React.FC<LoginViewProps> = ({
           {/* Header Brand */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs overflow-hidden flex items-center justify-center p-1">
+              <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-700/60 shadow-xs overflow-hidden flex items-center justify-center p-1">
                 <img 
-                  src="/src/assets/images/dropline_logo_1787409266928.jpg" 
+                  src="/dropline-logo.jpg" 
                   alt="DropLine Logo"
                   className="w-full h-full object-cover rounded-xl"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                    const parent = (e.target as HTMLElement).parentElement;
+                    if (parent) {
+                      parent.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-red-600 text-white font-black text-xl rounded-xl">D</div>`;
+                    }
+                  }}
                   referrerPolicy="no-referrer"
                 />
               </div>

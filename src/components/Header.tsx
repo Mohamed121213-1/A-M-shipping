@@ -249,11 +249,18 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => setActiveTab(currentUser ? (currentUser.role === 'courier' ? 'courier_app' : 'shipments') : 'login')}
             className="flex items-center gap-2.5 cursor-pointer group"
           >
-            <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 overflow-hidden shadow-xs group-hover:scale-105 transition-transform flex items-center justify-center p-0.5">
+            <div className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-700/60 overflow-hidden shadow-xs group-hover:scale-105 transition-transform flex items-center justify-center p-0.5">
               <img
-                src="/src/assets/images/dropline_logo_1787409266928.jpg"
+                src="/dropline-logo.jpg"
                 alt="DropLine Logo"
                 className="w-full h-full object-cover rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                  const parent = (e.target as HTMLElement).parentElement;
+                  if (parent) {
+                    parent.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-red-600 text-white font-black text-lg rounded-lg">D</div>`;
+                  }
+                }}
                 referrerPolicy="no-referrer"
               />
             </div>

@@ -45,11 +45,18 @@ export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, 
           {/* Airbill Header */}
           <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg border-2 border-slate-900 overflow-hidden shrink-0">
+              <div className="w-12 h-12 rounded-lg border-2 border-slate-900 overflow-hidden shrink-0 bg-slate-900">
                 <img
-                  src="/src/assets/images/dropline_logo_1787409266928.jpg"
+                  src="/dropline-logo.jpg"
                   alt="DropLine Logo"
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                    const parent = (e.target as HTMLElement).parentElement;
+                    if (parent) {
+                      parent.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-red-600 text-white font-black text-xl">D</div>`;
+                    }
+                  }}
                   referrerPolicy="no-referrer"
                 />
               </div>
