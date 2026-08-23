@@ -59,7 +59,7 @@ export const PublicTrackingView: React.FC<PublicTrackingViewProps> = ({
         <div className="relative z-10 space-y-4 max-w-xl mx-auto">
           <div className="inline-flex items-center gap-2 bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs font-bold border border-red-500/30">
             <Package className="w-4 h-4" />
-            تتبع شحنتك المباشر مع A&M shipping
+            تتبع شحنتك المباشر مع DropLine
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-black">أين طردك الآن؟</h2>

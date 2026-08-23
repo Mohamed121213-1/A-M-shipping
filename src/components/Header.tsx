@@ -100,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 font-medium text-red-400">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-            A&M shipping
+            DropLine
           </span>
           <span className="hidden md:inline text-slate-500">|</span>
           <span className="hidden md:inline text-slate-400">تغطية شاملة لجميع المحافظات المصرية</span>
@@ -249,10 +249,10 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => setActiveTab(currentUser ? (currentUser.role === 'courier' ? 'courier_app' : 'shipments') : 'login')}
             className="flex items-center gap-2.5 cursor-pointer group"
           >
-            <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 overflow-hidden shadow-sm shadow-slate-200 group-hover:scale-105 transition-transform flex items-center justify-center p-0.5">
+            <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 overflow-hidden shadow-xs group-hover:scale-105 transition-transform flex items-center justify-center p-0.5">
               <img
-                src="/src/assets/images/am_shipping_new_logo_1785454536501.jpg"
-                alt="A&M Shipping Logo"
+                src="/src/assets/images/dropline_logo_1787409266928.jpg"
+                alt="DropLine Logo"
                 className="w-full h-full object-cover rounded-lg"
                 referrerPolicy="no-referrer"
               />
@@ -260,7 +260,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-black text-xl tracking-tight text-slate-900">
-                  A&M <span className="text-red-600">shipping</span>
+                  Drop<span className="text-red-600">Line</span>
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium">منصة الشحن واللوجستيات المتكاملة</p>

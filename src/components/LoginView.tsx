@@ -397,15 +397,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs overflow-hidden flex items-center justify-center p-1">
                 <img 
-                  src="/src/assets/images/am_shipping_new_logo_1785454536501.jpg" 
-                  alt="A&M Shipping Logo"
+                  src="/src/assets/images/dropline_logo_1787409266928.jpg" 
+                  alt="DropLine Logo"
                   className="w-full h-full object-cover rounded-xl"
                   referrerPolicy="no-referrer"
                 />
               </div>
               <div>
                 <h1 className="text-xl font-black text-slate-900 tracking-tight">
-                  A&M <span className="text-red-600">shipping</span>
+                  Drop<span className="text-red-600">Line</span>
                 </h1>
                 <p className="text-xs font-bold text-slate-500">منصة إدارة اللوجستيات وتتبع الشحنات</p>
               </div>
@@ -831,7 +831,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         {/* Footer info */}
         <div className="pt-6 text-center sm:text-right text-[11px] text-slate-400 font-bold border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2 mt-6">
-          <span>© 2026 A&M shipping. جميع الحقوق محفوظة.</span>
+          <span>© 2026 DropLine. جميع الحقوق محفوظة.</span>
           <div className="flex items-center gap-3">
             <span className="hover:underline cursor-pointer">Supabase Auth Integrated</span>
             <span>•</span>

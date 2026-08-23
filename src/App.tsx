@@ -1840,7 +1840,7 @@ export default function App() {
     const courierUser: UserSession = {
       id: courierId,
       name: fullCourier.name,
-      email: `${courierId}@am-shipping.eg`,
+      email: `${courierId}@dropline.eg`,
       phone: fullCourier.phone,
       role: 'courier',
       avatarUrl: fullCourier.photoUrl,

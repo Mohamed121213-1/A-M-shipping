@@ -21,12 +21,12 @@ export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, 
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between no-print">
           <div className="flex items-center gap-2">
             <Printer className="w-5 h-5 text-red-500" />
-            <h3 className="font-bold text-base">معاينة وطباعة بوليصة الشحن (A&M shipping)</h3>
+            <h3 className="font-bold text-base">معاينة وطباعة بوليصة الشحن (DropLine)</h3>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-colors"
+              className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 shadow-xs transition-colors"
             >
               <Printer className="w-4 h-4" />
               طباعة البوليصة
@@ -47,17 +47,17 @@ export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, 
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-lg border-2 border-slate-900 overflow-hidden shrink-0">
                 <img
-                  src="/src/assets/images/am_shipping_new_logo_1785454536501.jpg"
-                  alt="A&M Shipping Logo"
+                  src="/src/assets/images/dropline_logo_1787409266928.jpg"
+                  alt="DropLine Logo"
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                 />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-3xl font-black tracking-tight text-slate-900">A&M <span className="text-red-600">shipping</span></span>
+                  <span className="text-3xl font-black tracking-tight text-slate-900">Drop<span className="text-red-600">Line</span></span>
                 </div>
-                <p className="text-xs text-slate-600 font-semibold mt-0.5">بوليصة شحن جوي وبري رسمية - شبكة A&M shipping مصر</p>
+                <p className="text-xs text-slate-600 font-semibold mt-0.5">بوليصة شحن جوي وبري رسمية - شبكة DropLine مصر</p>
               </div>
             </div>
 
@@ -177,9 +177,9 @@ export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, 
           <div className="border-t border-slate-200 pt-4 flex items-center justify-between text-[10px] text-slate-500">
             <div className="flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>هذه البوليصة صادرة إلكترونياً ومحمية بنظام التتبع المباشر من A&Mshipping</span>
+              <span>هذه البوليصة صادرة إلكترونياً ومحمية بنظام التتبع المباشر من DropLine</span>
             </div>
-            <span>الدعم الفني والخدمات: 19001 | amshipping.com</span>
+            <span>الدعم الفني والخدمات: 19001 | dropline.eg</span>
           </div>
         </div>
       </div>

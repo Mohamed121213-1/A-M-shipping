@@ -70,7 +70,7 @@ export const WHATSAPP_TEMPLATES = [
     getMessage: (data: WhatsAppTemplateData) =>
       `أهلاً بك أ/ ${data.recipientName} 👋\nيمكنك متابعة خط سير وموعد وصول شحنتك رقم #${
         data.trackingNumber
-      } لحظة بلحظة عبر منصة A&M shipping من خلال هذا الرابط:\n${window.location.origin}/?tracking=${data.trackingNumber}`,
+      } لحظة بلحظة عبر منصة DropLine من خلال هذا الرابط:\n${window.location.origin}/?tracking=${data.trackingNumber}`,
   },
   {
     id: 'arrival_notice',
