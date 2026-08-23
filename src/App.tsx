@@ -180,7 +180,7 @@ export default function App() {
 
   // Logo Customization State
   const [activeLogo, setActiveLogo] = useState<string>(() => {
-    return localStorage.getItem('dropline_active_logo') || '/dropline-opt1.jpg';
+    return localStorage.getItem('dropline_active_logo') || '/dropline-official.jpg';
   });
   const [isLogoSelectorOpen, setIsLogoSelectorOpen] = useState<boolean>(false);
 

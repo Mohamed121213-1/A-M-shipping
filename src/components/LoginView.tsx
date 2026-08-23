@@ -76,7 +76,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   currentRole = 'merchant',
   systemUsers = [],
   onRegisterPendingUser,
-  activeLogo = '/dropline-opt1.jpg',
+  activeLogo = '/dropline-official.jpg',
   onOpenLogoSelector,
 }) => {
   const [selectedRoleTab, setSelectedRoleTab] = useState<AppUserRole>(

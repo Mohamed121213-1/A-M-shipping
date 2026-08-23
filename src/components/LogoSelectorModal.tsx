@@ -11,11 +11,18 @@ export interface LogoOption {
 
 export const LOGO_OPTIONS: LogoOption[] = [
   {
-    id: 'opt1',
-    title: 'الخيار 1: سهم السرعة وحرف D الهندسي',
-    description: 'تصميم فكتور عصري مسطح يدمج حرف D ودبوس التوصيل وسهم الحركة السريعة بالأحمر والرمادي الداكن.',
-    styleTag: 'أيقونة تطبيق وتصميم Minimalist',
-    src: '/dropline-opt1.jpg',
+    id: 'opt_official',
+    title: 'شعار DropLine الرسمي (مسار الطريق وطريق الثقة)',
+    description: 'التصميم المعتمد: حرف D الأحمر والأبيض مع مسار الطريق السريع وعبارة Delivering Trust على خلفية كحلية داكنة فاخرة.',
+    styleTag: 'الشعار الرسمي المعتمد Official',
+    src: '/dropline-official.jpg',
+  },
+  {
+    id: 'opt_badge',
+    title: 'أيقونة حرف D اللوجستية (App Icon)',
+    description: 'شارة مركزة لحرف D المدمج بمسار الطريق السريع مخصصة لأيقونة التطبيقات والبوالص.',
+    styleTag: 'أيقونة مركزة Icon Badge',
+    src: '/dropline-badge.jpg',
   },
   {
     id: 'opt2',
@@ -30,13 +37,6 @@ export const LOGO_OPTIONS: LogoOption[] = [
     description: 'شعار انسيابي ديناميكي يرمز للسرعة الفائقة والشحن في نفس اليوم مع تدرج أنيق ومميز.',
     styleTag: 'أجنحة وديناميكية Express',
     src: '/dropline-opt3.jpg',
-  },
-  {
-    id: 'opt4',
-    title: 'الخيار 4: مسار التوصيل الدائري والموقع',
-    description: 'شعار دائري متناسق يجمع بين نقطة التوزيع، مسار الشحنة، وصندوق الطرد اللوجستي بخطوط قوية.',
-    styleTag: 'شارة دائرية Circular Badge',
-    src: '/dropline-opt4.jpg',
   },
 ];
 

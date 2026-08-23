@@ -62,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   notifications = [],
   onNotificationClick,
-  activeLogo = '/dropline-opt1.jpg',
+  activeLogo = '/dropline-official.jpg',
   onOpenLogoSelector,
 }) => {
   const [searchInput, setSearchInput] = useState('');

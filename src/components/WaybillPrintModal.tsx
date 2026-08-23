@@ -8,7 +8,7 @@ interface WaybillPrintModalProps {
   activeLogo?: string;
 }
 
-export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, onClose, activeLogo = '/dropline-opt1.jpg' }) => {
+export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, onClose, activeLogo = '/dropline-official.jpg' }) => {
   if (!shipment) return null;
 
   const handlePrint = () => {
