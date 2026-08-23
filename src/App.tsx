@@ -25,6 +25,7 @@ import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
 import { DeviceNotificationBanner } from './components/DeviceNotificationBanner';
 import { registerServiceWorker, subscribeUserToWebPush, sendDeviceNotification, isNotificationRelevantForUser, markNotificationAsNotified, hasNotificationBeenNotified, isNotificationFresh } from './utils/deviceNotifications';
+import droplineLogoImg from './assets/images/dropline_official_logo_1787442134000.jpg';
 
 // Safe localStorage loader helper
 const loadLocalState = <T,>(key: string, defaultValue: T): T => {
@@ -2300,14 +2301,11 @@ export default function App() {
       <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500 mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-slate-950 overflow-hidden border border-slate-800 shadow-2xs flex items-center justify-center p-0.5">
+            <div className="w-8 h-8 rounded-lg bg-[#091524] overflow-hidden border border-slate-750 shadow-2xs flex items-center justify-center p-0.5 shrink-0">
               <img
-                src="/dropline-logo.jpg"
+                src={droplineLogoImg}
                 alt="DropLine Logo"
                 className="w-full h-full object-cover rounded-md"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
                 referrerPolicy="no-referrer"
               />
             </div>

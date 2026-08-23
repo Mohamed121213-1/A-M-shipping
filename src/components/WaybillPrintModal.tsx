@@ -1,6 +1,7 @@
 import React from 'react';
 import { Shipment } from '../types';
 import { Printer, Download, X, PackageCheck, AlertTriangle, ShieldCheck, MapPin, Phone, User, Building } from 'lucide-react';
+import droplineLogoImg from '../assets/images/dropline_official_logo_1787442134000.jpg';
 
 interface WaybillPrintModalProps {
   shipment: Shipment | null;
@@ -45,18 +46,11 @@ export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, 
           {/* Airbill Header */}
           <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg border-2 border-slate-900 overflow-hidden shrink-0 bg-slate-950">
+              <div className="w-12 h-12 rounded-lg border-2 border-slate-900 overflow-hidden shrink-0 bg-[#091524]">
                 <img
-                  src="/dropline-logo.jpg"
+                  src={droplineLogoImg}
                   alt="DropLine Logo"
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                    const parent = (e.target as HTMLElement).parentElement;
-                    if (parent) {
-                      parent.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-red-600 text-white font-black text-xl">D</div>`;
-                    }
-                  }}
                   referrerPolicy="no-referrer"
                 />
               </div>

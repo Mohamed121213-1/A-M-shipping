@@ -33,6 +33,7 @@ import {
   clearFailedLoginAttempts, 
   sanitizeInputText 
 } from '../utils/security';
+import droplineLogoImg from '../assets/images/dropline_official_logo_1787442134000.jpg';
 
 interface LoginViewProps {
   onLoginSuccess: (user: UserSession) => void;
@@ -395,18 +396,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
           {/* Header Brand */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 shadow-xs overflow-hidden flex items-center justify-center p-1">
+              <div className="w-14 h-14 rounded-2xl bg-[#091524] border border-slate-750 shadow-sm overflow-hidden flex items-center justify-center p-0.5 shrink-0">
                 <img 
-                  src="/dropline-logo.jpg" 
+                  src={droplineLogoImg} 
                   alt="DropLine Logo"
                   className="w-full h-full object-cover rounded-xl"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                    const parent = (e.target as HTMLElement).parentElement;
-                    if (parent) {
-                      parent.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-red-600 text-white font-black text-xl rounded-xl">D</div>`;
-                    }
-                  }}
                   referrerPolicy="no-referrer"
                 />
               </div>

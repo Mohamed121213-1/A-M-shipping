@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { AppUserRole, MerchantWallet, UserSession, CourierNotification } from '../types';
 import { EnableNotifications } from './EnableNotifications';
+import droplineLogoImg from '../assets/images/dropline_official_logo_1787442134000.jpg';
 
 interface HeaderProps {
   currentRole: AppUserRole;
@@ -249,18 +250,11 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => setActiveTab(currentUser ? (currentUser.role === 'courier' ? 'courier_app' : 'shipments') : 'login')}
             className="flex items-center gap-2.5 cursor-pointer group"
           >
-            <div className="w-11 h-11 rounded-xl bg-slate-950 border border-slate-800 shadow-xs group-hover:scale-105 transition-transform flex items-center justify-center p-0.5 overflow-hidden">
+            <div className="w-12 h-12 rounded-xl bg-[#091524] border border-slate-750 shadow-sm group-hover:scale-105 transition-transform flex items-center justify-center p-0.5 overflow-hidden shrink-0">
               <img
-                src="/dropline-logo.jpg"
+                src={droplineLogoImg}
                 alt="DropLine Logo"
                 className="w-full h-full object-cover rounded-lg"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                  const parent = (e.target as HTMLElement).parentElement;
-                  if (parent) {
-                    parent.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-red-600 text-white font-black text-lg rounded-lg">D</div>`;
-                  }
-                }}
                 referrerPolicy="no-referrer"
               />
             </div>
