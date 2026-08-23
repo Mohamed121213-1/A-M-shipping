@@ -40,6 +40,8 @@ interface LoginViewProps {
   currentRole?: AppUserRole;
   systemUsers?: UserSession[];
   onRegisterPendingUser?: (user: UserSession) => void;
+  activeLogo?: string;
+  onOpenLogoSelector?: () => void;
 }
 
 export const createSessionUser = (identifier: string, role: AppUserRole, existingUsers?: UserSession[]): UserSession => {
@@ -73,7 +75,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
   onGuestTrack,
   currentRole = 'merchant',
   systemUsers = [],
-  onRegisterPendingUser
+  onRegisterPendingUser,
+  activeLogo = '/dropline-opt1.jpg',
+  onOpenLogoSelector,
 }) => {
   const [selectedRoleTab, setSelectedRoleTab] = useState<AppUserRole>(
     currentRole === 'public_tracker' ? 'merchant' : currentRole
@@ -395,9 +399,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
           {/* Header Brand */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-700/60 shadow-xs overflow-hidden flex items-center justify-center p-1">
+              <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-xs overflow-hidden flex items-center justify-center p-1">
                 <img 
-                  src="/dropline-logo.jpg" 
+                  src={activeLogo} 
                   alt="DropLine Logo"
                   className="w-full h-full object-cover rounded-xl"
                   onError={(e) => {
@@ -418,15 +422,27 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </div>
             </div>
 
-            {/* Supabase Connection Status Badge */}
-            <span className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl border ${
-              isSupabaseConfigured 
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
-                : 'bg-amber-50 text-amber-800 border-amber-200'
-            }`}>
-              <Database className={`w-4 h-4 ${isSupabaseConfigured ? 'text-emerald-600' : 'text-amber-600'}`} />
-              {isSupabaseConfigured ? 'Supabase Auth ⚡' : 'إعداد Supabase مطلوب'}
-            </span>
+            <div className="flex items-center gap-2">
+              {onOpenLogoSelector && (
+                <button
+                  type="button"
+                  onClick={onOpenLogoSelector}
+                  className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-red-50 hover:text-red-700 border border-slate-200 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5"
+                >
+                  <span>🎨 اختيار لوجو</span>
+                </button>
+              )}
+
+              {/* Supabase Connection Status Badge */}
+              <span className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl border ${
+                isSupabaseConfigured 
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                  : 'bg-amber-50 text-amber-800 border-amber-200'
+              }`}>
+                <Database className={`w-4 h-4 ${isSupabaseConfigured ? 'text-emerald-600' : 'text-amber-600'}`} />
+                {isSupabaseConfigured ? 'Supabase Auth ⚡' : 'إعداد Supabase'}
+              </span>
+            </div>
           </div>
 
           {/* Supabase Config Warning Box if not configured */}
