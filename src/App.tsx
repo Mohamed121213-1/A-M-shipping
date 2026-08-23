@@ -15,7 +15,6 @@ import { CompanyTreasuryView } from './components/CompanyTreasuryView';
 import { LoginView, createSessionUser } from './components/LoginView';
 import { AdminPanelView } from './components/AdminPanelView';
 import { DataBackupModal } from './components/DataBackupModal';
-import { LogoSelectorModal } from './components/LogoSelectorModal';
 import { supabase, isSupabaseConfigured, mapSupabaseUserToSession } from './lib/supabase';
 import { syncEngine } from './lib/syncEngine';
 
@@ -177,20 +176,6 @@ export default function App() {
 
   // Data Retention & Backup Modal State
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
-
-  // Logo Customization State
-  const [activeLogo, setActiveLogo] = useState<string>(() => {
-    return localStorage.getItem('dropline_active_logo') || '/dropline-official.jpg';
-  });
-  const [isLogoSelectorOpen, setIsLogoSelectorOpen] = useState<boolean>(false);
-
-  const handleSelectLogo = (logoSrc: string) => {
-    setActiveLogo(logoSrc);
-    try {
-      localStorage.setItem('dropline_active_logo', logoSrc);
-    } catch (e) {}
-    showToast('🎨 تم اعتماد وتحديث شعار DropLine بنجاح!');
-  };
 
   const handleRestoreState = (newState: any) => {
     if (!newState || typeof newState !== 'object') return;
@@ -2045,8 +2030,6 @@ export default function App() {
             handleMarkNotificationRead(notifId);
             handleOpenShipmentFromNotification(shipmentId);
           }}
-          activeLogo={activeLogo}
-          onOpenLogoSelector={() => setIsLogoSelectorOpen(true)}
         />
       )}
 
@@ -2067,8 +2050,6 @@ export default function App() {
                 currentRole={currentRole}
                 systemUsers={users}
                 onRegisterPendingUser={handleAddUser}
-                activeLogo={activeLogo}
-                onOpenLogoSelector={() => setIsLogoSelectorOpen(true)}
               />
             ) : currentUser.role === 'courier' ? (
               <CourierAppView
@@ -2153,8 +2134,6 @@ export default function App() {
                     onGuestTrack={handleGuestTrackFromLogin}
                     currentRole={currentRole}
                     systemUsers={users}
-                    activeLogo={activeLogo}
-                    onOpenLogoSelector={() => setIsLogoSelectorOpen(true)}
                   />
                 )}
 
@@ -2299,7 +2278,6 @@ export default function App() {
       <WaybillPrintModal
         shipment={selectedPrintShipment}
         onClose={() => setSelectedPrintShipment(null)}
-        activeLogo={activeLogo}
       />
 
       <DataBackupModal
@@ -2318,20 +2296,13 @@ export default function App() {
         onRestoreState={handleRestoreState}
       />
 
-      <LogoSelectorModal
-        isOpen={isLogoSelectorOpen}
-        onClose={() => setIsLogoSelectorOpen(false)}
-        currentLogo={activeLogo}
-        onSelectLogo={handleSelectLogo}
-      />
-
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500 mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-white overflow-hidden border border-slate-200 shadow-2xs flex items-center justify-center p-0.5">
+            <div className="w-7 h-7 rounded-lg bg-slate-950 overflow-hidden border border-slate-800 shadow-2xs flex items-center justify-center p-0.5">
               <img
-                src={activeLogo}
+                src="/dropline-logo.jpg"
                 alt="DropLine Logo"
                 className="w-full h-full object-cover rounded-md"
                 onError={(e) => {
@@ -2344,13 +2315,6 @@ export default function App() {
             <span>© 2026 جميع الحقوق محفوظة لمنصة DropLine للشحن واللوجستيات</span>
           </div>
           <div className="flex items-center gap-4 text-slate-400 font-medium">
-            <button
-              onClick={() => setIsLogoSelectorOpen(true)}
-              className="text-slate-600 hover:text-red-600 font-bold flex items-center gap-1 transition-colors"
-            >
-              <span>🎨 اختيار وتغيير الشعار</span>
-            </button>
-            <span>•</span>
             <span>الخط الساخن: 19001</span>
             <span>•</span>
             <span>dropline.eg</span>

@@ -42,8 +42,6 @@ interface HeaderProps {
   onLogout?: () => void;
   notifications?: CourierNotification[];
   onNotificationClick?: (shipmentId: string, notifId: string) => void;
-  activeLogo?: string;
-  onOpenLogoSelector?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -62,8 +60,6 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   notifications = [],
   onNotificationClick,
-  activeLogo = '/dropline-official.jpg',
-  onOpenLogoSelector,
 }) => {
   const [searchInput, setSearchInput] = useState('');
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -249,46 +245,33 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
         {/* Brand & Logo */}
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div 
-              onClick={() => setActiveTab(currentUser ? (currentUser.role === 'courier' ? 'courier_app' : 'shipments') : 'login')}
-              className="flex items-center gap-2.5 cursor-pointer group"
-            >
-              <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 shadow-xs group-hover:scale-105 transition-transform flex items-center justify-center p-0.5 overflow-hidden">
-                <img
-                  src={activeLogo}
-                  alt="DropLine Logo"
-                  className="w-full h-full object-cover rounded-lg"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                    const parent = (e.target as HTMLElement).parentElement;
-                    if (parent) {
-                      parent.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-red-600 text-white font-black text-lg rounded-lg">D</div>`;
-                    }
-                  }}
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-black text-xl tracking-tight text-slate-900">
-                    Drop<span className="text-red-600">Line</span>
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 font-medium">منصة الشحن واللوجستيات المتكاملة</p>
-              </div>
+          <div 
+            onClick={() => setActiveTab(currentUser ? (currentUser.role === 'courier' ? 'courier_app' : 'shipments') : 'login')}
+            className="flex items-center gap-2.5 cursor-pointer group"
+          >
+            <div className="w-11 h-11 rounded-xl bg-slate-950 border border-slate-800 shadow-xs group-hover:scale-105 transition-transform flex items-center justify-center p-0.5 overflow-hidden">
+              <img
+                src="/dropline-logo.jpg"
+                alt="DropLine Logo"
+                className="w-full h-full object-cover rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                  const parent = (e.target as HTMLElement).parentElement;
+                  if (parent) {
+                    parent.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-red-600 text-white font-black text-lg rounded-lg">D</div>`;
+                  }
+                }}
+                referrerPolicy="no-referrer"
+              />
             </div>
-
-            {onOpenLogoSelector && (
-              <button
-                type="button"
-                onClick={onOpenLogoSelector}
-                title="تغيير الشعار واختيار لوجو آخر"
-                className="hidden sm:flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-lg transition-colors shadow-2xs"
-              >
-                <span>🎨 اختيار لوجو</span>
-              </button>
-            )}
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-black text-xl tracking-tight text-slate-900">
+                  Drop<span className="text-red-600">Line</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">منصة الشحن واللوجستيات المتكاملة</p>
+            </div>
           </div>
 
           {/* Quick Search Tracking Box */}

@@ -5,10 +5,9 @@ import { Printer, Download, X, PackageCheck, AlertTriangle, ShieldCheck, MapPin,
 interface WaybillPrintModalProps {
   shipment: Shipment | null;
   onClose: () => void;
-  activeLogo?: string;
 }
 
-export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, onClose, activeLogo = '/dropline-official.jpg' }) => {
+export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, onClose }) => {
   if (!shipment) return null;
 
   const handlePrint = () => {
@@ -46,9 +45,9 @@ export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, 
           {/* Airbill Header */}
           <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg border-2 border-slate-900 overflow-hidden shrink-0 bg-white">
+              <div className="w-12 h-12 rounded-lg border-2 border-slate-900 overflow-hidden shrink-0 bg-slate-950">
                 <img
-                  src={activeLogo}
+                  src="/dropline-logo.jpg"
                   alt="DropLine Logo"
                   className="w-full h-full object-cover"
                   onError={(e) => {
