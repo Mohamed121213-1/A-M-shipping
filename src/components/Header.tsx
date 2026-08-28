@@ -21,7 +21,8 @@ import {
   X,
   MapPin,
   DollarSign,
-  Database
+  Database,
+  Users
 } from 'lucide-react';
 import { AppUserRole, MerchantWallet, UserSession, CourierNotification } from '../types';
 import { EnableNotifications } from './EnableNotifications';
@@ -364,6 +365,20 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <RotateCcw className="w-4 h-4 text-red-500" />
                   حساب المرتجعات
+                </button>
+              )}
+
+              {currentRole === 'admin' && (
+                <button
+                  onClick={() => handleNavClick('merchant_accounts')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
+                    activeTab === 'merchant_accounts'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-blue-700 hover:text-blue-900 bg-blue-50/70 border border-blue-200/60'
+                  }`}
+                >
+                  <Users className="w-4 h-4 text-blue-600" />
+                  حسابات التجار (كشف الحساب)
                 </button>
               )}
 

@@ -12,6 +12,7 @@ import { ReturnsAccountingView } from './components/ReturnsAccountingView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { RateCalculatorView } from './components/RateCalculatorView';
 import { CompanyTreasuryView } from './components/CompanyTreasuryView';
+import { MerchantAccountsView } from './components/MerchantAccountsView';
 import { LoginView, createSessionUser } from './components/LoginView';
 import { AdminPanelView } from './components/AdminPanelView';
 import { DataBackupModal } from './components/DataBackupModal';
@@ -2108,6 +2109,21 @@ export default function App() {
                   <ReturnsAccountingView shipments={userShipments} systemUsers={users} currentUser={currentUser} onMarkReturnedToMerchant={handleMarkReturnedToMerchant} />
                 )}
 
+                {activeTab === 'merchant_accounts' && (
+                  <MerchantAccountsView
+                    shipments={userShipments}
+                    systemUsers={users}
+                    wallet={userWallet}
+                    companyTransactions={companyTransactions}
+                    currentUser={currentUser}
+                    onAddTransaction={handleAddCompanyTransaction}
+                    onDeleteTransaction={handleDeleteCompanyTransaction}
+                    onToggleMerchantSettlement={handleToggleMerchantSettlement}
+                    onUpdateWallet={handleUpdateWallet}
+                    onRequestPayout={handleRequestPayout}
+                  />
+                )}
+
                 {activeTab === 'company_treasury' && (
                   <CompanyTreasuryView
                     transactions={companyTransactions}
@@ -2224,6 +2240,21 @@ export default function App() {
 
                 {activeTab === 'returns' && (
                   <ReturnsAccountingView shipments={shipments} systemUsers={users} currentUser={currentUser} onMarkReturnedToMerchant={handleMarkReturnedToMerchant} />
+                )}
+
+                {activeTab === 'merchant_accounts' && (
+                  <MerchantAccountsView
+                    shipments={shipments}
+                    systemUsers={users}
+                    wallet={wallet}
+                    companyTransactions={companyTransactions}
+                    currentUser={currentUser}
+                    onAddTransaction={handleAddCompanyTransaction}
+                    onDeleteTransaction={handleDeleteCompanyTransaction}
+                    onToggleMerchantSettlement={handleToggleMerchantSettlement}
+                    onUpdateWallet={handleUpdateWallet}
+                    onRequestPayout={handleRequestPayout}
+                  />
                 )}
 
                 {activeTab === 'company_treasury' && (
