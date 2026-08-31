@@ -7,7 +7,6 @@ import {
   PlusCircle, 
   Wallet, 
   BarChart3, 
-  Calculator, 
   SearchCode,
   CheckCircle2,
   Bell,
@@ -437,18 +436,6 @@ export const Header: React.FC<HeaderProps> = ({
                   تطبيق المندوب
                 </button>
               )}
-
-              <button
-                onClick={() => handleNavClick('calculator')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
-                  activeTab === 'calculator'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Calculator className="w-4 h-4 text-slate-500" />
-                حاسبة الأسعار
-              </button>
 
               <button
                 onClick={() => handleNavClick('tracking')}

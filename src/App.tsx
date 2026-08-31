@@ -10,7 +10,6 @@ import { PublicTrackingView } from './components/PublicTrackingView';
 import { WalletView } from './components/WalletView';
 import { ReturnsAccountingView } from './components/ReturnsAccountingView';
 import { AnalyticsView } from './components/AnalyticsView';
-import { RateCalculatorView } from './components/RateCalculatorView';
 import { CompanyTreasuryView } from './components/CompanyTreasuryView';
 import { MerchantAccountsView } from './components/MerchantAccountsView';
 import { LoginView, createSessionUser } from './components/LoginView';
@@ -2137,8 +2136,6 @@ export default function App() {
 
                 {activeTab === 'analytics' && <AnalyticsView shipments={userShipments} couriers={couriers} wallet={wallet} companyTransactions={companyTransactions} />}
 
-                {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
-
                 {activeTab === 'tracking' && (
                   <PublicTrackingView shipments={userShipments} initialTrackingNumber={publicSearchTrackNum} />
                 )}
@@ -2269,8 +2266,6 @@ export default function App() {
                 )}
 
                 {activeTab === 'analytics' && <AnalyticsView shipments={shipments} couriers={couriers} wallet={wallet} companyTransactions={companyTransactions} />}
-
-                {activeTab === 'calculator' && <RateCalculatorView governorates={governorates} />}
               </>
             )}
           </motion.div>
