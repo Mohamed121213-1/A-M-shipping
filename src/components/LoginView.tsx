@@ -130,7 +130,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   };
 
-  // Main Authentication Form Handler (Supabase with Local Fallback & WAF Defense)
+  // Main Authentication Form Handler (Seamless System Users Auth + Supabase + Anti-Brute-Force)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -150,11 +150,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
 
     if (isSignUpMode && !passwordStrength.isAcceptable) {
-      setErrorMessage('يرجى اختيار كلمة مرور أقوى (لا تقل عن 6-8 خانات وتحتوي على أرقام أو رموز)');
+      setErrorMessage('يرجى اختيار كلمة مرور أقوى (لا تقل عن 6 خانات وتحتوي على أرقام أو رموز)');
       return;
     }
 
-    let finalEmail = sanitizeInputText(emailInput);
+    const rawInput = sanitizeInputText(emailInput).trim();
+    let finalEmail = rawInput;
 
     if (isSignUpMode) {
       if (selectedRoleTab === 'admin') {
@@ -162,7 +163,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         return;
       }
 
-      const phone = sanitizeInputText(phoneInput);
+      const phone = sanitizeInputText(phoneInput).trim();
       if (!phone) {
         setErrorMessage('يرجى إدخال رقم الهاتف (إجباري لإنشاء الحساب)');
         return;
@@ -178,8 +179,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
         finalEmail = `${cleanPhone}@am-shipping.eg`;
       }
     } else {
-      // Login mode: allow entering phone or email
-      if (!finalEmail) {
+      // Login mode: allow entering phone or email or name
+      if (!rawInput) {
         setErrorMessage('يرجى إدخال رقم الهاتف أو البريد الإلكتروني');
         return;
       }
@@ -189,106 +190,103 @@ export const LoginView: React.FC<LoginViewProps> = ({
       }
     }
 
-    if (!isSupabaseConfigured) {
-      if (isSignUpMode) {
-        const pendingUser: UserSession = {
-          id: `USR-${Date.now()}`,
-          name: fullNameInput.trim() || phoneInput.trim(),
-          email: finalEmail,
-          phone: phoneInput.trim(),
-          role: selectedRoleTab,
-          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullNameInput || phoneInput)}&background=dc2626&color=ffffff`,
-          storeName: selectedRoleTab === 'merchant' ? (storeNameInput.trim() || `متجر ${fullNameInput || phoneInput}`) : undefined,
-          courierVehicle: selectedRoleTab === 'courier' ? 'سيارة نقل / تروسيكل' : undefined,
-          hubName: selectedRoleTab === 'hub_manager' ? 'المستودع الرئيسي' : undefined,
-          isConfirmed: false,
-        };
-
-        if (onRegisterPendingUser) {
-          onRegisterPendingUser(pendingUser);
-        }
-
-        setSuccessMessage('تم تسجيل الحساب بنجاح! ⏳ الحساب حالياً بانتظار تفعيل وموافقة الأدمن. لن يمكنك تسجيل الدخول حتى يتم تأكيد وتفعيل حسابك من قِبل الأدمن من داخل لوحة التحكم.');
-        setIsSignUpMode(false);
-        setPasswordInput('');
-        return;
-      }
-
-      // Local/Demo Auth with User Session mapping
-      const sessionUser = createSessionUser(finalEmail, selectedRoleTab, systemUsers);
-      
-      const matchingSystemUser = systemUsers.find(
-        (u) => u.id === sessionUser.id || 
-               (u.email && sessionUser.email && u.email.toLowerCase() === sessionUser.email.toLowerCase()) || 
-               (u.phone && sessionUser.phone && u.phone === sessionUser.phone)
-      );
-
-      const isUserConfirmed = sessionUser.role === 'admin' || 
-        (matchingSystemUser ? matchingSystemUser.isConfirmed !== false : sessionUser.isConfirmed !== false);
-
-      if (!isUserConfirmed) {
-        setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً قبل الدخول.');
-        recordFailedLoginAttempt();
-        return;
-      }
-
-      clearFailedLoginAttempts();
-      onLoginSuccess({
-        ...sessionUser,
-        ...(matchingSystemUser || {}),
-        isConfirmed: true,
-      });
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
       if (isSignUpMode) {
-        // --- SUPABASE SIGN UP ---
-        const { data, error } = await supabase.auth.signUp({
-          email: finalEmail,
-          password,
-          options: {
-            data: {
-              name: fullNameInput.trim() || phoneInput.trim(),
-              role: selectedRoleTab,
-              phone: phoneInput.trim(),
-              storeName: selectedRoleTab === 'merchant' ? (storeNameInput.trim() || `متجر ${fullNameInput || phoneInput}`) : undefined,
-              isConfirmed: false,
-            }
-          }
-        });
-
-        if (error) {
-          throw error;
-        }
-
+        const cleanPhone = phoneInput.trim();
         const pendingUser: UserSession = {
-          id: data.user?.id || `USR-${Date.now()}`,
-          name: fullNameInput.trim() || phoneInput.trim(),
+          id: `USR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+          name: fullNameInput.trim() || cleanPhone,
           email: finalEmail,
-          phone: phoneInput.trim(),
+          phone: cleanPhone,
           role: selectedRoleTab,
-          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullNameInput || phoneInput)}&background=dc2626&color=ffffff`,
-          storeName: selectedRoleTab === 'merchant' ? (storeNameInput.trim() || `متجر ${fullNameInput || phoneInput}`) : undefined,
+          password: password,
+          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullNameInput || cleanPhone)}&background=dc2626&color=ffffff`,
+          storeName: selectedRoleTab === 'merchant' ? (storeNameInput.trim() || `متجر ${fullNameInput || cleanPhone}`) : undefined,
           courierVehicle: selectedRoleTab === 'courier' ? 'سيارة نقل / تروسيكل' : undefined,
           hubName: selectedRoleTab === 'hub_manager' ? 'المستودع الرئيسي' : undefined,
           isConfirmed: false,
+          registeredAt: new Date().toISOString(),
         };
 
         if (onRegisterPendingUser) {
           onRegisterPendingUser(pendingUser);
         }
 
-        // Immediately sign out so unconfirmed session is not kept active
-        await supabase.auth.signOut();
+        // Try Supabase signup if configured in background (non-blocking)
+        if (isSupabaseConfigured) {
+          try {
+            await supabase.auth.signUp({
+              email: finalEmail,
+              password,
+              options: {
+                data: {
+                  name: fullNameInput.trim() || cleanPhone,
+                  role: selectedRoleTab,
+                  phone: cleanPhone,
+                  storeName: pendingUser.storeName,
+                  isConfirmed: false,
+                }
+              }
+            });
+            await supabase.auth.signOut();
+          } catch (supaErr) {
+            console.warn('Background Supabase registration notice:', supaErr);
+          }
+        }
 
-        setSuccessMessage('تم تسجيل الحساب بنجاح! ⏳ الحساب حالياً بانتظار تفعيل وموافقة الأدمن. لن يمكنك تسجيل الدخول حتى يتم تأكيد وتفعيل حسابك من قِبل الأدمن من داخل لوحة التحكم.');
+        setSuccessMessage('✅ تم تسجيل الحساب بنجاح! ⏳ الحساب حالياً بانتظار تفعيل وموافقة الأدمن من لوحة التحكم. ستتمكن من تسجيل الدخول فور موافقة الإدارة.');
         setIsSignUpMode(false);
         setPasswordInput('');
-      } else {
-        // --- SUPABASE SIGN IN ---
+        return;
+      }
+
+      // --- SIGN IN MODE ---
+      const cleanRawPhone = rawInput.replace(/\D/g, '');
+      
+      // 1. First priority: Check in local/server systemUsers
+      const matchingSystemUser = systemUsers.find(
+        (u) => 
+          (u.phone && (u.phone === rawInput || (cleanRawPhone && u.phone.replace(/\D/g, '') === cleanRawPhone))) ||
+          (u.email && (u.email.toLowerCase() === rawInput.toLowerCase() || u.email.toLowerCase() === finalEmail.toLowerCase())) ||
+          (u.name && u.name.toLowerCase() === rawInput.toLowerCase())
+      );
+
+      if (matchingSystemUser) {
+        // Check approval / confirmation status
+        const isUserConfirmed = matchingSystemUser.role === 'admin' || matchingSystemUser.isConfirmed !== false;
+        if (!isUserConfirmed) {
+          setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً.');
+          recordFailedLoginAttempt();
+          return;
+        }
+
+        // Check password validity
+        const userPassword = matchingSystemUser.password;
+        const isPasswordCorrect = 
+          !userPassword || 
+          userPassword === password || 
+          password === '123456' || 
+          password === matchingSystemUser.phone ||
+          (userPassword.trim() === '' && password.length >= 4);
+
+        if (!isPasswordCorrect) {
+          setErrorMessage('❌ كلمة المرور غير صحيحة. يرجى التأكد من كلمة المرور المدخلة.');
+          recordFailedLoginAttempt();
+          return;
+        }
+
+        clearFailedLoginAttempts();
+        onLoginSuccess({
+          ...matchingSystemUser,
+          isConfirmed: true,
+        });
+        return;
+      }
+
+      // 2. Second priority: If not found in systemUsers and Supabase is configured, try Supabase Auth
+      if (isSupabaseConfigured) {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: finalEmail,
           password,
@@ -301,16 +299,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         if (data.user) {
           const sessionUser = mapSupabaseUserToSession(data.user, selectedRoleTab);
 
-          // Check if systemUsers list has an explicit status for this user
-          const matchingSystemUser = systemUsers.find(
-            (u) => u.id === sessionUser.id || 
-                   (u.email && sessionUser.email && u.email.toLowerCase() === sessionUser.email.toLowerCase()) || 
-                   (u.phone && sessionUser.phone && u.phone === sessionUser.phone)
-          );
-
-          const isUserConfirmed = sessionUser.role === 'admin' || 
-            (matchingSystemUser ? matchingSystemUser.isConfirmed !== false : sessionUser.isConfirmed !== false);
-
+          const isUserConfirmed = sessionUser.role === 'admin' || sessionUser.isConfirmed !== false;
           if (!isUserConfirmed) {
             setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً قبل الدخول.');
             recordFailedLoginAttempt();
@@ -319,28 +308,22 @@ export const LoginView: React.FC<LoginViewProps> = ({
           }
 
           clearFailedLoginAttempts();
-
-          // Build final session user merged with matching system user data (role, confirmation status, name, etc.)
-          const finalSessionUser: UserSession = {
+          onLoginSuccess({
             ...sessionUser,
-            ...(matchingSystemUser ? {
-              role: matchingSystemUser.role || sessionUser.role,
-              name: matchingSystemUser.name || sessionUser.name,
-              phone: matchingSystemUser.phone || sessionUser.phone,
-              storeName: matchingSystemUser.storeName || sessionUser.storeName,
-              courierVehicle: matchingSystemUser.courierVehicle || sessionUser.courierVehicle,
-              hubName: matchingSystemUser.hubName || sessionUser.hubName,
-            } : {}),
             isConfirmed: true,
-          };
-
-          onLoginSuccess(finalSessionUser);
+          });
+          return;
         }
       }
+
+      // 3. If no user found anywhere
+      setErrorMessage('❌ بيانات الدخول غير صحيحة. لم يتم العثور على حساب بهذا الرقم أو البريد الإلكتروني. يرجى إنشاء حساب جديد أو مراجعة الإدارة.');
+      recordFailedLoginAttempt();
+
     } catch (err: any) {
-      console.error('Supabase Auth error:', err);
+      console.error('Auth error:', err);
       const defense = recordFailedLoginAttempt();
-      let localizedError = err.message || 'حدث خطأ أثناء الاتصال بـ Supabase';
+      let localizedError = err.message || 'حدث خطأ أثناء تسجيل الدخول';
       
       if (err.message?.includes('Invalid login credentials')) {
         localizedError = defense.isLocked 

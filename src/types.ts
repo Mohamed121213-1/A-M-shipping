@@ -192,11 +192,13 @@ export interface UserSession {
   email: string;
   phone: string;
   role: AppUserRole;
+  password?: string;
   avatarUrl?: string;
   storeName?: string;
   hubName?: string;
   courierVehicle?: string;
-  isConfirmed?: boolean; // حالة تأكيد وتفعيل الحساب من خلال الأدمن في Supabase
+  isConfirmed?: boolean; // حالة تأكيد وتفعيل الحساب من خلال الأدمن
+  registeredAt?: string;
 }
 
 export interface CourierNotification {

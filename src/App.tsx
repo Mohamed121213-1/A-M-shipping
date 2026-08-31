@@ -2148,6 +2148,7 @@ export default function App() {
                     onGuestTrack={handleGuestTrackFromLogin}
                     currentRole={currentRole}
                     systemUsers={users}
+                    onRegisterPendingUser={handleAddUser}
                   />
                 )}
 
