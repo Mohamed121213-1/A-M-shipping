@@ -377,7 +377,7 @@ if (!fs.existsSync(BACKUPS_DIR)) {
 
 const SUPABASE_SYNCED_USERS = [
   {
-    id: '10fdf171-fb33-4ede-9d27-2fae8a2c2d4b',
+    id: 'admin_root',
     name: 'محمد صلاح (أدمن الرئيسية)',
     email: 'mohamedsalah565657@icloud.com',
     phone: '01000000001',
@@ -385,94 +385,6 @@ const SUPABASE_SYNCED_USERS = [
     avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF+%D8%B5%D9%84%D8%A7%D8%AD&background=dc2626&color=ffffff',
     isConfirmed: true,
     registeredAt: '2026-08-30T00:00:00.000Z',
-  },
-  {
-    id: '15c6e6d1-df23-4e20-a464-e4df09590e4d',
-    name: 'Amr',
-    email: '01015674681@am-shipping.eg',
-    phone: '01015674681',
-    role: 'merchant',
-    avatarUrl: 'https://ui-avatars.com/api/?name=Amr&background=dc2626&color=ffffff',
-    storeName: 'متجر Amr',
-    isConfirmed: false,
-    registeredAt: '2026-08-30T10:00:00.000Z',
-  },
-  {
-    id: 'b009b128-b1f5-4c03-b6ec-842d35cca9b0',
-    name: 'ام فاتن',
-    email: '01017266727@am-shipping.eg',
-    phone: '01017266727',
-    role: 'merchant',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D9%85+%D9%81%D8%A7%D8%AA%D9%86&background=dc2626&color=ffffff',
-    storeName: 'متجر ام فاتن',
-    isConfirmed: false,
-    registeredAt: '2026-08-30T10:05:00.000Z',
-  },
-  {
-    id: '16cfabd6-f309-4c09-ad2e-3ddc10338d67',
-    name: 'حسن علي',
-    email: '01093383328@am-shipping.eg',
-    phone: '01093383328',
-    role: 'merchant',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86+%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff',
-    storeName: 'متجر حسن علي',
-    isConfirmed: false,
-    registeredAt: '2026-08-30T10:10:00.000Z',
-  },
-  {
-    id: '8b151dbb-660d-4169-903a-647c12967504',
-    name: 'Oo',
-    email: '01121212121@am-shipping.eg',
-    phone: '01121212121',
-    role: 'merchant',
-    avatarUrl: 'https://ui-avatars.com/api/?name=Oo&background=dc2626&color=ffffff',
-    storeName: 'متجر Oo',
-    isConfirmed: false,
-    registeredAt: '2026-08-30T10:15:00.000Z',
-  },
-  {
-    id: '169880e0-ba38-416e-ab42-9ae66d67b5c3',
-    name: 'محمد',
-    email: '01125465248@am-shipping.eg',
-    phone: '01125465248',
-    role: 'merchant',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF&background=dc2626&color=ffffff',
-    storeName: 'متجر محمد',
-    isConfirmed: false,
-    registeredAt: '2026-08-30T10:20:00.000Z',
-  },
-  {
-    id: 'd5892b9e-760c-4a7b-a428-04916faf5513',
-    name: 'Pp',
-    email: '01125465676@am-shipping.eg',
-    phone: '01125465676',
-    role: 'merchant',
-    avatarUrl: 'https://ui-avatars.com/api/?name=Pp&background=dc2626&color=ffffff',
-    storeName: 'متجر Pp',
-    isConfirmed: false,
-    registeredAt: '2026-08-30T10:25:00.000Z',
-  },
-  {
-    id: '16256cfa-8044-4607-abce-9de1335f311a',
-    name: 'ابراهيم شريف',
-    email: '01155219660@am-shipping.eg',
-    phone: '01155219660',
-    role: 'merchant',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D8%A8%D8%B1%D8%A7%D9%87%D9%8A%D9%85+%D8%B4%D8%B1%D9%8A%D9%81&background=dc2626&color=ffffff',
-    storeName: 'متجر ابراهيم شريف',
-    isConfirmed: false,
-    registeredAt: '2026-08-30T10:30:00.000Z',
-  },
-  {
-    id: '234aa881-d193-42a3-b86a-5408ba92146e',
-    name: 'ام فاتن',
-    email: '01234567891@am-shipping.eg',
-    phone: '01234567891',
-    role: 'merchant',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D9%85+%D9%81%D8%A7%D8%AA%D9%86&background=dc2626&color=ffffff',
-    storeName: 'متجر ام فاتن 2',
-    isConfirmed: false,
-    registeredAt: '2026-08-30T10:35:00.000Z',
   },
 ];
 
@@ -713,6 +625,7 @@ async function pullStateFromSupabaseOnBoot() {
           email: 'mohamedsalah565657@icloud.com',
           phone: '01000000001',
           role: 'admin',
+          storeName: undefined,
           avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF+%D8%B5%D9%84%D8%A7%D8%AD&background=dc2626&color=ffffff',
           isConfirmed: true,
           registeredAt: '2026-08-30T00:00:00.000Z',
@@ -1199,16 +1112,16 @@ app.patch("/api/shipments/:id/status", (req, res) => {
 
     // Direct update to Supabase 'shipments' table immediately
     if (supabaseServer) {
-      supabaseServer
-        .from('shipments')
-        .update({
-          status,
-          data: updatedShipment,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', updatedShipment.id)
-        .then(() => {})
-        .catch(() => {});
+      Promise.resolve(
+        supabaseServer
+          .from('shipments')
+          .update({
+            status,
+            data: updatedShipment,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', updatedShipment.id)
+      ).catch(() => {});
     }
 
     persistAndBroadcast(senderId || 'api_update_status', {
@@ -1385,7 +1298,7 @@ app.delete("/api/shipments/:id", (req, res) => {
 
     // Direct deletion from Supabase 'shipments' table
     if (supabaseServer) {
-      supabaseServer.from('shipments').delete().or(`id.eq.${id},tracking_number.eq.${id}`).then(() => {}).catch(() => {});
+      Promise.resolve(supabaseServer.from('shipments').delete().or(`id.eq.${id},tracking_number.eq.${id}`)).catch(() => {});
     }
 
     return res.json({ success: true, id, state: serverAppState });
@@ -1406,7 +1319,7 @@ app.post("/api/shipments/batch-delete", (req, res) => {
 
       // Direct batch delete from Supabase 'shipments' table
       if (supabaseServer && ids.length > 0) {
-        supabaseServer.from('shipments').delete().in('id', ids).then(() => {}).catch(() => {});
+        Promise.resolve(supabaseServer.from('shipments').delete().in('id', ids)).catch(() => {});
       }
     }
     return res.json({ success: true, state: serverAppState });
@@ -1426,7 +1339,7 @@ app.post("/api/shipments/clear-all", (req, res) => {
 
     // Direct wipe from Supabase 'shipments' table
     if (supabaseServer) {
-      supabaseServer.from('shipments').delete().neq('id', '___none___').then(() => {}).catch(() => {});
+      Promise.resolve(supabaseServer.from('shipments').delete().neq('id', '___none___')).catch(() => {});
     }
 
     return res.json({ success: true, state: serverAppState });
@@ -1619,16 +1532,18 @@ app.post("/api/users/register", (req, res) => {
 
     // Direct Upsert to Supabase profiles table
     if (supabaseServer) {
-      supabaseServer.from('profiles').upsert({
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email || null,
-        phone: newUser.phone,
-        role: newUser.role,
-        store_name: newUser.storeName || null,
-        is_confirmed: newUser.isConfirmed,
-        created_at: newUser.registeredAt
-      }, { onConflict: 'id' }).then(() => {}).catch(() => {});
+      Promise.resolve(
+        supabaseServer.from('profiles').upsert({
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email || null,
+          phone: newUser.phone,
+          role: newUser.role,
+          store_name: newUser.storeName || null,
+          is_confirmed: newUser.isConfirmed,
+          created_at: newUser.registeredAt
+        }, { onConflict: 'id' })
+      ).catch(() => {});
     }
 
     broadcastSseState(serverAppState, now, 'server_user_register');
@@ -1681,7 +1596,9 @@ app.post("/api/users/confirm", (req, res) => {
 
       // Direct Update to Supabase profiles table
       if (supabaseServer) {
-        supabaseServer.from('profiles').update({ is_confirmed: Boolean(isConfirmed) }).eq('id', userId).then(() => {}).catch(() => {});
+        Promise.resolve(
+          supabaseServer.from('profiles').update({ is_confirmed: Boolean(isConfirmed) }).eq('id', userId)
+        ).catch(() => {});
       }
 
       broadcastSseState(serverAppState, now, 'server_user_confirm');
@@ -1717,7 +1634,7 @@ app.post("/api/users/delete", (req, res) => {
 
       // Direct Delete from Supabase profiles table
       if (supabaseServer) {
-        supabaseServer.from('profiles').delete().eq('id', userId).then(() => {}).catch(() => {});
+        Promise.resolve(supabaseServer.from('profiles').delete().eq('id', userId)).catch(() => {});
       }
 
       broadcastSseState(serverAppState, now, 'server_user_delete');
