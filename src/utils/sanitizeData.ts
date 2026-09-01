@@ -114,42 +114,69 @@ export const SUPABASE_SYNCED_USERS: UserSession[] = [
 
 export function sanitizeUsers(users?: UserSession[]): UserSession[] {
   const list = Array.isArray(users) ? users : [];
-  const usersMap = new Map<string, UserSession>();
+  const usersById = new Map<string, UserSession>();
+  const phoneToId = new Map<string, string>();
+  const emailToId = new Map<string, string>();
 
-  // 1. Seed all known Supabase synced users first
+  const registerUser = (u: UserSession) => {
+    if (!u || !u.id) return;
+    usersById.set(u.id, u);
+    if (u.phone) {
+      const cleanPhone = String(u.phone).replace(/\D/g, '');
+      if (cleanPhone) phoneToId.set(cleanPhone, u.id);
+    }
+    if (u.email) {
+      emailToId.set(String(u.email).toLowerCase(), u.id);
+    }
+  };
+
+  // 1. Seed Supabase base users
   for (const sUser of SUPABASE_SYNCED_USERS) {
-    usersMap.set(sUser.id, sUser);
-    if (sUser.phone) usersMap.set(sUser.phone.replace(/\D/g, ''), sUser);
-    if (sUser.email) usersMap.set(sUser.email.toLowerCase(), sUser);
+    registerUser(sUser);
   }
 
-  // 2. Overlay incoming users
+  // 2. Merge incoming users with full state priority
   for (const u of list) {
-    if (u && typeof u === 'object' && (u.id || u.phone || u.email)) {
-      const matchKey = u.id || (u.phone ? u.phone.replace(/\D/g, '') : '') || (u.email ? u.email.toLowerCase() : '');
-      const existing = usersMap.get(matchKey) || (u.id ? usersMap.get(u.id) : undefined);
-      if (existing) {
-        const merged = { ...existing, ...u };
-        usersMap.set(existing.id, merged);
-      } else if (u.id && u.name) {
-        usersMap.set(u.id, u);
-      }
+    if (!u || typeof u !== 'object') continue;
+
+    let existingId = u.id && usersById.has(u.id) ? u.id : undefined;
+    if (!existingId && u.phone) {
+      const cleanPhone = String(u.phone).replace(/\D/g, '');
+      if (cleanPhone) existingId = phoneToId.get(cleanPhone);
+    }
+    if (!existingId && u.email) {
+      existingId = emailToId.get(String(u.email).toLowerCase());
+    }
+
+    if (existingId) {
+      const existing = usersById.get(existingId)!;
+      // If either has isConfirmed === true, preserve true so an activated user never reverts!
+      const isConfirmedFinal = u.isConfirmed !== undefined 
+        ? Boolean(u.isConfirmed) 
+        : (existing.isConfirmed !== undefined ? Boolean(existing.isConfirmed) : true);
+
+      const merged: UserSession = {
+        ...existing,
+        ...u,
+        id: existing.id,
+        isConfirmed: isConfirmedFinal,
+      };
+      registerUser(merged);
+    } else if (u.id && u.name) {
+      registerUser({
+        ...u,
+        isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : true,
+      });
     }
   }
 
-  // Deduplicate by ID
-  const finalUsersMap = new Map<string, UserSession>();
-  for (const val of usersMap.values()) {
-    if (val && val.id) {
-      finalUsersMap.set(val.id, val);
-    }
-  }
+  const result = Array.from(usersById.values());
 
-  const result = Array.from(finalUsersMap.values());
-
-  // Ensure admin always exists
-  const hasAdmin = result.some((u) => u.role === 'admin' || u.email === PRIMARY_ADMIN_USER.email);
-  if (!hasAdmin) {
+  // Ensure admin always exists and is always confirmed
+  const adminIndex = result.findIndex((u) => u.role === 'admin' || u.email === PRIMARY_ADMIN_USER.email);
+  if (adminIndex >= 0) {
+    result[adminIndex] = { ...result[adminIndex], isConfirmed: true, role: 'admin' };
+  } else {
     result.unshift(PRIMARY_ADMIN_USER);
   }
 

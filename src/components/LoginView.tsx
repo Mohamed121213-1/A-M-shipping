@@ -285,8 +285,33 @@ export const LoginView: React.FC<LoginViewProps> = ({
       );
 
       if (matchingSystemUser) {
+        // Live check with server in case admin confirmed the account recently on another device/window
+        let isUserConfirmed = matchingSystemUser.role === 'admin' || matchingSystemUser.isConfirmed !== false;
+        
+        if (!isUserConfirmed) {
+          try {
+            const serverRes = await fetch('/api/state');
+            if (serverRes.ok) {
+              const serverData = await serverRes.json();
+              const serverUsers = serverData?.state?.users || [];
+              const cleanPhoneDigits = (matchingSystemUser.phone || '').replace(/\D/g, '');
+              const serverMatch = serverUsers.find(
+                (u: any) => 
+                  u.id === matchingSystemUser.id ||
+                  (u.phone && cleanPhoneDigits && String(u.phone).replace(/\D/g, '') === cleanPhoneDigits) ||
+                  (u.email && matchingSystemUser.email && String(u.email).toLowerCase() === matchingSystemUser.email.toLowerCase())
+              );
+              if (serverMatch && serverMatch.isConfirmed !== false) {
+                isUserConfirmed = true;
+                matchingSystemUser.isConfirmed = true;
+              }
+            }
+          } catch (e) {
+            // fallback to current flag
+          }
+        }
+
         // Check approval / confirmation status
-        const isUserConfirmed = matchingSystemUser.role === 'admin' || matchingSystemUser.isConfirmed !== false;
         if (!isUserConfirmed) {
           setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً.');
           recordFailedLoginAttempt();

@@ -462,30 +462,64 @@ function sanitizeServerState(rawState: any) {
   if (!rawState.users || !Array.isArray(rawState.users)) {
     rawState.users = [...SUPABASE_SYNCED_USERS];
   } else {
-    const usersMap = new Map<string, any>();
+    const usersById = new Map<string, any>();
+    const phoneToId = new Map<string, string>();
+    const emailToId = new Map<string, string>();
+
+    const registerServerUser = (u: any) => {
+      if (!u || !u.id) return;
+      usersById.set(u.id, u);
+      if (u.phone) {
+        const cleanPhone = String(u.phone).replace(/\D/g, '');
+        if (cleanPhone) phoneToId.set(cleanPhone, u.id);
+      }
+      if (u.email) {
+        emailToId.set(String(u.email).toLowerCase(), u.id);
+      }
+    };
+
     for (const sUser of SUPABASE_SYNCED_USERS) {
-      usersMap.set(sUser.id, sUser);
-      if (sUser.phone) usersMap.set(sUser.phone.replace(/\D/g, ''), sUser);
-      if (sUser.email) usersMap.set(sUser.email.toLowerCase(), sUser);
+      registerServerUser(sUser);
     }
+
     for (const u of rawState.users) {
-      if (u && typeof u === 'object' && (u.id || u.phone || u.email)) {
-        const matchKey = u.id || (u.phone ? String(u.phone).replace(/\D/g, '') : '') || (u.email ? String(u.email).toLowerCase() : '');
-        const existing = usersMap.get(matchKey) || (u.id ? usersMap.get(u.id) : undefined);
-        if (existing) {
-          usersMap.set(existing.id, { ...existing, ...u });
-        } else if (u.id && u.name) {
-          usersMap.set(u.id, u);
-        }
+      if (!u || typeof u !== 'object') continue;
+      let existingId = u.id && usersById.has(u.id) ? u.id : undefined;
+      if (!existingId && u.phone) {
+        const cleanPhone = String(u.phone).replace(/\D/g, '');
+        if (cleanPhone) existingId = phoneToId.get(cleanPhone);
+      }
+      if (!existingId && u.email) {
+        existingId = emailToId.get(String(u.email).toLowerCase());
+      }
+
+      if (existingId) {
+        const existing = usersById.get(existingId);
+        const isConfirmedFinal = u.isConfirmed !== undefined 
+          ? Boolean(u.isConfirmed) 
+          : (existing?.isConfirmed !== undefined ? Boolean(existing.isConfirmed) : true);
+
+        const merged = {
+          ...existing,
+          ...u,
+          id: existing.id,
+          isConfirmed: isConfirmedFinal,
+        };
+        registerServerUser(merged);
+      } else if (u.id && u.name) {
+        registerServerUser({
+          ...u,
+          isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : true,
+        });
       }
     }
-    const finalUsersMap = new Map<string, any>();
-    for (const val of usersMap.values()) {
-      if (val && val.id) {
-        finalUsersMap.set(val.id, val);
-      }
+
+    const result = Array.from(usersById.values());
+    const adminIdx = result.findIndex((u: any) => u.role === 'admin' || u.email === 'mohamedsalah565657@icloud.com');
+    if (adminIdx >= 0) {
+      result[adminIdx] = { ...result[adminIdx], isConfirmed: true, role: 'admin' };
     }
-    rawState.users = Array.from(finalUsersMap.values());
+    rawState.users = result;
   }
 
   if (Array.isArray(rawState.couriers)) {
@@ -989,8 +1023,16 @@ app.post("/api/users/confirm", (req, res) => {
     }
 
     if (serverAppState && Array.isArray(serverAppState.users)) {
+      const cleanTargetPhone = String(userId).replace(/\D/g, '');
+      const cleanTargetEmail = String(userId).toLowerCase();
       serverAppState.users = serverAppState.users.map((u: any) => {
-        if (u.id === userId || u.phone === userId) {
+        const uPhoneDigits = u.phone ? String(u.phone).replace(/\D/g, '') : '';
+        const uEmail = u.email ? String(u.email).toLowerCase() : '';
+        if (
+          u.id === userId || 
+          (cleanTargetPhone && uPhoneDigits === cleanTargetPhone) ||
+          (uEmail && uEmail === cleanTargetEmail)
+        ) {
           return { ...u, isConfirmed: Boolean(isConfirmed) };
         }
         return u;

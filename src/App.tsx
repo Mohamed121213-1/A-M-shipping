@@ -479,17 +479,17 @@ export default function App() {
     };
   }, []);
 
-  // Monitor active session: if an account is marked as unconfirmed or pending approval, prevent active session
+  // Monitor active session: if an account is explicitly rejected/unconfirmed by admin, handle session gracefully
   useEffect(() => {
     if (currentUser && currentUser.role !== 'admin') {
+      const cleanPhone = (currentUser.phone || '').replace(/\D/g, '');
       const matchingUser = users.find(
         (u) => u.id === currentUser.id ||
                (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-               (u.phone && currentUser.phone && u.phone === currentUser.phone)
+               (u.phone && cleanPhone && u.phone.replace(/\D/g, '') === cleanPhone)
       );
 
-      const isUnconfirmed = matchingUser ? matchingUser.isConfirmed === false : currentUser.isConfirmed === false;
-      if (isUnconfirmed) {
+      if (matchingUser && matchingUser.isConfirmed === false) {
         setCurrentUser(null);
         localStorage.removeItem('bosta_current_user');
         if (isSupabaseConfigured) {

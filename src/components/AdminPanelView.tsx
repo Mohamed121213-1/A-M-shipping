@@ -1024,9 +1024,9 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                 type="button"
                 onClick={() => {
                   SUPABASE_SYNCED_USERS.forEach((sUser) => {
-                    onUpdateUser(sUser);
+                    onUpdateUser({ ...sUser, isConfirmed: true });
                   });
-                  alert('✅ تمت مزامنة كافة حسابات Supabase التسعة وربطها بقاعدة بيانات الموقع بنجاح!');
+                  alert('✅ تمت مزامنة وتفعيل كافة حسابات Supabase التسعة في قاعدة بيانات الموقع بنجاح!');
                 }}
                 className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-xs px-3.5 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 title="مزامنة وتأكيد حسابات Supabase"
