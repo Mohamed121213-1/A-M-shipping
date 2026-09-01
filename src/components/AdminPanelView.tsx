@@ -2093,7 +2093,6 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                           wallet,
                           hubs,
                           governorates,
-                          companyTransactions,
                         });
                         alert(result.message || `تم إرسال ${shipments.length} شحنة إلى Supabase بنجاح!`);
                       } catch (e: any) {

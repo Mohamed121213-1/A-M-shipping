@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Header } from './components/Header';
 import { ShipmentsList } from './components/ShipmentsList';
@@ -392,22 +392,13 @@ export default function App() {
     };
   }, []);
 
-  // One-time initial push to ensure all loaded local shipments are immediately mirrored in Supabase tables
+  const hasInitialHydratedRef = useRef<boolean>(false);
+
   useEffect(() => {
-    if (shipments.length > 0) {
-      const timer = setTimeout(() => {
-        syncEngine.forceSyncWithSupabase({
-          shipments,
-          wallet,
-          users,
-          couriers,
-          hubs,
-          governorates,
-          companyTransactions,
-        }).catch(() => {});
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
+    const timer = setTimeout(() => {
+      hasInitialHydratedRef.current = true;
+    }, 1200);
+    return () => clearTimeout(timer);
   }, []);
 
   // Broadcast state changes whenever core data is modified
@@ -433,9 +424,9 @@ export default function App() {
     });
   };
 
-  // Automatically broadcast local mutations across all connected devices
+  // Automatically broadcast local mutations across all connected devices only after initial hydration
   useEffect(() => {
-    if (!isIncomingSyncRef.current) {
+    if (!isIncomingSyncRef.current && hasInitialHydratedRef.current) {
       broadcastDataChange();
     }
   }, [shipments, wallet, users, couriers, hubs, governorates, courierNotifications, companyTransactions]);
@@ -499,6 +490,23 @@ export default function App() {
 
   // Monitor active session: if an account is explicitly rejected/unconfirmed by admin, handle session gracefully
   useEffect(() => {
+    if (currentUser) {
+      try {
+        localStorage.setItem('bosta_current_user', JSON.stringify(currentUser));
+        localStorage.setItem('bosta_current_role', currentUser.role);
+      } catch (e) {}
+    } else {
+      localStorage.removeItem('bosta_current_user');
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('bosta_active_tab', activeTab);
+    } catch (e) {}
+  }, [activeTab]);
+
+  useEffect(() => {
     if (currentUser && currentUser.role !== 'admin') {
       const cleanPhone = (currentUser.phone || '').replace(/\D/g, '');
       const matchingUser = users.find(
@@ -524,36 +532,46 @@ export default function App() {
     }
 
     if (currentUser.role === 'merchant') {
-      const storeName = currentUser.storeName?.trim().toLowerCase();
-      const userName = currentUser.name?.trim().toLowerCase();
+      const storeName = (currentUser.storeName || '').trim().toLowerCase();
+      const cleanStore = storeName.replace(/^متجر\s+/, '').trim();
+      const userName = (currentUser.name || '').trim().toLowerCase();
+      const cleanUserName = userName.replace(/^متجر\s+/, '').trim();
       const userPhone = currentUser.phone ? String(currentUser.phone).replace(/\D/g, '') : '';
       const userId = currentUser.id?.trim();
 
       return shipments.filter((s) => {
-        const sStore = s.sender?.storeName?.trim().toLowerCase();
-        const sContact = s.sender?.contactName?.trim().toLowerCase();
+        const sStore = (s.sender?.storeName || '').trim().toLowerCase();
+        const sCleanStore = sStore.replace(/^متجر\s+/, '').trim();
+        const sContact = (s.sender?.contactName || '').trim().toLowerCase();
         const sPhone = s.sender?.phone ? String(s.sender.phone).replace(/\D/g, '') : '';
         const sSenderId = (s.sender as any)?.id?.trim();
 
         // 1. Direct ID match
-        if (userId && sSenderId && sSenderId === userId) return true;
+        if (userId && sSenderId && (sSenderId === userId || sSenderId.endsWith(userId) || userId.endsWith(sSenderId))) return true;
 
-        // 2. Exact or included store name match
+        // 2. Normalized store name match
+        if (cleanStore && sCleanStore && (sCleanStore === cleanStore || sCleanStore.includes(cleanStore) || cleanStore.includes(sCleanStore))) {
+          return true;
+        }
         if (storeName && sStore && (sStore === storeName || sStore.includes(storeName) || storeName.includes(sStore))) {
           return true;
         }
 
         // 3. Contact name match
-        if (userName && (sContact === userName || sContact?.includes(userName) || (sStore && sStore === userName))) {
+        if (userName && sContact && (sContact === userName || sContact.includes(userName) || userName.includes(sContact))) {
+          return true;
+        }
+        if (cleanUserName && sCleanStore && (sCleanStore === cleanUserName || sCleanStore.includes(cleanUserName) || cleanUserName.includes(sCleanStore))) {
           return true;
         }
 
-        // 4. Phone number match
-        if (userPhone && sPhone && (sPhone === userPhone || sPhone.endsWith(userPhone) || userPhone.endsWith(sPhone))) {
-          return true;
+        // 4. Phone number match (full or last 9 digits)
+        if (userPhone && sPhone) {
+          if (sPhone === userPhone || sPhone.includes(userPhone) || userPhone.includes(sPhone)) return true;
+          const uSuffix = userPhone.slice(-9);
+          const sSuffix = sPhone.slice(-9);
+          if (uSuffix && sSuffix && uSuffix === sSuffix) return true;
         }
-
-        if (s.sender?.contactName && currentUser.name && s.sender.contactName.trim() === currentUser.name.trim()) return true;
 
         return false;
       });
@@ -833,6 +851,7 @@ export default function App() {
 
   // Approve single pending shipment
   const handleApproveShipment = (shipmentId: string) => {
+    let approvedShipment: Shipment | undefined;
     const nextShipments = shipments.map((s) => {
       if (s.id !== shipmentId) return s;
 
@@ -848,13 +867,18 @@ export default function App() {
         },
       ];
 
-      return {
+      approvedShipment = {
         ...s,
         status: 'created' as ShipmentStatus,
         updatedAt: new Date().toISOString(),
         timeline: updatedTimeline,
       };
+      return approvedShipment;
     });
+
+    if (approvedShipment) {
+      syncEngine.lockShipmentStatus(shipmentId, 'created', approvedShipment);
+    }
 
     setShipments(nextShipments);
     broadcastDataChange({ shipments: nextShipments });
@@ -885,12 +909,14 @@ export default function App() {
           actorRole: 'system' as const,
         },
       ];
-      return {
+      const updated = {
         ...s,
         status: 'created' as ShipmentStatus,
         updatedAt: new Date().toISOString(),
         timeline: updatedTimeline,
       };
+      syncEngine.lockShipmentStatus(s.id, 'created', updated);
+      return updated;
     });
 
     setShipments(nextShipments);
@@ -1140,6 +1166,9 @@ export default function App() {
     } catch (e) {
       console.warn('Error persisting shipments update:', e);
     }
+
+    // Lock status locally for 20s to ensure no race condition can revert it
+    syncEngine.lockShipmentStatus(shipmentId, newStatus, updatedShipment);
 
     // Broadcast IMMEDIATELY to Admin and all connected instances
     broadcastDataChange({ shipments: nextShipments, wallet: updatedWallet, notifications: nextNotifications });

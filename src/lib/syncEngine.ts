@@ -25,6 +25,17 @@ class SyncEngine {
   private instanceId = `CLIENT-${Math.random().toString(36).substring(2, 9)}`;
   private latestStateCache: SyncedAppState | null = null;
   private latestTimestamp: number = 0;
+  private localStatusLocks: Map<string, { status: string; timestamp: number; fullShipment?: any }> = new Map();
+
+  public lockShipmentStatus(shipmentId: string, status: string, fullShipment?: any) {
+    this.localStatusLocks.set(shipmentId, { status, timestamp: Date.now(), fullShipment });
+    setTimeout(() => {
+      const lock = this.localStatusLocks.get(shipmentId);
+      if (lock && Date.now() - lock.timestamp >= 19000) {
+        this.localStatusLocks.delete(shipmentId);
+      }
+    }, 20000);
+  }
 
   constructor() {
     // 0. Initialize latest timestamp & full state cache from localStorage if available
@@ -80,16 +91,15 @@ class SyncEngine {
       this.fetchPersistedStateFromServer();
       this.initSseStream();
       
-      // Safety fallback poll every 2.5 seconds
+      // Safety fallback poll every 5 seconds
       setInterval(() => {
         this.fetchPersistedStateFromServer();
-      }, 2500);
+      }, 5000);
 
       // Re-check and sync state immediately when phone is unlocked, tab becomes visible, or on focus
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
           this.fetchPersistedStateFromServer();
-          this.requestStateSync();
           if (!this.sseSource || this.sseSource.readyState !== EventSource.OPEN) {
             this.initSseStream();
           }
@@ -98,7 +108,6 @@ class SyncEngine {
 
       window.addEventListener('focus', () => {
         this.fetchPersistedStateFromServer();
-        this.requestStateSync();
         if (!this.sseSource || this.sseSource.readyState !== EventSource.OPEN) {
           this.initSseStream();
         }
@@ -106,13 +115,11 @@ class SyncEngine {
 
       window.addEventListener('pageshow', () => {
         this.fetchPersistedStateFromServer();
-        this.requestStateSync();
       });
 
       window.addEventListener('online', () => {
         this.fetchPersistedStateFromServer();
         this.initSseStream();
-        this.requestStateSync();
       });
 
       // Listen to Service Worker Background Sync & Push updates
@@ -141,14 +148,6 @@ class SyncEngine {
               this.handleIncomingUpdate(payload.payload);
             }
           })
-          .on('broadcast', { event: 'request_state_sync' }, (payload: any) => {
-            if (payload?.payload?.senderId !== this.instanceId) {
-              const current = this.getLatestState();
-              if (current && (current.shipments?.length || current.users?.length)) {
-                this.broadcastState(current);
-              }
-            }
-          })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'bosta_app_state' }, (payload: any) => {
             if (payload?.new?.state && payload.new.state.senderId !== this.instanceId) {
               this.handleIncomingUpdate(payload.new.state);
@@ -156,22 +155,11 @@ class SyncEngine {
           })
           .subscribe((status: string) => {
             if (status === 'SUBSCRIBED') {
-              console.log('⚡ Connected to Global Cross-Device Sync Service');
-              this.requestStateSync();
-              // If we already have local data, share with other connected peers
-              const current = this.getLatestState();
-              if (current && current.shipments && current.shipments.length > 0) {
-                setTimeout(() => {
-                  this.broadcastState(current);
-                }, 1000);
-              }
+              console.log('⚡ Connected to Global Realtime Sync');
             }
           });
 
         this.fetchPersistedStateFromSupabase();
-        setInterval(() => {
-          this.fetchPersistedStateFromSupabase();
-        }, 4000);
       } catch (err) {
         console.warn('Supabase Realtime Channel error:', err);
       }
@@ -368,7 +356,20 @@ class SyncEngine {
     if (this.isProcessingIncoming) return;
 
     // Sanitize state entities to purge dummy accounts and mock data
-    if (data.shipments) data.shipments = sanitizeShipments(data.shipments);
+    if (data.shipments) {
+      data.shipments = sanitizeShipments(data.shipments);
+      // Protect recently updated local statuses from being reverted by stale snapshots
+      data.shipments = data.shipments.map((s: Shipment) => {
+        const id = s.id || s.trackingNumber;
+        const lock = this.localStatusLocks.get(id);
+        if (lock && Date.now() - lock.timestamp < 20000) {
+          if (s.status !== lock.status) {
+            return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
+          }
+        }
+        return s;
+      });
+    }
     if (data.users) data.users = sanitizeUsers(data.users);
     if (data.couriers) data.couriers = sanitizeCouriers(data.couriers);
     if (data.wallet) data.wallet = sanitizeWallet(data.wallet);
@@ -438,10 +439,40 @@ class SyncEngine {
         .maybeSingle();
 
       if (!error && data?.state) {
-        const remoteTime = Number(data.state.timestamp) || 0;
         if (data.state.senderId !== this.instanceId) {
-          this.handleIncomingUpdate(data.state);
+          if (Array.isArray(data.state.shipments) && data.state.shipments.length > 0) {
+            this.handleIncomingUpdate(data.state);
+          }
         }
+      }
+
+      // Also sync profiles table rows
+      const { data: pRows } = await supabase.from('profiles').select('*');
+      if (pRows && Array.isArray(pRows) && pRows.length > 0) {
+        const mappedUsers: UserSession[] = pRows.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          email: p.email || `${p.phone}@am-shipping.eg`,
+          phone: p.phone,
+          role: p.role,
+          storeName: p.store_name,
+          isConfirmed: p.is_confirmed !== false,
+          registeredAt: p.created_at || new Date().toISOString(),
+          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=dc2626&color=ffffff`
+        }));
+        if (!mappedUsers.some(u => u.role === 'admin')) {
+          mappedUsers.unshift({
+            id: 'admin_root',
+            name: 'محمد صلاح (أدمن الرئيسية)',
+            email: 'mohamedsalah565657@icloud.com',
+            phone: '01000000001',
+            role: 'admin',
+            avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF+%D8%B5%D9%84%D8%A7%D8%AD&background=dc2626&color=ffffff',
+            isConfirmed: true,
+            registeredAt: '2026-08-30T00:00:00.000Z',
+          });
+        }
+        this.handleIncomingUpdate({ users: mappedUsers, senderId: 'supabase_profiles_pull' });
       }
     } catch (e) {
       // Table may not exist yet in Supabase project, ignore
@@ -477,7 +508,7 @@ class SyncEngine {
       }
     }
 
-    // 2. Broadcast to all connected devices via Supabase Realtime
+    // 3. Broadcast to all connected devices via Supabase Realtime
     if (this.realtimeChannel && isSupabaseConfigured) {
       try {
         this.realtimeChannel.send({
@@ -490,7 +521,7 @@ class SyncEngine {
       }
     }
 
-    // 3. Always persist to Supabase DB tables asynchronously if Supabase is configured
+    // 4. Always persist to Supabase DB tables asynchronously if Supabase is configured
     if (isSupabaseConfigured) {
       (async () => {
         try {
@@ -500,56 +531,53 @@ class SyncEngine {
             .upsert({ id: 'global_state', state: payload, updated_at: new Date().toISOString() });
 
           // 2. Sync shipments table
-          if (Array.isArray(payload.shipments) && payload.shipments.length > 0) {
-            const mappedShipments = payload.shipments.map((s: any) => ({
-              id: String(s.id || s.trackingNumber),
-              tracking_number: String(s.trackingNumber || s.id || ''),
-              code: String(s.code || s.trackingNumber || s.id || ''),
-              status: String(s.status || 'created'),
-              customer_name: String(s.recipient?.name || s.customerName || ''),
-              customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
-              governorate: String(s.recipient?.governorate || s.governorate || ''),
-              city: String(s.recipient?.city || s.city || ''),
-              address: String(s.recipient?.streetAddress || s.address || ''),
-              cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
-              shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
-              net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
-              sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
-              courier_name: String(s.courier?.name || s.courierName || ''),
-              notes: String(s.recipient?.notes || s.notes || ''),
-              data: s,
-              created_at: s.createdAt || new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }));
-            try {
-              await supabase.from('shipments').upsert(mappedShipments, { onConflict: 'id' });
-            } catch (err) {}
-          }
-
-          // 3. Sync customers table
-          if (Array.isArray(payload.shipments) && payload.shipments.length > 0) {
-            const custMap = new Map<string, any>();
-            for (const s of payload.shipments as any[]) {
-              const phone = s.recipient?.phone || s.customerPhone;
-              const name = s.recipient?.name || s.customerName;
-              if (phone && name && !custMap.has(phone)) {
-                custMap.set(phone, {
-                  id: `cust_${String(phone).replace(/\D/g, '')}`,
-                  name: String(name),
-                  phone: String(phone),
-                  address: String(s.recipient?.streetAddress || s.address || ''),
-                  city: String(s.recipient?.city || s.city || ''),
-                  governorate: String(s.recipient?.governorate || s.governorate || ''),
-                  notes: String(s.recipient?.notes || ''),
-                  created_at: s.createdAt || new Date().toISOString()
-                });
-              }
-            }
-            if (custMap.size > 0) {
+          if (Array.isArray(payload.shipments)) {
+            if (payload.shipments.length === 0) {
               try {
-                await supabase.from('customers').upsert(Array.from(custMap.values()), { onConflict: 'id' });
+                await supabase.from('shipments').delete().neq('id', '___none___');
+              } catch (err) {}
+            } else {
+              const mappedShipments = payload.shipments.map((s: any) => ({
+                id: String(s.id || s.trackingNumber),
+                tracking_number: String(s.trackingNumber || s.id || ''),
+                code: String(s.code || s.trackingNumber || s.id || ''),
+                status: String(s.status || 'created'),
+                customer_name: String(s.recipient?.name || s.customerName || ''),
+                customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
+                governorate: String(s.recipient?.governorate || s.governorate || ''),
+                city: String(s.recipient?.city || s.city || ''),
+                address: String(s.recipient?.streetAddress || s.address || ''),
+                cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
+                shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
+                net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
+                sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
+                courier_name: String(s.courier?.name || s.courierName || ''),
+                notes: String(s.recipient?.notes || s.notes || ''),
+                data: s,
+                created_at: s.createdAt || new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }));
+              try {
+                await supabase.from('shipments').upsert(mappedShipments, { onConflict: 'id' });
               } catch (err) {}
             }
+          }
+
+          // 3. Sync user profiles to 'profiles' table
+          if (Array.isArray(payload.users) && payload.users.length > 0) {
+            const mappedProfiles = payload.users.map((u: any) => ({
+              id: String(u.id),
+              name: String(u.name || ''),
+              email: u.email || null,
+              phone: String(u.phone || ''),
+              role: String(u.role || 'merchant'),
+              store_name: u.storeName || null,
+              is_confirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : true,
+              created_at: u.registeredAt || new Date().toISOString()
+            }));
+            try {
+              await supabase.from('profiles').upsert(mappedProfiles, { onConflict: 'id' });
+            } catch (err) {}
           }
 
           // 4. Sync couriers

@@ -630,33 +630,7 @@ async function pushStateToSupabase(state: any, timestamp: number) {
       }
     }
 
-    // 3. Sync extracted customers to 'customers' table
-    if (Array.isArray(state?.shipments) && state.shipments.length > 0) {
-      const custMap = new Map<string, any>();
-      for (const s of state.shipments) {
-        const phone = s.recipient?.phone || s.customerPhone;
-        const name = s.recipient?.name || s.customerName;
-        if (phone && name && !custMap.has(phone)) {
-          custMap.set(phone, {
-            id: `cust_${String(phone).replace(/\D/g, '')}`,
-            name: String(name),
-            phone: String(phone),
-            address: String(s.recipient?.streetAddress || s.address || ''),
-            city: String(s.recipient?.city || s.city || ''),
-            governorate: String(s.recipient?.governorate || s.governorate || ''),
-            notes: String(s.recipient?.notes || ''),
-            created_at: s.createdAt || new Date().toISOString()
-          });
-        }
-      }
-      if (custMap.size > 0) {
-        try {
-          await supabaseServer.from('customers').upsert(Array.from(custMap.values()), { onConflict: 'id' });
-        } catch (err) {}
-      }
-    }
-
-    // 4. Sync couriers to 'couriers' table
+    // 3. Sync couriers to 'couriers' table
     if (Array.isArray(state?.couriers) && state.couriers.length > 0) {
       const formattedCouriers = state.couriers.map((c: any) => ({
         id: String(c.id || `courier_${Date.now()}`),
@@ -672,15 +646,15 @@ async function pushStateToSupabase(state: any, timestamp: number) {
       } catch (err) {}
     }
 
-    // 5. Sync user profiles to 'profiles' table
+    // 4. Sync user profiles directly to 'profiles' table
     if (Array.isArray(state?.users) && state.users.length > 0) {
       const formattedProfiles = state.users.map((u: any) => ({
         id: String(u.id || `usr_${Date.now()}`),
         name: String(u.name || ''),
-        email: String(u.email || ''),
+        email: u.email || null,
         phone: String(u.phone || ''),
         role: String(u.role || 'merchant'),
-        store_name: String(u.storeName || ''),
+        store_name: u.storeName || null,
         is_confirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : true,
         created_at: u.registeredAt || new Date().toISOString()
       }));
@@ -705,12 +679,83 @@ async function pullStateFromSupabaseOnBoot() {
 
     if (!error && data?.state) {
       const remoteState = sanitizeServerState(data.state);
-      const remoteTime = remoteState.timestamp || (data.updated_at ? new Date(data.updated_at).getTime() : 0);
-      if (remoteTime > serverLastUpdated || !serverAppState) {
+      const remoteShipmentsCount = remoteState.shipments?.length || 0;
+      const currentShipmentsCount = serverAppState?.shipments?.length || 0;
+
+      if (remoteShipmentsCount >= currentShipmentsCount || !serverAppState) {
         serverAppState = remoteState;
-        serverLastUpdated = remoteTime;
-        console.log("⚡ Server state initialized and synchronized from Supabase Cloud Database!");
-        fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: serverLastUpdated }), () => {});
+        serverLastUpdated = Date.now();
+        console.log(`⚡ Server state initialized and synchronized from Supabase Cloud Database! (${remoteShipmentsCount} shipments, ${remoteState.users?.length || 0} users)`);
+        fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: serverLastUpdated }, null, 2), () => {});
+      }
+    }
+
+    // Ensure profiles table rows are mirrored in users
+    const { data: pRows, error: pErr } = await supabaseServer.from('profiles').select('*');
+    if (!pErr && Array.isArray(pRows) && pRows.length > 0) {
+      const mappedProfiles = pRows.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        email: p.email || `${p.phone}@am-shipping.eg`,
+        phone: p.phone,
+        role: p.role,
+        storeName: p.store_name,
+        isConfirmed: p.is_confirmed !== false,
+        registeredAt: p.created_at || new Date().toISOString(),
+        avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=dc2626&color=ffffff`
+      }));
+
+      // Ensure Admin is always present
+      if (!mappedProfiles.some((u: any) => u.role === 'admin')) {
+        mappedProfiles.unshift({
+          id: 'admin_root',
+          name: 'محمد صلاح (أدمن الرئيسية)',
+          email: 'mohamedsalah565657@icloud.com',
+          phone: '01000000001',
+          role: 'admin',
+          avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF+%D8%B5%D9%84%D8%A7%D8%AD&background=dc2626&color=ffffff',
+          isConfirmed: true,
+          registeredAt: '2026-08-30T00:00:00.000Z',
+        });
+      }
+
+      if (!serverAppState) serverAppState = {};
+      serverAppState.users = mappedProfiles;
+    }
+
+    // Fallback/Supplement: Ensure shipments table rows are also reflected
+    if (!serverAppState?.shipments || serverAppState.shipments.length === 0) {
+      const { data: sRows, error: sErr } = await supabaseServer.from('shipments').select('*').limit(200);
+      if (!sErr && Array.isArray(sRows) && sRows.length > 0) {
+        const mapped = sRows.map((r: any) => r.data || {
+          id: r.id,
+          trackingNumber: r.tracking_number,
+          status: r.status,
+          recipient: {
+            name: r.customer_name,
+            phone: r.customer_phone,
+            governorate: r.governorate,
+            city: r.city,
+            streetAddress: r.address,
+          },
+          sender: {
+            storeName: r.sender_name,
+            contactName: r.sender_name,
+          },
+          financials: {
+            codAmount: r.cod_amount,
+            shippingFee: r.shipping_fee,
+            netPayout: r.net_payout,
+          },
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        });
+
+        if (!serverAppState) serverAppState = {};
+        serverAppState.shipments = mapped;
+        serverLastUpdated = Date.now();
+        console.log(`⚡ Hydrated ${mapped.length} shipments directly from Supabase shipments table!`);
+        fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: serverLastUpdated }, null, 2), () => {});
       }
     }
   } catch (e) {
@@ -1151,6 +1196,21 @@ app.patch("/api/shipments/:id/status", (req, res) => {
     serverAppState.notifications.unshift(notifItem);
 
     recalculateServerWallet();
+
+    // Direct update to Supabase 'shipments' table immediately
+    if (supabaseServer) {
+      supabaseServer
+        .from('shipments')
+        .update({
+          status,
+          data: updatedShipment,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', updatedShipment.id)
+        .then(() => {})
+        .catch(() => {});
+    }
+
     persistAndBroadcast(senderId || 'api_update_status', {
       title: `🚚 تحديث حالة شحنة (#${updatedShipment.trackingNumber})`,
       body: `${newTimelineEntry.title} - ${updatedShipment.recipient?.name || ''}`,
@@ -1323,6 +1383,11 @@ app.delete("/api/shipments/:id", (req, res) => {
       persistAndBroadcast(senderId || 'api_delete_shipment');
     }
 
+    // Direct deletion from Supabase 'shipments' table
+    if (supabaseServer) {
+      supabaseServer.from('shipments').delete().or(`id.eq.${id},tracking_number.eq.${id}`).then(() => {}).catch(() => {});
+    }
+
     return res.json({ success: true, id, state: serverAppState });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -1338,6 +1403,11 @@ app.post("/api/shipments/batch-delete", (req, res) => {
       serverAppState.shipments = serverAppState.shipments.filter((s: any) => !idSet.has(s.id) && !idSet.has(s.trackingNumber));
       recalculateServerWallet();
       persistAndBroadcast(senderId || 'api_batch_delete');
+
+      // Direct batch delete from Supabase 'shipments' table
+      if (supabaseServer && ids.length > 0) {
+        supabaseServer.from('shipments').delete().in('id', ids).then(() => {}).catch(() => {});
+      }
     }
     return res.json({ success: true, state: serverAppState });
   } catch (err: any) {
@@ -1353,6 +1423,12 @@ app.post("/api/shipments/clear-all", (req, res) => {
     serverAppState.shipments = [];
     recalculateServerWallet();
     persistAndBroadcast(senderId || 'api_clear_all');
+
+    // Direct wipe from Supabase 'shipments' table
+    if (supabaseServer) {
+      supabaseServer.from('shipments').delete().neq('id', '___none___').then(() => {}).catch(() => {});
+    }
+
     return res.json({ success: true, state: serverAppState });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -1392,7 +1468,7 @@ app.post("/api/sync/state", (req, res) => {
     let mergedState = { ...state };
 
     if (!isExplicitClear && serverAppState) {
-      // Intelligent Shipments union merge
+      // Intelligent Shipments union merge with timestamp comparison (prevents overwriting newer status updates)
       if (Array.isArray(serverAppState.shipments) && serverAppState.shipments.length > 0) {
         if (!Array.isArray(state.shipments) || state.shipments.length === 0) {
           mergedState.shipments = serverAppState.shipments;
@@ -1400,7 +1476,17 @@ app.post("/api/sync/state", (req, res) => {
           const shipmentsMap = new Map<string, any>(serverAppState.shipments.map((s: any) => [s.id || s.trackingNumber, s]));
           for (const incomingS of state.shipments) {
             if (incomingS && (incomingS.id || incomingS.trackingNumber)) {
-              shipmentsMap.set(incomingS.id || incomingS.trackingNumber, incomingS);
+              const key = incomingS.id || incomingS.trackingNumber;
+              const existingS = shipmentsMap.get(key);
+              if (!existingS) {
+                shipmentsMap.set(key, incomingS);
+              } else {
+                const existingTime = new Date(existingS.updatedAt || existingS.createdAt || 0).getTime();
+                const incomingTime = new Date(incomingS.updatedAt || incomingS.createdAt || 0).getTime();
+                if (incomingTime >= existingTime) {
+                  shipmentsMap.set(key, incomingS);
+                }
+              }
             }
           }
           mergedState.shipments = Array.from(shipmentsMap.values());
@@ -1530,6 +1616,21 @@ app.post("/api/users/register", (req, res) => {
 
     saveBackupSnapshot(serverAppState, now);
     pushStateToSupabase(serverAppState, now);
+
+    // Direct Upsert to Supabase profiles table
+    if (supabaseServer) {
+      supabaseServer.from('profiles').upsert({
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email || null,
+        phone: newUser.phone,
+        role: newUser.role,
+        store_name: newUser.storeName || null,
+        is_confirmed: newUser.isConfirmed,
+        created_at: newUser.registeredAt
+      }, { onConflict: 'id' }).then(() => {}).catch(() => {});
+    }
+
     broadcastSseState(serverAppState, now, 'server_user_register');
 
     // Notify admins via push notification about new registered user
@@ -1577,6 +1678,12 @@ app.post("/api/users/confirm", (req, res) => {
       });
       saveBackupSnapshot(serverAppState, now);
       pushStateToSupabase(serverAppState, now);
+
+      // Direct Update to Supabase profiles table
+      if (supabaseServer) {
+        supabaseServer.from('profiles').update({ is_confirmed: Boolean(isConfirmed) }).eq('id', userId).then(() => {}).catch(() => {});
+      }
+
       broadcastSseState(serverAppState, now, 'server_user_confirm');
     }
 
@@ -1607,6 +1714,12 @@ app.post("/api/users/delete", (req, res) => {
       });
       saveBackupSnapshot(serverAppState, now);
       pushStateToSupabase(serverAppState, now);
+
+      // Direct Delete from Supabase profiles table
+      if (supabaseServer) {
+        supabaseServer.from('profiles').delete().eq('id', userId).then(() => {}).catch(() => {});
+      }
+
       broadcastSseState(serverAppState, now, 'server_user_delete');
     }
 
