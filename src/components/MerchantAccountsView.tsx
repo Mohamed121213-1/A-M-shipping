@@ -270,8 +270,32 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
       merch.dueBalance = merch.netEarned - merch.totalPaidOut;
     });
 
-    return Array.from(merchantMap.values()).sort((a, b) => b.dueBalance - a.dueBalance);
-  }, [shipments, systemUsers, companyTransactions]);
+    const allMerchants = Array.from(merchantMap.values()).sort((a, b) => b.dueBalance - a.dueBalance);
+
+    // Isolate data if logged in as a merchant
+    if (currentUser?.role === 'merchant') {
+      const storeName = currentUser.storeName?.trim().toLowerCase();
+      const userName = currentUser.name?.trim().toLowerCase();
+      const userPhone = currentUser.phone ? String(currentUser.phone).replace(/\D/g, '') : '';
+      const userId = currentUser.id?.trim();
+
+      const filtered = allMerchants.filter((m) => {
+        const mStore = m.storeName?.trim().toLowerCase();
+        const mName = m.name?.trim().toLowerCase();
+        const mPhone = m.phone ? String(m.phone).replace(/\D/g, '') : '';
+
+        if (userId && m.id === userId) return true;
+        if (storeName && mStore && (mStore === storeName || mStore.includes(storeName) || storeName.includes(mStore))) return true;
+        if (userName && (mName === userName || mName.includes(userName) || (mStore && mStore === userName))) return true;
+        if (userPhone && mPhone && (mPhone === userPhone || mPhone.endsWith(userPhone) || userPhone.endsWith(mPhone))) return true;
+        return false;
+      });
+
+      return filtered.length > 0 ? filtered : allMerchants.slice(0, 1);
+    }
+
+    return allMerchants;
+  }, [shipments, systemUsers, companyTransactions, currentUser]);
 
   // Overall Totals
   const totals = useMemo(() => {

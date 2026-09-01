@@ -392,6 +392,24 @@ export default function App() {
     };
   }, []);
 
+  // One-time initial push to ensure all loaded local shipments are immediately mirrored in Supabase tables
+  useEffect(() => {
+    if (shipments.length > 0) {
+      const timer = setTimeout(() => {
+        syncEngine.forceSyncWithSupabase({
+          shipments,
+          wallet,
+          users,
+          couriers,
+          hubs,
+          governorates,
+          companyTransactions,
+        }).catch(() => {});
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   // Broadcast state changes whenever core data is modified
   const broadcastDataChange = (overrideState?: Partial<{
     shipments: Shipment[];
@@ -508,23 +526,34 @@ export default function App() {
     if (currentUser.role === 'merchant') {
       const storeName = currentUser.storeName?.trim().toLowerCase();
       const userName = currentUser.name?.trim().toLowerCase();
-      const userPhone = currentUser.phone?.trim();
+      const userPhone = currentUser.phone ? String(currentUser.phone).replace(/\D/g, '') : '';
+      const userId = currentUser.id?.trim();
 
       return shipments.filter((s) => {
         const sStore = s.sender?.storeName?.trim().toLowerCase();
         const sContact = s.sender?.contactName?.trim().toLowerCase();
-        const sPhone = s.sender?.phone?.trim();
+        const sPhone = s.sender?.phone ? String(s.sender.phone).replace(/\D/g, '') : '';
+        const sSenderId = (s.sender as any)?.id?.trim();
 
+        // 1. Direct ID match
+        if (userId && sSenderId && sSenderId === userId) return true;
+
+        // 2. Exact or included store name match
         if (storeName && sStore && (sStore === storeName || sStore.includes(storeName) || storeName.includes(sStore))) {
           return true;
         }
+
+        // 3. Contact name match
         if (userName && (sContact === userName || sContact?.includes(userName) || (sStore && sStore === userName))) {
           return true;
         }
-        if (userPhone && sPhone && sPhone === userPhone) {
+
+        // 4. Phone number match
+        if (userPhone && sPhone && (sPhone === userPhone || sPhone.endsWith(userPhone) || userPhone.endsWith(sPhone))) {
           return true;
         }
-        if (s.sender?.contactName === currentUser.name) return true;
+
+        if (s.sender?.contactName && currentUser.name && s.sender.contactName.trim() === currentUser.name.trim()) return true;
 
         return false;
       });
@@ -559,10 +588,66 @@ export default function App() {
     return shipments;
   }, [shipments, currentUser]);
 
-  // Merchant Wallet scoped calculation
+  // Merchant Wallet scoped calculation strictly to logged in merchant
   const userWallet = useMemo(() => {
+    if (!currentUser || currentUser.role === 'admin') {
+      return wallet;
+    }
+
+    if (currentUser.role === 'merchant') {
+      let available = 0;
+      let pending = 0;
+      let totalPaidOut = 0;
+
+      userShipments.forEach((s) => {
+        const isSettled = Boolean(s.isMerchantSettled || s.financials?.paidStatus === 'settled');
+
+        if (s.status === 'delivered') {
+          const cod = Number(s.financials?.codAmount) || 0;
+          const fee = Number(s.financials?.shippingFee) || 0;
+          const net = Number(s.financials?.netPayout) ?? Math.max(0, cod - fee);
+          if (isSettled) {
+            totalPaidOut += net;
+          } else {
+            available += net;
+          }
+        } else if (s.status === 'partial_delivery') {
+          const cod = Number(s.partialDetails?.partialCodAmount ?? s.financials?.codAmount) || 0;
+          const fee = Number(s.financials?.shippingFee) || 0;
+          const net = Math.max(0, cod - fee);
+          if (isSettled) {
+            totalPaidOut += net;
+          } else {
+            available += net;
+          }
+        } else if (s.status === 'returned' || s.status === 'refused') {
+          const totalShippingFee = Number(s.financials?.shippingFee) || 0;
+          let collectedShipping = 0;
+          if (s.refusedDetails?.amountCollected !== undefined) {
+            collectedShipping = Number(s.refusedDetails.amountCollected) || 0;
+          } else if (s.refusedDetails?.shippingFeePaid) {
+            collectedShipping = totalShippingFee;
+          }
+          const deducted = Math.max(0, totalShippingFee - collectedShipping);
+          if (!isSettled && deducted > 0) {
+            available = Math.max(0, available - deducted);
+          }
+        } else {
+          pending += Number(s.financials?.codAmount) || 0;
+        }
+      });
+
+      return {
+        merchantId: currentUser.id || 'merch',
+        merchantName: currentUser.storeName || `متجر ${currentUser.name}`,
+        availableBalance: available,
+        pendingCod: pending,
+        totalPaidOut: totalPaidOut,
+      };
+    }
+
     return wallet;
-  }, [wallet]);
+  }, [wallet, currentUser, userShipments]);
 
   // Auth handlers
   const handleLoginSuccess = (user: UserSession) => {

@@ -149,6 +149,11 @@ class SyncEngine {
               }
             }
           })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'bosta_app_state' }, (payload: any) => {
+            if (payload?.new?.state && payload.new.state.senderId !== this.instanceId) {
+              this.handleIncomingUpdate(payload.new.state);
+            }
+          })
           .subscribe((status: string) => {
             if (status === 'SUBSCRIBED') {
               console.log('⚡ Connected to Global Cross-Device Sync Service');
@@ -485,13 +490,83 @@ class SyncEngine {
       }
     }
 
-    // 3. Always persist to Supabase DB table asynchronously if Supabase is configured
+    // 3. Always persist to Supabase DB tables asynchronously if Supabase is configured
     if (isSupabaseConfigured) {
       (async () => {
         try {
+          // 1. Sync full state
           await supabase
             .from('bosta_app_state')
             .upsert({ id: 'global_state', state: payload, updated_at: new Date().toISOString() });
+
+          // 2. Sync shipments table
+          if (Array.isArray(payload.shipments) && payload.shipments.length > 0) {
+            const mappedShipments = payload.shipments.map((s: any) => ({
+              id: String(s.id || s.trackingNumber),
+              tracking_number: String(s.trackingNumber || s.id || ''),
+              code: String(s.code || s.trackingNumber || s.id || ''),
+              status: String(s.status || 'created'),
+              customer_name: String(s.recipient?.name || s.customerName || ''),
+              customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
+              governorate: String(s.recipient?.governorate || s.governorate || ''),
+              city: String(s.recipient?.city || s.city || ''),
+              address: String(s.recipient?.streetAddress || s.address || ''),
+              cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
+              shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
+              net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
+              sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
+              courier_name: String(s.courier?.name || s.courierName || ''),
+              notes: String(s.recipient?.notes || s.notes || ''),
+              data: s,
+              created_at: s.createdAt || new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }));
+            try {
+              await supabase.from('shipments').upsert(mappedShipments, { onConflict: 'id' });
+            } catch (err) {}
+          }
+
+          // 3. Sync customers table
+          if (Array.isArray(payload.shipments) && payload.shipments.length > 0) {
+            const custMap = new Map<string, any>();
+            for (const s of payload.shipments as any[]) {
+              const phone = s.recipient?.phone || s.customerPhone;
+              const name = s.recipient?.name || s.customerName;
+              if (phone && name && !custMap.has(phone)) {
+                custMap.set(phone, {
+                  id: `cust_${String(phone).replace(/\D/g, '')}`,
+                  name: String(name),
+                  phone: String(phone),
+                  address: String(s.recipient?.streetAddress || s.address || ''),
+                  city: String(s.recipient?.city || s.city || ''),
+                  governorate: String(s.recipient?.governorate || s.governorate || ''),
+                  notes: String(s.recipient?.notes || ''),
+                  created_at: s.createdAt || new Date().toISOString()
+                });
+              }
+            }
+            if (custMap.size > 0) {
+              try {
+                await supabase.from('customers').upsert(Array.from(custMap.values()), { onConflict: 'id' });
+              } catch (err) {}
+            }
+          }
+
+          // 4. Sync couriers
+          if (Array.isArray(payload.couriers) && payload.couriers.length > 0) {
+            const mappedCouriers = payload.couriers.map((c: any) => ({
+              id: String(c.id),
+              name: String(c.name || 'مندوب'),
+              phone: String(c.phone || ''),
+              vehicle: String(c.vehicle || 'motorcycle'),
+              assigned_hub: String(c.assignedHub || ''),
+              status: 'active',
+              created_at: new Date().toISOString()
+            }));
+            try {
+              await supabase.from('couriers').upsert(mappedCouriers, { onConflict: 'id' });
+            } catch (err) {}
+          }
         } catch (e) {
           // Ignore DB upsert errors
         }
@@ -499,21 +574,59 @@ class SyncEngine {
     }
   }
 
-  public async forceSyncWithSupabase(): Promise<{ success: boolean; message: string; timestamp?: number }> {
+  public async forceSyncWithSupabase(clientState?: any): Promise<{ success: boolean; message: string; timestamp?: number }> {
     try {
-      const res = await fetch('/api/supabase/sync', { method: 'POST' });
+      const stateToSync = clientState || this.latestStateCache;
+      
+      // 1. Post to Server Endpoint
+      const res = await fetch('/api/supabase/sync', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: stateToSync })
+      });
       const data = await res.json();
       
-      if (isSupabaseConfigured && this.latestStateCache) {
+      // 2. Direct Client-side push to Supabase as backup & immediate reflection
+      if (isSupabaseConfigured && stateToSync) {
         try {
           await supabase
             .from('bosta_app_state')
-            .upsert({ id: 'global_state', state: this.latestStateCache, updated_at: new Date().toISOString() });
-        } catch (e) {}
+            .upsert({ id: 'global_state', state: stateToSync, updated_at: new Date().toISOString() });
+
+          if (Array.isArray(stateToSync.shipments) && stateToSync.shipments.length > 0) {
+            const mappedShipments = stateToSync.shipments.map((s: any) => ({
+              id: String(s.id || s.trackingNumber),
+              tracking_number: String(s.trackingNumber || s.id || ''),
+              code: String(s.code || s.trackingNumber || s.id || ''),
+              status: String(s.status || 'created'),
+              customer_name: String(s.recipient?.name || s.customerName || ''),
+              customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
+              governorate: String(s.recipient?.governorate || s.governorate || ''),
+              city: String(s.recipient?.city || s.city || ''),
+              address: String(s.recipient?.streetAddress || s.address || ''),
+              cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
+              shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
+              net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
+              sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
+              courier_name: String(s.courier?.name || s.courierName || ''),
+              notes: String(s.recipient?.notes || s.notes || ''),
+              data: s,
+              created_at: s.createdAt || new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }));
+            
+            for (let i = 0; i < mappedShipments.length; i += 50) {
+              const batch = mappedShipments.slice(i, i + 50);
+              await supabase.from('shipments').upsert(batch, { onConflict: 'id' });
+            }
+          }
+        } catch (e) {
+          console.warn('Client-side direct Supabase sync warning:', e);
+        }
       }
 
       await this.fetchPersistedStateFromServer();
-      return { success: true, message: data.message || 'تمت المزامنة السحابية بنجاح' };
+      return { success: true, message: data.message || `تمت مزامنة ${stateToSync?.shipments?.length || 0} شحنة إلى Supabase بنجاح!` };
     } catch (err: any) {
       return { success: false, message: err.message || 'فشلت المزامنة مع الخادم' };
     }

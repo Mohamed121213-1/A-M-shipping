@@ -589,6 +589,7 @@ function saveBackupSnapshot(state: any, timestamp: number) {
 async function pushStateToSupabase(state: any, timestamp: number) {
   if (!supabaseServer) return;
   try {
+    // 1. Sync full unified JSON state
     await supabaseServer
       .from('bosta_app_state')
       .upsert({
@@ -596,6 +597,97 @@ async function pushStateToSupabase(state: any, timestamp: number) {
         state,
         updated_at: new Date(timestamp || Date.now()).toISOString(),
       }, { onConflict: 'id' });
+
+    // 2. Sync individual shipments to 'shipments' table
+    if (Array.isArray(state?.shipments) && state.shipments.length > 0) {
+      const formattedShipments = state.shipments.map((s: any) => ({
+        id: String(s.id || s.trackingNumber || `BST-${Date.now()}`),
+        tracking_number: String(s.trackingNumber || s.id || ''),
+        code: String(s.code || s.trackingNumber || s.id || ''),
+        status: String(s.status || 'created'),
+        customer_name: String(s.recipient?.name || s.customerName || ''),
+        customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
+        governorate: String(s.recipient?.governorate || s.governorate || ''),
+        city: String(s.recipient?.city || s.city || ''),
+        address: String(s.recipient?.streetAddress || s.address || ''),
+        cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
+        shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
+        net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
+        sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
+        courier_name: String(s.courier?.name || s.courierName || ''),
+        notes: String(s.recipient?.notes || s.notes || ''),
+        data: s,
+        created_at: s.createdAt || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+
+      // Upsert in batches of 50
+      for (let i = 0; i < formattedShipments.length; i += 50) {
+        const batch = formattedShipments.slice(i, i + 50);
+        try {
+          await supabaseServer.from('shipments').upsert(batch, { onConflict: 'id' });
+        } catch (err) {}
+      }
+    }
+
+    // 3. Sync extracted customers to 'customers' table
+    if (Array.isArray(state?.shipments) && state.shipments.length > 0) {
+      const custMap = new Map<string, any>();
+      for (const s of state.shipments) {
+        const phone = s.recipient?.phone || s.customerPhone;
+        const name = s.recipient?.name || s.customerName;
+        if (phone && name && !custMap.has(phone)) {
+          custMap.set(phone, {
+            id: `cust_${String(phone).replace(/\D/g, '')}`,
+            name: String(name),
+            phone: String(phone),
+            address: String(s.recipient?.streetAddress || s.address || ''),
+            city: String(s.recipient?.city || s.city || ''),
+            governorate: String(s.recipient?.governorate || s.governorate || ''),
+            notes: String(s.recipient?.notes || ''),
+            created_at: s.createdAt || new Date().toISOString()
+          });
+        }
+      }
+      if (custMap.size > 0) {
+        try {
+          await supabaseServer.from('customers').upsert(Array.from(custMap.values()), { onConflict: 'id' });
+        } catch (err) {}
+      }
+    }
+
+    // 4. Sync couriers to 'couriers' table
+    if (Array.isArray(state?.couriers) && state.couriers.length > 0) {
+      const formattedCouriers = state.couriers.map((c: any) => ({
+        id: String(c.id || `courier_${Date.now()}`),
+        name: String(c.name || 'مندوب'),
+        phone: String(c.phone || ''),
+        vehicle: String(c.vehicle || 'motorcycle'),
+        assigned_hub: String(c.assignedHub || ''),
+        status: 'active',
+        created_at: new Date().toISOString()
+      }));
+      try {
+        await supabaseServer.from('couriers').upsert(formattedCouriers, { onConflict: 'id' });
+      } catch (err) {}
+    }
+
+    // 5. Sync user profiles to 'profiles' table
+    if (Array.isArray(state?.users) && state.users.length > 0) {
+      const formattedProfiles = state.users.map((u: any) => ({
+        id: String(u.id || `usr_${Date.now()}`),
+        name: String(u.name || ''),
+        email: String(u.email || ''),
+        phone: String(u.phone || ''),
+        role: String(u.role || 'merchant'),
+        store_name: String(u.storeName || ''),
+        is_confirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : true,
+        created_at: u.registeredAt || new Date().toISOString()
+      }));
+      try {
+        await supabaseServer.from('profiles').upsert(formattedProfiles, { onConflict: 'id' });
+      } catch (err) {}
+    }
   } catch (e) {
     // Non-blocking catch
   }
@@ -1915,6 +2007,53 @@ app.post("/api/ai-risk-check", async (req, res) => {
     return res.json(result);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// Supabase Full Cloud Push & Sync Endpoint
+app.post("/api/supabase/sync", async (req, res) => {
+  try {
+    const { state } = req.body || {};
+    const stateToSync = state ? sanitizeServerState(state) : serverAppState;
+    if (!stateToSync) {
+      return res.status(400).json({ error: "لا توجد بيانات حالية للمزامنة السحابية" });
+    }
+
+    const now = Date.now();
+    await pushStateToSupabase(stateToSync, now);
+
+    return res.json({
+      success: true,
+      message: "تم إرسال كافة الشحنات والمستخدمين والمناديب إلى Supabase بنجاح!",
+      timestamp: now,
+      stats: {
+        shipmentsCount: stateToSync.shipments?.length || 0,
+        usersCount: stateToSync.users?.length || 0,
+        couriersCount: stateToSync.couriers?.length || 0,
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Check Supabase Connection Status
+app.get("/api/supabase/status", async (req, res) => {
+  try {
+    if (!supabaseServer) {
+      return res.json({ connected: false, error: "Supabase client not initialized" });
+    }
+    const { data, error } = await supabaseServer.from('bosta_app_state').select('id, updated_at').limit(1);
+    const { data: sData, error: sError } = await supabaseServer.from('shipments').select('id').limit(1);
+    
+    return res.json({
+      connected: !error,
+      appStateTable: !error,
+      shipmentsTable: !sError,
+      error: error?.message || sError?.message || null
+    });
+  } catch (err: any) {
+    return res.status(500).json({ connected: false, error: err.message });
   }
 });
 

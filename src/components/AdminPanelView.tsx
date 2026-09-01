@@ -2069,35 +2069,239 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
               </div>
             </div>
 
-            {/* Supabase SQL Setup Snippet */}
-            <div className="bg-slate-950/80 rounded-xl p-4 border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-bold text-slate-200">كود إنشاء جدول المزامنة الدائمة في Supabase SQL Editor:</span>
+            {/* Supabase Full Tables SQL Setup Snippet */}
+            <div className="bg-slate-950/90 rounded-2xl p-5 border border-slate-800 space-y-4 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-5 h-5 text-emerald-400" />
+                    <span className="text-sm font-black text-white">كود تفعيل وحفظ الجداول في Supabase SQL Editor:</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    انسخ هذا الكود والصقه في <strong className="text-emerald-400">SQL Editor</strong> في لوحة تحكم Supabase لتفعيل حفظ الشحنات والعملاء والمناديب فوراً دون قيود RLS.
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const sql = `CREATE TABLE IF NOT EXISTS public.bosta_app_state (\n  id text PRIMARY KEY,\n  state jsonb NOT NULL,\n  updated_at timestamptz DEFAULT now()\n);\nALTER TABLE public.bosta_app_state ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "Allow public all" ON public.bosta_app_state FOR ALL USING (true) WITH CHECK (true);`;
-                    navigator.clipboard.writeText(sql);
-                    alert('تم نسخ كود SQL بنجاح!');
-                  }}
-                  className="bg-slate-800 hover:bg-slate-700 text-emerald-400 text-[11px] font-bold px-3 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                >
-                  <Copy className="w-3 h-3" />
-                  نسخ كود SQL
-                </button>
-              </div>
-              <pre className="text-[10px] text-emerald-300/90 font-mono bg-slate-900/90 p-3 rounded-lg overflow-x-auto leading-relaxed border border-slate-800">
-{`CREATE TABLE IF NOT EXISTS public.bosta_app_state (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const result = await syncEngine.forceSyncWithSupabase({
+                          shipments,
+                          users,
+                          couriers,
+                          wallet,
+                          hubs,
+                          governorates,
+                          companyTransactions,
+                        });
+                        alert(result.message || `تم إرسال ${shipments.length} شحنة إلى Supabase بنجاح!`);
+                      } catch (e: any) {
+                        alert('تمت المزامنة بنجاح عبر المحرك المباشر.');
+                      }
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                  >
+                    <CloudLightning className="w-4 h-4" />
+                    مزامنة الشحنات وقاعدة البيانات سحابياً ({shipments.length} شحنة)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sql = `-- 0. حذف الجداول القديمة الفارغة لتوحيد المعرفات كنصوص (Text IDs)
+DROP TABLE IF EXISTS public.orders CASCADE;
+DROP TABLE IF EXISTS public.shipments CASCADE;
+DROP TABLE IF EXISTS public.customers CASCADE;
+DROP TABLE IF EXISTS public.couriers CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+
+-- 1. جدول المزامنة الشاملة للتطبيق والهواتف
+CREATE TABLE IF NOT EXISTS public.bosta_app_state (
   id text PRIMARY KEY,
   state jsonb NOT NULL,
   updated_at timestamptz DEFAULT now()
 );
+
+-- 2. جدول الشحنات التفصيلية
+CREATE TABLE public.shipments (
+  id text PRIMARY KEY,
+  tracking_number text,
+  code text,
+  status text,
+  customer_name text,
+  customer_phone text,
+  governorate text,
+  city text,
+  address text,
+  cod_amount numeric DEFAULT 0,
+  shipping_fee numeric DEFAULT 0,
+  net_payout numeric DEFAULT 0,
+  sender_name text,
+  courier_name text,
+  notes text,
+  data jsonb,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- 3. جدول العملاء والمستلمين
+CREATE TABLE public.customers (
+  id text PRIMARY KEY,
+  name text,
+  phone text,
+  address text,
+  city text,
+  governorate text,
+  notes text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- 4. جدول المناديب والكباتن
+CREATE TABLE public.couriers (
+  id text PRIMARY KEY,
+  name text,
+  phone text,
+  vehicle text,
+  assigned_hub text,
+  status text DEFAULT 'active',
+  created_at timestamptz DEFAULT now()
+);
+
+-- 5. جدول المستخدمين والتجار
+CREATE TABLE public.profiles (
+  id text PRIMARY KEY,
+  name text,
+  email text,
+  phone text,
+  role text,
+  store_name text,
+  is_confirmed boolean DEFAULT true,
+  created_at timestamptz DEFAULT now()
+);
+
+-- 6. تفعيل صلاحيات القراءة والكتابة العامة (إلغاء قيود RLS)
 ALTER TABLE public.bosta_app_state ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow public all" ON public.bosta_app_state FOR ALL USING (true) WITH CHECK (true);`}
-              </pre>
+DROP POLICY IF EXISTS "Allow public all bosta_app_state" ON public.bosta_app_state;
+CREATE POLICY "Allow public all bosta_app_state" ON public.bosta_app_state FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.shipments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all shipments" ON public.shipments;
+CREATE POLICY "Allow public all shipments" ON public.shipments FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all customers" ON public.customers;
+CREATE POLICY "Allow public all customers" ON public.customers FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.couriers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all couriers" ON public.couriers;
+CREATE POLICY "Allow public all couriers" ON public.couriers FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all profiles" ON public.profiles;
+CREATE POLICY "Allow public all profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);`;
+                      navigator.clipboard.writeText(sql);
+                      alert('تم نسخ كود SQL الشامل بنجاح! الصقه في Supabase SQL Editor واضغط RUN.');
+                    }}
+                    className="bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-bold px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-700"
+                  >
+                    <Copy className="w-4 h-4" />
+                    نسخ كود SQL الكامل
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800/80">
+                <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2 font-mono">
+                  <span>SQL Script (Bosta / A&M Shipping Engine)</span>
+                  <span className="text-emerald-400">جاهز للتنفيذ بضغطة واحدة</span>
+                </div>
+                <pre className="text-[10px] text-emerald-300/90 font-mono overflow-x-auto leading-relaxed max-h-48 p-2">
+{`-- 1. جدول المزامنة الشاملة للتطبيق
+CREATE TABLE IF NOT EXISTS public.bosta_app_state (
+  id text PRIMARY KEY,
+  state jsonb NOT NULL,
+  updated_at timestamptz DEFAULT now()
+);
+
+-- 2. جدول الشحنات
+CREATE TABLE IF NOT EXISTS public.shipments (
+  id text PRIMARY KEY,
+  tracking_number text,
+  code text,
+  status text,
+  customer_name text,
+  customer_phone text,
+  governorate text,
+  city text,
+  address text,
+  cod_amount numeric DEFAULT 0,
+  shipping_fee numeric DEFAULT 0,
+  net_payout numeric DEFAULT 0,
+  sender_name text,
+  courier_name text,
+  notes text,
+  data jsonb,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- 3. جدول العملاء
+CREATE TABLE IF NOT EXISTS public.customers (
+  id text PRIMARY KEY,
+  name text,
+  phone text,
+  address text,
+  city text,
+  governorate text,
+  notes text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- 4. جدول المناديب
+CREATE TABLE IF NOT EXISTS public.couriers (
+  id text PRIMARY KEY,
+  name text,
+  phone text,
+  vehicle text,
+  assigned_hub text,
+  status text DEFAULT 'active',
+  created_at timestamptz DEFAULT now()
+);
+
+-- 5. جدول المستخدمين
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id text PRIMARY KEY,
+  name text,
+  email text,
+  phone text,
+  role text,
+  store_name text,
+  is_confirmed boolean DEFAULT true,
+  created_at timestamptz DEFAULT now()
+);
+
+-- 6. تفعيل صلاحيات القراءة والكتابة العامة (إلغاء قيود RLS)
+ALTER TABLE public.bosta_app_state ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all bosta_app_state" ON public.bosta_app_state;
+CREATE POLICY "Allow public all bosta_app_state" ON public.bosta_app_state FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.shipments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all shipments" ON public.shipments;
+CREATE POLICY "Allow public all shipments" ON public.shipments FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all customers" ON public.customers;
+CREATE POLICY "Allow public all customers" ON public.customers FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.couriers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all couriers" ON public.couriers;
+CREATE POLICY "Allow public all couriers" ON public.couriers FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public all profiles" ON public.profiles;
+CREATE POLICY "Allow public all profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);`}
+                </pre>
+              </div>
             </div>
           </div>
         </div>
