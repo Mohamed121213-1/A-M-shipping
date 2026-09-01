@@ -12,8 +12,28 @@ const app = express();
 const PORT = 3000;
 
 // Supabase Cloud Configuration
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "https://mnovqngjipmqniipwnif.supabase.co";
-const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ub3ZxbmdqaXBtcW5paXB3bmlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxODExODksImV4cCI6MjEwMDc1NzE4OX0.LZXvJlJ5XeAIpfLKBp74_Vxq9heBWCgHs4QcnbpO2wE";
+const DEFAULT_SUPABASE_URL = "https://mnovqngjipmqniipwnif.supabase.co";
+const DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ub3ZxbmdqaXBtcW5paXB3bmlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxODExODksImV4cCI6MjEwMDc1NzE4OX0.LZXvJlJ5XeAIpfLKBp74_Vxq9heBWCgHs4QcnbpO2wE";
+
+function resolveValidServerUrl(urlCandidate: any, fallback: string): string {
+  if (typeof urlCandidate === 'string') {
+    const trimmed = urlCandidate.trim();
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+  }
+  return fallback;
+}
+
+function resolveValidServerKey(keyCandidate: any, fallback: string): string {
+  if (typeof keyCandidate === 'string' && keyCandidate.trim().length > 10) {
+    return keyCandidate.trim();
+  }
+  return fallback;
+}
+
+const SUPABASE_URL = resolveValidServerUrl(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL, DEFAULT_SUPABASE_URL);
+const SUPABASE_KEY = resolveValidServerKey(process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY, DEFAULT_SUPABASE_KEY);
 
 const supabaseServer = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false },
