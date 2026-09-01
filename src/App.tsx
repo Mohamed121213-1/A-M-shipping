@@ -716,6 +716,16 @@ export default function App() {
     setWallet(nextWallet);
     broadcastDataChange({ shipments: nextShipments, wallet: nextWallet });
 
+    // Direct atomic REST persistence
+    fetch('/api/shipments/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shipments: newCreatedShipments,
+        senderId: syncEngine.getInstanceId(),
+      }),
+    }).catch((err) => console.warn('Batch creation API error:', err));
+
     const count = newCreatedShipments.length;
     if (count === 1) {
       const single = newCreatedShipments[0];
@@ -763,6 +773,13 @@ export default function App() {
 
     setShipments(nextShipments);
     broadcastDataChange({ shipments: nextShipments });
+
+    fetch(`/api/shipments/${encodeURIComponent(shipmentId)}/approve`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
+    }).catch((err) => console.warn('Approve API error:', err));
+
     showToast(`✅ تم تأكيد وموافقة الأوردر بنجاح!`);
   };
 
@@ -794,6 +811,12 @@ export default function App() {
     setShipments(nextShipments);
     broadcastDataChange({ shipments: nextShipments });
 
+    fetch('/api/shipments/batch-approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
+    }).catch((err) => console.warn('Batch approve API error:', err));
+
     if (count > 0) {
       showToast(`🎉 تم تأكيد وموافقة جميع الطلبات المعلّقة (${count} أوردر) بنجاح!`);
     } else {
@@ -809,6 +832,7 @@ export default function App() {
     extraUpdates?: Partial<Shipment>
   ) => {
     let updatedWallet = wallet;
+    let effectiveExtraOut = extraUpdates;
 
     const nextShipments = shipments.map((s) => {
       if (s.id !== shipmentId) return s;
@@ -849,6 +873,8 @@ export default function App() {
           },
         };
       }
+
+      effectiveExtraOut = effectiveExtra;
 
       const updatedTimeline = [
         ...s.timeline,
@@ -1033,6 +1059,18 @@ export default function App() {
     // Broadcast IMMEDIATELY to Admin and all connected instances
     broadcastDataChange({ shipments: nextShipments, wallet: updatedWallet, notifications: nextNotifications });
 
+    // Direct atomic REST persistence to server & Supabase
+    fetch(`/api/shipments/${encodeURIComponent(shipmentId)}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: newStatus,
+        note,
+        extraUpdates: effectiveExtraOut,
+        senderId: syncEngine.getInstanceId(),
+      }),
+    }).catch((err) => console.warn('Status update API error:', err));
+
     // Also update current active detail modal if open
     if (selectedDetailShipment && selectedDetailShipment.id === shipmentId) {
       setSelectedDetailShipment((prev) => (prev ? { 
@@ -1066,6 +1104,12 @@ export default function App() {
       broadcastDataChange({ shipments: nextShipments });
     }, 20);
 
+    fetch(`/api/shipments/${encodeURIComponent(shipmentId)}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
+    }).catch((err) => console.warn('Delete shipment API error:', err));
+
     if (selectedDetailShipment && selectedDetailShipment.id === shipmentId) {
       setSelectedDetailShipment(null);
     }
@@ -1094,6 +1138,17 @@ export default function App() {
       broadcastDataChange({ shipments: nextShipments });
     }, 20);
 
+    fetch(`/api/shipments/${encodeURIComponent(shipmentId)}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: 'returned',
+        note: 'تم تأكيد تسليم المرتجع للتاجر',
+        extraUpdates: { isReturnedToMerchant: true, returnedToMerchantAt: new Date().toISOString() },
+        senderId: syncEngine.getInstanceId(),
+      }),
+    }).catch((err) => console.warn('Mark returned API error:', err));
+
     showToast('تم تأكيد تسليم المرتجع للتاجر بنجاح وحفظ البيانات بالتحليلات');
   };
 
@@ -1108,6 +1163,12 @@ export default function App() {
     setTimeout(() => {
       broadcastDataChange({ shipments: nextShipments });
     }, 20);
+
+    fetch('/api/shipments/batch-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: shipmentIds, senderId: syncEngine.getInstanceId() }),
+    }).catch((err) => console.warn('Batch delete API error:', err));
 
     if (selectedDetailShipment && shipmentIds.includes(selectedDetailShipment.id)) {
       setSelectedDetailShipment(null);
@@ -1189,6 +1250,13 @@ export default function App() {
     }
 
     broadcastDataChange({ shipments: nextShipments, notifications: nextNotifications });
+
+    fetch(`/api/shipments/${encodeURIComponent(shipmentId)}/courier`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ courier, senderId: syncEngine.getInstanceId() }),
+    }).catch((err) => console.warn('Assign courier API error:', err));
+
     showToast(`🚚 تم إسناد الشحنة ${shipmentId} للكابتن ${courier.name} وإرسال إشعار فوري له!`);
   };
 
@@ -1737,6 +1805,12 @@ export default function App() {
     }
 
     broadcastDataChange({ shipments: nextShipments });
+    fetch('/api/shipments/settle-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
+    }).catch((e) => console.warn('Settle all API error:', e));
+
     showToast(`✅ تم تحويل كافة الشحنات الجاهزة (${settledCount} شحنة) إلى "تم استلام التاجر للمستحقات" بنجاح!`);
   };
 
@@ -1977,20 +2051,42 @@ export default function App() {
 
   const handleClearAllShipments = () => {
     setShipments([]);
+    broadcastDataChange({ shipments: [] });
+    fetch('/api/shipments/clear-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
+    }).catch((e) => console.warn('Clear shipments API error:', e));
     showToast('🗑️ تم مسح جميع الشحنات والبوليصات بالكامل من النظام');
   };
 
   // Clear All Data Handler
   const handleClearAllData = () => {
-    setShipments([]);
-    setWallet({
+    const emptyWallet = {
       ...INITIAL_MERCHANT_WALLET,
       availableBalance: 0,
       pendingCod: 0,
       totalPaidOut: 0,
-    });
+    };
+    setShipments([]);
+    setWallet(emptyWallet);
     setCourierNotifications([]);
     setUsers([]);
+    broadcastDataChange({
+      shipments: [],
+      wallet: emptyWallet,
+      notifications: [],
+      users: [],
+    });
+    fetch('/api/sync/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        state: { shipments: [], wallet: emptyWallet, notifications: [], users: [] },
+        isExplicitClear: true,
+        senderId: syncEngine.getInstanceId(),
+      }),
+    }).catch((e) => console.warn('Clear all API error:', e));
     showToast('🗑️ تم مسح كافة الشحنات والحسابات والمحفظة بنجاح');
   };
 
@@ -1998,6 +2094,18 @@ export default function App() {
   const handleRestoreDemoData = () => {
     setShipments(INITIAL_SHIPMENTS);
     setWallet(INITIAL_MERCHANT_WALLET);
+    broadcastDataChange({
+      shipments: INITIAL_SHIPMENTS,
+      wallet: INITIAL_MERCHANT_WALLET,
+    });
+    fetch('/api/sync/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        state: { shipments: INITIAL_SHIPMENTS, wallet: INITIAL_MERCHANT_WALLET },
+        senderId: syncEngine.getInstanceId(),
+      }),
+    }).catch((e) => console.warn('Restore demo API error:', e));
     showToast('🔄 تمت استعادة البيانات التجريبية الافتراضية بنجاح');
   };
 

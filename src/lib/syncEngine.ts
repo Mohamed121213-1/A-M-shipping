@@ -185,6 +185,10 @@ class SyncEngine {
     }
   }
 
+  public getInstanceId(): string {
+    return this.instanceId;
+  }
+
   private isInitialized = false;
   private sseSource: EventSource | null = null;
 
@@ -200,9 +204,9 @@ class SyncEngine {
         if (!event.data) return;
         try {
           const data = JSON.parse(event.data);
-          if (data && data.state && data.timestamp) {
-            const remoteTime = Number(data.timestamp) || 0;
-            if (remoteTime > this.latestTimestamp && data.senderId !== this.instanceId) {
+          if (data && data.state) {
+            const remoteTime = Number(data.timestamp) || Date.now();
+            if (data.senderId !== this.instanceId) {
               this.handleIncomingUpdate({
                 ...data.state,
                 timestamp: remoteTime,
@@ -234,8 +238,8 @@ class SyncEngine {
       const res = await fetch('/api/sync/state');
       if (!res.ok) return;
       const data = await res.json();
-      if (data && data.state && data.timestamp) {
-        const remoteTime = Number(data.timestamp) || 0;
+      if (data && data.state) {
+        const remoteTime = Number(data.timestamp) || Date.now();
 
         // Check if local storage currently has shipments
         const localShipmentsRaw = localStorage.getItem('bosta_shipments');
@@ -246,23 +250,18 @@ class SyncEngine {
         const isServerEmpty = !Array.isArray(serverShipments) || serverShipments.length === 0;
 
         if (isServerEmpty && !isLocalEmpty) {
-          // If server is empty but client has local data, push local state to server!
+          // If server is genuinely empty but client has local data on very first boot, seed server
           if (this.latestStateCache) {
             this.postStateToServer(this.latestStateCache, Date.now());
           }
-        } else if (remoteTime > this.latestTimestamp || isLocalEmpty) {
+        } else if (!isServerEmpty || remoteTime >= this.latestTimestamp) {
+          // Authoritative server state applied to client
           this.handleIncomingUpdate({
             ...data.state,
-            timestamp: remoteTime || Date.now(),
-            senderId: 'server_initial_sync',
+            timestamp: remoteTime,
+            senderId: 'server_authoritative_sync',
           });
-        } else if (this.latestTimestamp > remoteTime && this.latestStateCache) {
-          // Local client has newer state than server, push to server
-          this.postStateToServer(this.latestStateCache, this.latestTimestamp);
         }
-      } else if (data && !data.state && this.latestStateCache) {
-        // Server empty, push client state
-        this.postStateToServer(this.latestStateCache, this.latestTimestamp);
       }
     } catch (e) {
       // Network/Server offline, silently continue
@@ -369,21 +368,10 @@ class SyncEngine {
         .maybeSingle();
 
       if (!error && data?.state) {
-        const remoteTime = data.state.timestamp || 0;
-        // CRITICAL FIX: Apply state ONLY if remote timestamp is strictly newer than our local timestamp!
-        if (remoteTime > this.latestTimestamp && data.state.senderId !== this.instanceId) {
+        const remoteTime = Number(data.state.timestamp) || 0;
+        if (data.state.senderId !== this.instanceId) {
           this.handleIncomingUpdate(data.state);
-        } else if (this.latestTimestamp > remoteTime && this.latestStateCache) {
-          // Local state is NEWER than Supabase DB! Push local state to Supabase.
-          await supabase
-            .from('bosta_app_state')
-            .upsert({ id: 'global_state', state: this.latestStateCache, updated_at: new Date().toISOString() });
         }
-      } else if (!error && !data && this.latestStateCache) {
-        // First time initialization in Supabase DB
-        await supabase
-          .from('bosta_app_state')
-          .upsert({ id: 'global_state', state: this.latestStateCache, updated_at: new Date().toISOString() });
       }
     } catch (e) {
       // Table may not exist yet in Supabase project, ignore

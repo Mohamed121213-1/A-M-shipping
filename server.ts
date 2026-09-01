@@ -770,76 +770,511 @@ app.get("/api/sync/state", (req, res) => {
   });
 });
 
+app.get("/api/state", (req, res) => {
+  res.json({
+    state: serverAppState,
+    timestamp: serverLastUpdated,
+  });
+});
+
+// Helper to recalculate server-side wallet
+function recalculateServerWallet() {
+  if (!serverAppState || !Array.isArray(serverAppState.shipments)) return;
+  const shipments = serverAppState.shipments;
+  
+  const calcPendingCod = shipments
+    .filter((ship: any) => !ship.isCourierSettled && (
+      ship.status === 'delivered' ||
+      ship.status === 'partial_delivery' ||
+      ((ship.status === 'refused' || ship.status === 'returned') && ((ship.refusedDetails?.amountCollected || 0) > 0 || ship.refusedDetails?.shippingFeePaid))
+    ))
+    .reduce((sum: number, ship: any) => {
+      if (ship.status === 'partial_delivery') {
+        return sum + (ship.partialDetails?.partialCodAmount ?? ship.financials?.codAmount ?? 0);
+      }
+      if (ship.status === 'refused' || ship.status === 'returned') {
+        return sum + (ship.refusedDetails?.amountCollected ?? (ship.refusedDetails?.shippingFeePaid ? (ship.financials?.shippingFee || 0) : 0));
+      }
+      return sum + (ship.financials?.codAmount || 0);
+    }, 0);
+
+  const calcTotalEarnedPayout = shipments.reduce((sum: number, ship: any) => {
+    if (ship.status === 'delivered') {
+      return sum + (ship.financials?.netPayout ?? ((ship.financials?.codAmount || 0) - (ship.financials?.shippingFee || 0)));
+    }
+    if (ship.status === 'partial_delivery') {
+      const collected = ship.partialDetails?.partialCodAmount ?? ship.financials?.codAmount ?? 0;
+      return sum + (ship.financials?.netPayout ?? Math.max(0, collected - (ship.financials?.shippingFee || 0)));
+    }
+    if (ship.status === 'refused' || ship.status === 'returned') {
+      if (ship.financials?.netPayout !== undefined) {
+        return sum + ship.financials.netPayout;
+      }
+      if (ship.refusedDetails?.merchantDeductedAmount !== undefined) {
+        return sum - ship.refusedDetails.merchantDeductedAmount;
+      }
+      if (ship.refusedDetails?.shippingFeePaid === false) {
+        return sum - (ship.financials?.shippingFee || 0);
+      }
+    }
+    return sum;
+  }, 0);
+
+  const currentWallet = serverAppState.wallet || { totalPaidOut: 0, totalBalance: 0, pendingCod: 0, availableBalance: 0 };
+  serverAppState.wallet = {
+    ...currentWallet,
+    pendingCod: calcPendingCod,
+    availableBalance: Math.max(0, calcTotalEarnedPayout - (currentWallet.totalPaidOut || 0)),
+  };
+}
+
+// Master persist & broadcast pipeline
+function persistAndBroadcast(senderId: string = 'server', notifOptions?: { title: string; body: string; tag?: string; data?: any; targetCourierId?: string }) {
+  const now = Date.now();
+  serverLastUpdated = now;
+  if (!serverAppState) {
+    serverAppState = { shipments: [], users: [], couriers: [], notifications: [], companyTransactions: [] };
+  }
+  serverAppState = sanitizeServerState(serverAppState);
+
+  fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: now }), (err) => {
+    if (err) console.warn("Error persisting server state:", err);
+  });
+
+  saveBackupSnapshot(serverAppState, now);
+  pushStateToSupabase(serverAppState, now);
+  broadcastSseState(serverAppState, now, senderId);
+
+  if (notifOptions) {
+    sendWebPushToSubscribers(notifOptions).catch((e) => console.warn('Web push notification failed:', e));
+  }
+}
+
+// DIRECT ATOMIC SHIPMENT MANAGEMENT ENDPOINTS
+
+// 1. Get all shipments
+app.get("/api/shipments", (req, res) => {
+  try {
+    const shipments = Array.isArray(serverAppState?.shipments) ? serverAppState.shipments : [];
+    return res.json({ success: true, shipments, count: shipments.length });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Create single shipment
+app.post("/api/shipments", (req, res) => {
+  try {
+    const { shipment, senderId } = req.body || {};
+    if (!shipment) {
+      return res.status(400).json({ error: "بيانات الشحنة مطلوبة" });
+    }
+
+    if (!serverAppState) serverAppState = { shipments: [] };
+    if (!Array.isArray(serverAppState.shipments)) serverAppState.shipments = [];
+
+    const nowIso = new Date().toISOString();
+    const trackingNo = shipment.trackingNumber || `BST-${Math.floor(100000 + Math.random() * 900000)}`;
+    const newShipment = {
+      ...shipment,
+      id: shipment.id || trackingNo,
+      trackingNumber: trackingNo,
+      createdAt: shipment.createdAt || nowIso,
+      updatedAt: nowIso,
+      timeline: Array.isArray(shipment.timeline) && shipment.timeline.length > 0 ? shipment.timeline : [
+        {
+          id: `tl-${Date.now()}`,
+          status: shipment.status || 'pending_approval',
+          title: shipment.status === 'created' ? '✨ تم إنشاء بوليصة الشحن بنجاح' : '⏳ طلب جديد - بانتظار موافقة الأدمن',
+          description: shipment.status === 'created' ? 'تم اعتماد الشحنة وجاري تجهيز الاستلام' : 'تم إضافة الأوردر وهي بانتظار اعتماد وموافقة الأدمن',
+          timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+          actorRole: 'system',
+        }
+      ],
+    };
+
+    serverAppState.shipments.unshift(newShipment);
+    recalculateServerWallet();
+    persistAndBroadcast(senderId || 'api_create_shipment', {
+      title: `📦 شحنة جديدة (#${newShipment.trackingNumber})`,
+      body: `تم تسجيل شحنة جديدة للعميل ${newShipment.recipient?.name || ''} - ${newShipment.recipient?.governorate || ''}`,
+      tag: `new-shipment-${newShipment.id}`,
+      data: { shipmentId: newShipment.id, url: '/' },
+    });
+
+    return res.json({ success: true, shipment: newShipment, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Create batch shipments (Excel import / bulk create)
+app.post("/api/shipments/batch", (req, res) => {
+  try {
+    const { shipments, senderId } = req.body || {};
+    if (!Array.isArray(shipments) || shipments.length === 0) {
+      return res.status(400).json({ error: "قائمة الشحنات فارغة" });
+    }
+
+    if (!serverAppState) serverAppState = { shipments: [] };
+    if (!Array.isArray(serverAppState.shipments)) serverAppState.shipments = [];
+
+    const nowIso = new Date().toISOString();
+    const createdList = shipments.map((s: any, idx: number) => {
+      const trackingNo = s.trackingNumber || `BST-${Math.floor(100000 + Math.random() * 900000)}`;
+      return {
+        ...s,
+        id: s.id || trackingNo,
+        trackingNumber: trackingNo,
+        createdAt: s.createdAt || nowIso,
+        updatedAt: nowIso,
+        timeline: Array.isArray(s.timeline) && s.timeline.length > 0 ? s.timeline : [
+          {
+            id: `tl-${Date.now()}-${idx}`,
+            status: s.status || 'pending_approval',
+            title: s.status === 'created' ? '✨ تم إنشاء بوليصة الشحن بنجاح' : '⏳ طلب جديد - بانتظار موافقة الأدمن',
+            description: s.status === 'created' ? 'تم اعتماد الشحنة وجاري تجهيز الاستلام' : 'تم إضافة الأوردر وبانتظار اعتماد الأدمن',
+            timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+            actorRole: 'system',
+          }
+        ],
+      };
+    });
+
+    serverAppState.shipments = [...createdList, ...serverAppState.shipments];
+    recalculateServerWallet();
+    persistAndBroadcast(senderId || 'api_create_batch_shipments', {
+      title: `📦 تم استيراد (${createdList.length}) شحنة جديدة`,
+      body: `تم إضافة دفعة شحنات جديدة إلى النظام بنجاح`,
+      tag: `batch-shipments-${Date.now()}`,
+      data: { url: '/' },
+    });
+
+    return res.json({ success: true, count: createdList.length, shipments: createdList, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Update shipment status
+app.patch("/api/shipments/:id/status", (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, note, extraUpdates, senderId } = req.body || {};
+    if (!status) {
+      return res.status(400).json({ error: "الحالة الجديدة مطلوبة" });
+    }
+
+    if (!serverAppState || !Array.isArray(serverAppState.shipments)) {
+      return res.status(404).json({ error: "لا توجد شحنات مسجلة" });
+    }
+
+    const shipIndex = serverAppState.shipments.findIndex((s: any) => s.id === id || s.trackingNumber === id);
+    if (shipIndex === -1) {
+      return res.status(404).json({ error: "الشحنة غير موجودة" });
+    }
+
+    const currentS = serverAppState.shipments[shipIndex];
+    const nowTimeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const newTimelineEntry = {
+      id: `tl-${Date.now()}`,
+      status,
+      title:
+        status === 'created'
+          ? 'تم تأكيد واعتماد الشحنة'
+          : status === 'pending_approval'
+          ? 'بانتظار موافقة الأدمن'
+          : status === 'delivered'
+          ? 'تم التسليم بنجاح وتحصيل المبلغ'
+          : status === 'partial_delivery'
+          ? 'استلام جزئي من العميل وتحصيل المبلغ'
+          : status === 'refused'
+          ? 'رفض الاستلام من العميل'
+          : status === 'returned'
+          ? 'مرتجع للتاجر'
+          : status === 'out_for_delivery'
+          ? 'خرجت للتسليم مع المندوب'
+          : status === 'failed_attempt'
+          ? 'محاولة تسليم غير ناجحة'
+          : status === 'in_hub'
+          ? 'وصلت المستودع الرئيسي'
+          : 'تحديث حالة الشحنة',
+      description: note || 'تم التحديث بواسطة نظام A&Mshipping الإداري',
+      timestamp: nowTimeStr,
+      actorRole: 'system',
+    };
+
+    const updatedShipment = {
+      ...currentS,
+      ...(extraUpdates || {}),
+      status,
+      updatedAt: new Date().toISOString(),
+      timeline: [...(currentS.timeline || []), newTimelineEntry],
+    };
+
+    serverAppState.shipments[shipIndex] = updatedShipment;
+
+    // Add smart notification to server state
+    if (!Array.isArray(serverAppState.notifications)) serverAppState.notifications = [];
+    const notifItem = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      shipmentId: updatedShipment.id,
+      trackingNumber: updatedShipment.trackingNumber,
+      recipientName: updatedShipment.recipient?.name || 'العميل',
+      recipientPhone: updatedShipment.recipient?.phone || '',
+      governorate: updatedShipment.recipient?.governorate || '',
+      city: updatedShipment.recipient?.city || '',
+      courierId: updatedShipment.assignedCourier?.id,
+      courierName: updatedShipment.assignedCourier?.name,
+      statusTitle: newTimelineEntry.title,
+      statusNote: note || `تم تحديث الحالة إلى ${status}`,
+      isNoAnswer: note ? note.includes('لم يرد') || note.includes('مغلق') : false,
+      isAddressWrong: note ? note.includes('عنوان خاطئ') || note.includes('غير مطابق') : false,
+      isRefused: status === 'refused',
+      isDelivered: status === 'delivered' || status === 'partial_delivery',
+      isDelayed: status === 'failed_attempt',
+      createdAt: new Date().toISOString(),
+      read: false,
+    };
+    serverAppState.notifications.unshift(notifItem);
+
+    recalculateServerWallet();
+    persistAndBroadcast(senderId || 'api_update_status', {
+      title: `🚚 تحديث حالة شحنة (#${updatedShipment.trackingNumber})`,
+      body: `${newTimelineEntry.title} - ${updatedShipment.recipient?.name || ''}`,
+      tag: `status-${updatedShipment.id}`,
+      data: { shipmentId: updatedShipment.id, url: '/' },
+      targetCourierId: updatedShipment.assignedCourier?.id,
+    });
+
+    return res.json({ success: true, shipment: updatedShipment, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Approve single pending shipment
+app.patch("/api/shipments/:id/approve", (req, res) => {
+  try {
+    const { id } = req.params;
+    const { senderId } = req.body || {};
+
+    if (!serverAppState || !Array.isArray(serverAppState.shipments)) {
+      return res.status(404).json({ error: "لا توجد شحنات مسجلة" });
+    }
+
+    const shipIndex = serverAppState.shipments.findIndex((s: any) => s.id === id || s.trackingNumber === id);
+    if (shipIndex === -1) {
+      return res.status(404).json({ error: "الشحنة غير موجودة" });
+    }
+
+    const currentS = serverAppState.shipments[shipIndex];
+    const updatedShipment = {
+      ...currentS,
+      status: 'created',
+      updatedAt: new Date().toISOString(),
+      timeline: [
+        ...(currentS.timeline || []),
+        {
+          id: `tl-${Date.now()}`,
+          status: 'created',
+          title: '✅ تم تأكيد وموافقة الأوردر بواسطة الأدمن',
+          description: 'قام أدمن النظام بمراجعة بيانات الشحنة وتأكيدها لبدء التنفيذ والاستلام',
+          timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+          actorRole: 'system',
+        },
+      ],
+    };
+
+    serverAppState.shipments[shipIndex] = updatedShipment;
+    recalculateServerWallet();
+    persistAndBroadcast(senderId || 'api_approve_shipment', {
+      title: `✅ تم اعتماد الشحنة (#${updatedShipment.trackingNumber})`,
+      body: `تمت موافقة الأدمن على شحنة العميل ${updatedShipment.recipient?.name || ''}`,
+      tag: `approve-${updatedShipment.id}`,
+      data: { shipmentId: updatedShipment.id, url: '/' },
+    });
+
+    return res.json({ success: true, shipment: updatedShipment, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Batch approve pending shipments
+app.post("/api/shipments/batch-approve", (req, res) => {
+  try {
+    const { ids, senderId } = req.body || {};
+    if (!serverAppState || !Array.isArray(serverAppState.shipments)) {
+      return res.json({ success: true, count: 0 });
+    }
+
+    let approvedCount = 0;
+    serverAppState.shipments = serverAppState.shipments.map((s: any) => {
+      const match = ids && Array.isArray(ids) ? ids.includes(s.id) : s.status === 'pending_approval';
+      if (match) {
+        approvedCount++;
+        return {
+          ...s,
+          status: 'created',
+          updatedAt: new Date().toISOString(),
+          timeline: [
+            ...(s.timeline || []),
+            {
+              id: `tl-${Date.now()}-${approvedCount}`,
+              status: 'created',
+              title: '✅ تم موافقة وتأكيد الأوردر بواسطة الأدمن',
+              description: 'تمت الموافقة وتأكيد الأوردر ضمن الموافقة الجماعية بواسطة أدمن النظام',
+              timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+              actorRole: 'system',
+            },
+          ],
+        };
+      }
+      return s;
+    });
+
+    recalculateServerWallet();
+    persistAndBroadcast(senderId || 'api_batch_approve', {
+      title: `🎉 تم اعتماد (${approvedCount}) أوردر بنجاح`,
+      body: `تمت موافقة الأدمن على كافة الشحنات المعلقة`,
+      tag: `batch-approve-${Date.now()}`,
+      data: { url: '/' },
+    });
+
+    return res.json({ success: true, count: approvedCount, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. Assign courier to shipment
+app.patch("/api/shipments/:id/courier", (req, res) => {
+  try {
+    const { id } = req.params;
+    const { courier, senderId } = req.body || {};
+
+    if (!serverAppState || !Array.isArray(serverAppState.shipments)) {
+      return res.status(404).json({ error: "لا توجد شحنات مسجلة" });
+    }
+
+    const shipIndex = serverAppState.shipments.findIndex((s: any) => s.id === id || s.trackingNumber === id);
+    if (shipIndex === -1) {
+      return res.status(404).json({ error: "الشحنة غير موجودة" });
+    }
+
+    const currentS = serverAppState.shipments[shipIndex];
+    const updatedStatus = currentS.status === 'created' || currentS.status === 'in_hub' ? 'out_for_delivery' : currentS.status;
+    const updatedShipment = {
+      ...currentS,
+      assignedCourier: courier,
+      status: updatedStatus,
+      updatedAt: new Date().toISOString(),
+      timeline: [
+        ...(currentS.timeline || []),
+        {
+          id: `tl-${Date.now()}`,
+          status: updatedStatus,
+          title: `تم تعيين المندوب ${courier?.name || 'المندوب'}`,
+          description: `تم إسناد الشحنة رسمياً للمندوب ${courier?.name || ''} (${courier?.phone || ''}) للمتابعة والتسليم`,
+          timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+          actorRole: 'hub',
+        },
+      ],
+    };
+
+    serverAppState.shipments[shipIndex] = updatedShipment;
+    recalculateServerWallet();
+    persistAndBroadcast(senderId || 'api_assign_courier', {
+      title: `🛵 تم تكليفك بشحنة جديدة (#${updatedShipment.trackingNumber})`,
+      body: `الشحنة للعميل ${updatedShipment.recipient?.name || ''} - ${updatedShipment.recipient?.governorate || ''}`,
+      tag: `courier-assigned-${updatedShipment.id}`,
+      data: { shipmentId: updatedShipment.id, url: '/' },
+      targetCourierId: courier?.id,
+    });
+
+    return res.json({ success: true, shipment: updatedShipment, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 8. Delete single shipment
+app.delete("/api/shipments/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const { senderId } = req.body || {};
+
+    if (serverAppState && Array.isArray(serverAppState.shipments)) {
+      serverAppState.shipments = serverAppState.shipments.filter((s: any) => s.id !== id && s.trackingNumber !== id);
+      recalculateServerWallet();
+      persistAndBroadcast(senderId || 'api_delete_shipment');
+    }
+
+    return res.json({ success: true, id, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 9. Batch delete shipments
+app.post("/api/shipments/batch-delete", (req, res) => {
+  try {
+    const { ids, senderId } = req.body || {};
+    if (Array.isArray(ids) && serverAppState && Array.isArray(serverAppState.shipments)) {
+      const idSet = new Set(ids);
+      serverAppState.shipments = serverAppState.shipments.filter((s: any) => !idSet.has(s.id) && !idSet.has(s.trackingNumber));
+      recalculateServerWallet();
+      persistAndBroadcast(senderId || 'api_batch_delete');
+    }
+    return res.json({ success: true, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 10. Clear all shipments
+app.post("/api/shipments/clear-all", (req, res) => {
+  try {
+    const { senderId } = req.body || {};
+    if (!serverAppState) serverAppState = {};
+    serverAppState.shipments = [];
+    recalculateServerWallet();
+    persistAndBroadcast(senderId || 'api_clear_all');
+    return res.json({ success: true, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 11. Settle all merchant shipments
+app.post("/api/shipments/settle-all", (req, res) => {
+  try {
+    const { senderId } = req.body || {};
+    if (serverAppState && Array.isArray(serverAppState.shipments)) {
+      serverAppState.shipments = serverAppState.shipments.map((s: any) => {
+        if (s.status === 'delivered' || s.status === 'partial_delivery') {
+          return { ...s, isSettledWithMerchant: true };
+        }
+        return s;
+      });
+      recalculateServerWallet();
+      persistAndBroadcast(senderId || 'api_settle_all');
+    }
+    return res.json({ success: true, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// MASTER SYNC ENDPOINT
 app.post("/api/sync/state", (req, res) => {
   try {
     const { state, timestamp, senderId, isExplicitClear } = req.body || {};
-    const incomingTime = Number(timestamp) || Date.now();
+    const incomingTime = Date.now();
 
     if (!state) {
       return res.status(400).json({ error: "بيانات الإرسال فارغة" });
-    }
-
-    // Detect new notifications or shipment updates to send remote push to closed devices
-    if (Array.isArray(state.notifications) && state.notifications.length > 0) {
-      const previousNotifIds = new Set(
-        Array.isArray(serverAppState?.notifications)
-          ? serverAppState.notifications.map((n: any) => n.id)
-          : []
-      );
-
-      const newNotifs = state.notifications.filter((n: any) => n && n.id && !previousNotifIds.has(n.id));
-
-      for (const notif of newNotifs) {
-        sendWebPushToSubscribers({
-          title: notif.statusTitle || `💬 إشعار شحنة جديد (#${notif.trackingNumber || ''})`,
-          body: notif.message || notif.statusNote || `تم تحديث حالة الشحنة رقم ${notif.trackingNumber || ''}`,
-          tag: notif.id,
-          data: { shipmentId: notif.shipmentId, url: '/' },
-          targetCourierId: notif.courierId,
-        }).catch((e) => console.warn('Remote push send error:', e));
-      }
-    }
-
-    // Detect direct shipment status changes, new shipments, and courier assignments
-    if (Array.isArray(state.shipments) && state.shipments.length > 0) {
-      const oldShipmentsMap = new Map<string, any>(
-        Array.isArray(serverAppState?.shipments)
-          ? serverAppState.shipments.map((s: any) => [s.id || s.trackingNumber, s])
-          : []
-      );
-
-      for (const s of state.shipments) {
-        if (!s || (!s.id && !s.trackingNumber)) continue;
-        const key = s.id || s.trackingNumber;
-        const oldS = oldShipmentsMap.get(key);
-
-        if (!oldS && oldShipmentsMap.size > 0) {
-          // New shipment created
-          sendWebPushToSubscribers({
-            title: `📦 شحنة جديدة (#${s.trackingNumber || s.id})`,
-            body: `تم إضافة شحنة جديدة للعميل ${s.recipient?.name || ''} - ${s.recipient?.governorate || ''}`,
-            tag: `new-shipment-${key}`,
-            data: { shipmentId: s.id, url: '/' },
-          }).catch((e) => console.warn('New shipment push error:', e));
-        } else if (oldS && oldS.status !== s.status) {
-          // Status changed!
-          sendWebPushToSubscribers({
-            title: `🚚 تحديث حالة شحنة (#${s.trackingNumber || s.id})`,
-            body: `تغيرت الحالة إلى (${s.status || 'تحديث جديد'}) - العميل: ${s.recipient?.name || s.recipient?.governorate || ''}`,
-            tag: `status-change-${key}-${Date.now()}`,
-            data: { shipmentId: s.id, url: '/' },
-          }).catch((e) => console.warn('Status change push error:', e));
-        } else if (oldS && s.assignedCourier?.id && oldS.assignedCourier?.id !== s.assignedCourier?.id) {
-          // Courier assigned/changed!
-          sendWebPushToSubscribers({
-            title: `🛵 تعيين مندوب للشحنة (#${s.trackingNumber || s.id})`,
-            body: `تم تكليف المندوب (${s.assignedCourier.name}) بالتوصيل`,
-            tag: `courier-assigned-${key}-${Date.now()}`,
-            data: { shipmentId: s.id, url: '/' },
-            targetCourierId: s.assignedCourier.id,
-          }).catch((e) => console.warn('Courier change push error:', e));
-        }
-      }
     }
 
     let mergedState = { ...state };
@@ -860,7 +1295,7 @@ app.post("/api/sync/state", (req, res) => {
         }
       }
 
-      // Intelligent Users union merge (never lose pending or registered accounts!)
+      // Intelligent Users union merge
       if (Array.isArray(serverAppState.users) && serverAppState.users.length > 0) {
         if (!Array.isArray(state.users) || state.users.length === 0) {
           mergedState.users = serverAppState.users;
@@ -895,23 +1330,8 @@ app.post("/api/sync/state", (req, res) => {
       }
     }
 
-    if (incomingTime >= serverLastUpdated || !serverAppState) {
-      serverLastUpdated = incomingTime;
-      serverAppState = sanitizeServerState({ ...mergedState, timestamp: incomingTime, senderId });
-
-      fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: incomingTime }), (err) => {
-        if (err) console.warn("Error persisting server state:", err);
-      });
-
-      // Save automatic rolling backup snapshot
-      saveBackupSnapshot(serverAppState, incomingTime);
-
-      // Async sync to Supabase Cloud
-      pushStateToSupabase(serverAppState, incomingTime);
-
-      // Broadcast state update INSTANTLY (< 50ms) to all connected SSE clients across devices
-      broadcastSseState(serverAppState, incomingTime, senderId);
-    }
+    serverAppState = sanitizeServerState({ ...mergedState, timestamp: incomingTime, senderId });
+    persistAndBroadcast(senderId || 'server_state_sync');
 
     return res.json({ success: true, timestamp: serverLastUpdated, state: serverAppState });
   } catch (err: any) {
