@@ -27,15 +27,37 @@ class SyncEngine {
   private latestTimestamp: number = 0;
 
   constructor() {
-    // 0. Initialize latest timestamp from localStorage if available
+    // 0. Initialize latest timestamp & full state cache from localStorage if available
     if (typeof window !== 'undefined') {
       try {
         const savedTime = localStorage.getItem('bosta_last_updated');
         if (savedTime) {
           this.latestTimestamp = Number(savedTime) || 0;
         }
+
+        const shipmentsRaw = localStorage.getItem('bosta_shipments');
+        const walletRaw = localStorage.getItem('bosta_wallet');
+        const usersRaw = localStorage.getItem('bosta_users');
+        const couriersRaw = localStorage.getItem('bosta_couriers');
+        const hubsRaw = localStorage.getItem('bosta_hubs');
+        const governoratesRaw = localStorage.getItem('bosta_governorates');
+        const notificationsRaw = localStorage.getItem('bosta_courier_notifications');
+        const txnsRaw = localStorage.getItem('bosta_company_txns');
+
+        this.latestStateCache = {
+          shipments: shipmentsRaw ? sanitizeShipments(JSON.parse(shipmentsRaw)) : undefined,
+          wallet: walletRaw ? sanitizeWallet(JSON.parse(walletRaw)) : undefined,
+          users: usersRaw ? sanitizeUsers(JSON.parse(usersRaw)) : undefined,
+          couriers: couriersRaw ? sanitizeCouriers(JSON.parse(couriersRaw)) : undefined,
+          hubs: hubsRaw ? JSON.parse(hubsRaw) : undefined,
+          governorates: governoratesRaw ? JSON.parse(governoratesRaw) : undefined,
+          notifications: notificationsRaw ? JSON.parse(notificationsRaw) : undefined,
+          companyTransactions: txnsRaw ? sanitizeCompanyTxns(JSON.parse(txnsRaw)) : undefined,
+          timestamp: this.latestTimestamp || Date.now(),
+          senderId: this.instanceId,
+        };
       } catch (e) {
-        console.warn('Error reading bosta_last_updated:', e);
+        console.warn('Error reading bosta local state cache:', e);
       }
     }
 
@@ -58,15 +80,16 @@ class SyncEngine {
       this.fetchPersistedStateFromServer();
       this.initSseStream();
       
-      // Safety fallback poll every 2 seconds
+      // Safety fallback poll every 2.5 seconds
       setInterval(() => {
         this.fetchPersistedStateFromServer();
-      }, 2000);
+      }, 2500);
 
       // Re-check and sync state immediately when phone is unlocked, tab becomes visible, or on focus
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
           this.fetchPersistedStateFromServer();
+          this.requestStateSync();
           if (!this.sseSource || this.sseSource.readyState !== EventSource.OPEN) {
             this.initSseStream();
           }
@@ -75,6 +98,7 @@ class SyncEngine {
 
       window.addEventListener('focus', () => {
         this.fetchPersistedStateFromServer();
+        this.requestStateSync();
         if (!this.sseSource || this.sseSource.readyState !== EventSource.OPEN) {
           this.initSseStream();
         }
@@ -82,11 +106,13 @@ class SyncEngine {
 
       window.addEventListener('pageshow', () => {
         this.fetchPersistedStateFromServer();
+        this.requestStateSync();
       });
 
       window.addEventListener('online', () => {
         this.fetchPersistedStateFromServer();
         this.initSseStream();
+        this.requestStateSync();
       });
 
       // Listen to Service Worker Background Sync & Push updates
@@ -116,21 +142,31 @@ class SyncEngine {
             }
           })
           .on('broadcast', { event: 'request_state_sync' }, (payload: any) => {
-            if (payload?.payload?.senderId !== this.instanceId && this.latestStateCache) {
-              this.broadcastState(this.latestStateCache);
+            if (payload?.payload?.senderId !== this.instanceId) {
+              const current = this.getLatestState();
+              if (current && (current.shipments?.length || current.users?.length)) {
+                this.broadcastState(current);
+              }
             }
           })
           .subscribe((status: string) => {
             if (status === 'SUBSCRIBED') {
               console.log('⚡ Connected to Global Cross-Device Sync Service');
               this.requestStateSync();
+              // If we already have local data, share with other connected peers
+              const current = this.getLatestState();
+              if (current && current.shipments && current.shipments.length > 0) {
+                setTimeout(() => {
+                  this.broadcastState(current);
+                }, 1000);
+              }
             }
           });
 
         this.fetchPersistedStateFromSupabase();
         setInterval(() => {
           this.fetchPersistedStateFromSupabase();
-        }, 3000);
+        }, 4000);
       } catch (err) {
         console.warn('Supabase Realtime Channel error:', err);
       }
@@ -187,6 +223,35 @@ class SyncEngine {
 
   public getInstanceId(): string {
     return this.instanceId;
+  }
+
+  public getLatestState(): SyncedAppState | null {
+    if (typeof window === 'undefined') return this.latestStateCache;
+    try {
+      const shipmentsRaw = localStorage.getItem('bosta_shipments');
+      const walletRaw = localStorage.getItem('bosta_wallet');
+      const usersRaw = localStorage.getItem('bosta_users');
+      const couriersRaw = localStorage.getItem('bosta_couriers');
+      const hubsRaw = localStorage.getItem('bosta_hubs');
+      const governoratesRaw = localStorage.getItem('bosta_governorates');
+      const notificationsRaw = localStorage.getItem('bosta_courier_notifications');
+      const txnsRaw = localStorage.getItem('bosta_company_txns');
+
+      return {
+        shipments: shipmentsRaw ? sanitizeShipments(JSON.parse(shipmentsRaw)) : this.latestStateCache?.shipments,
+        wallet: walletRaw ? sanitizeWallet(JSON.parse(walletRaw)) : this.latestStateCache?.wallet,
+        users: usersRaw ? sanitizeUsers(JSON.parse(usersRaw)) : this.latestStateCache?.users,
+        couriers: couriersRaw ? sanitizeCouriers(JSON.parse(couriersRaw)) : this.latestStateCache?.couriers,
+        hubs: hubsRaw ? JSON.parse(hubsRaw) : this.latestStateCache?.hubs,
+        governorates: governoratesRaw ? JSON.parse(governoratesRaw) : this.latestStateCache?.governorates,
+        notifications: notificationsRaw ? JSON.parse(notificationsRaw) : this.latestStateCache?.notifications,
+        companyTransactions: txnsRaw ? sanitizeCompanyTxns(JSON.parse(txnsRaw)) : this.latestStateCache?.companyTransactions,
+        timestamp: this.latestTimestamp || Date.now(),
+        senderId: this.instanceId,
+      };
+    } catch (e) {
+      return this.latestStateCache;
+    }
   }
 
   private isInitialized = false;

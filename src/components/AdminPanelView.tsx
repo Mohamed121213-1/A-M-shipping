@@ -34,7 +34,8 @@ import {
   Copy,
   Cloud,
   CloudLightning,
-  CheckCircle
+  CheckCircle,
+  Terminal
 } from 'lucide-react';
 import { EnableNotifications } from './EnableNotifications';
 import { 
@@ -2063,9 +2064,40 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                   3. حماية دائمة من فقدان البيانات
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  البيانات محمية سحابياً ومحفوظة حتى في حال إعادة تشغيل السيرفر أو تغيير جهاز المستخدم.
+                  البيانات محمية سحابياً ومحفوظة حتى في حال إعادة تشغيل السيرفر أو فتح المتجر من هاتف أو جهاز كمبيوتر جديد.
                 </p>
               </div>
+            </div>
+
+            {/* Supabase SQL Setup Snippet */}
+            <div className="bg-slate-950/80 rounded-xl p-4 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold text-slate-200">كود إنشاء جدول المزامنة الدائمة في Supabase SQL Editor:</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sql = `CREATE TABLE IF NOT EXISTS public.bosta_app_state (\n  id text PRIMARY KEY,\n  state jsonb NOT NULL,\n  updated_at timestamptz DEFAULT now()\n);\nALTER TABLE public.bosta_app_state ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "Allow public all" ON public.bosta_app_state FOR ALL USING (true) WITH CHECK (true);`;
+                    navigator.clipboard.writeText(sql);
+                    alert('تم نسخ كود SQL بنجاح!');
+                  }}
+                  className="bg-slate-800 hover:bg-slate-700 text-emerald-400 text-[11px] font-bold px-3 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <Copy className="w-3 h-3" />
+                  نسخ كود SQL
+                </button>
+              </div>
+              <pre className="text-[10px] text-emerald-300/90 font-mono bg-slate-900/90 p-3 rounded-lg overflow-x-auto leading-relaxed border border-slate-800">
+{`CREATE TABLE IF NOT EXISTS public.bosta_app_state (
+  id text PRIMARY KEY,
+  state jsonb NOT NULL,
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE public.bosta_app_state ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public all" ON public.bosta_app_state FOR ALL USING (true) WITH CHECK (true);`}
+              </pre>
             </div>
           </div>
         </div>
