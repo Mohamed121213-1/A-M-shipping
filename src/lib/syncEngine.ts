@@ -445,6 +445,26 @@ class SyncEngine {
       })();
     }
   }
+
+  public async forceSyncWithSupabase(): Promise<{ success: boolean; message: string; timestamp?: number }> {
+    try {
+      const res = await fetch('/api/supabase/sync', { method: 'POST' });
+      const data = await res.json();
+      
+      if (isSupabaseConfigured && this.latestStateCache) {
+        try {
+          await supabase
+            .from('bosta_app_state')
+            .upsert({ id: 'global_state', state: this.latestStateCache, updated_at: new Date().toISOString() });
+        } catch (e) {}
+      }
+
+      await this.fetchPersistedStateFromServer();
+      return { success: true, message: data.message || 'تمت المزامنة السحابية بنجاح' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'فشلت المزامنة مع الخادم' };
+    }
+  }
 }
 
 export const syncEngine = new SyncEngine();

@@ -322,6 +322,18 @@ export default function App() {
 
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
+    // Initial fetch of authoritative users from server
+    fetch('/api/users')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.users) && data.users.length > 0) {
+          const cleaned = sanitizeUsers(data.users);
+          setUsers(cleaned);
+          localStorage.setItem('bosta_users', JSON.stringify(cleaned));
+        }
+      })
+      .catch(() => {});
+
     const unsubscribe = syncEngine.subscribe((incoming) => {
       isIncomingSyncRef.current = true;
       if (incoming.shipments && Array.isArray(incoming.shipments)) {
@@ -1733,6 +1745,13 @@ export default function App() {
     const userId = user.id || `USR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const fullUser: UserSession = { ...user, id: userId };
 
+    // Direct server persistence
+    fetch('/api/users/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullUser),
+    }).catch((e) => console.warn('Direct server register notice:', e));
+
     setUsers((prev) => {
       const existsIndex = prev.findIndex(
         (u) => u.id === fullUser.id ||
@@ -1776,10 +1795,23 @@ export default function App() {
         return nextCouriers;
       });
     }
-    showToast(`✅ تم تسديد وإضافة الحساب ${fullUser.name} بنجاح`);
+    showToast(`✅ تم حفظ وإدراج الحساب ${fullUser.name} بنجاح`);
   };
 
   const handleUpdateUser = (updatedUser: UserSession) => {
+    // Direct server update & confirmation
+    fetch('/api/users/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: updatedUser.id, isConfirmed: updatedUser.isConfirmed !== false }),
+    }).catch((e) => console.warn('Direct server confirm notice:', e));
+
+    fetch('/api/users/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedUser),
+    }).catch((e) => console.warn('Direct server register notice:', e));
+
     setUsers((prev) => {
       const nextUsers = prev.map((u) => (u.id === updatedUser.id ? updatedUser : u));
       localStorage.setItem('bosta_users', JSON.stringify(nextUsers));
@@ -1805,10 +1837,17 @@ export default function App() {
         return nextCouriers;
       });
     }
-    showToast(`✏️ تم تحديث بيانات الحساب ${updatedUser.name}`);
+    showToast(`✏️ تم تحديث واعتماد بيانات الحساب ${updatedUser.name}`);
   };
 
   const handleDeleteUser = (userId: string) => {
+    // Direct server delete
+    fetch('/api/users/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    }).catch((e) => console.warn('Direct server delete notice:', e));
+
     setUsers((prev) => {
       const nextUsers = prev.filter((u) => u.id !== userId);
       localStorage.setItem('bosta_users', JSON.stringify(nextUsers));

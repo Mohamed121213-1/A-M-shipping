@@ -195,26 +195,47 @@ export const LoginView: React.FC<LoginViewProps> = ({
     try {
       if (isSignUpMode) {
         const cleanPhone = phoneInput.trim();
+        const cleanPhoneDigits = cleanPhone.replace(/\D/g, '');
+
+        // Check if account is already registered in system users
+        const existingSystemUser = systemUsers.find(
+          (u) =>
+            (u.phone && (u.phone === cleanPhone || (cleanPhoneDigits && u.phone.replace(/\D/g, '') === cleanPhoneDigits))) ||
+            (u.email && finalEmail && u.email.toLowerCase() === finalEmail.toLowerCase())
+        );
+
         const pendingUser: UserSession = {
-          id: `USR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
-          name: fullNameInput.trim() || cleanPhone,
+          id: existingSystemUser?.id || `USR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+          name: fullNameInput.trim() || existingSystemUser?.name || cleanPhone,
           email: finalEmail,
           phone: cleanPhone,
           role: selectedRoleTab,
           password: password,
           avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(fullNameInput || cleanPhone)}&background=dc2626&color=ffffff`,
-          storeName: selectedRoleTab === 'merchant' ? (storeNameInput.trim() || `متجر ${fullNameInput || cleanPhone}`) : undefined,
-          courierVehicle: selectedRoleTab === 'courier' ? 'سيارة نقل / تروسيكل' : undefined,
-          hubName: selectedRoleTab === 'hub_manager' ? 'المستودع الرئيسي' : undefined,
+          storeName: selectedRoleTab === 'merchant' ? (storeNameInput.trim() || existingSystemUser?.storeName || `متجر ${fullNameInput || cleanPhone}`) : undefined,
+          courierVehicle: selectedRoleTab === 'courier' ? (existingSystemUser?.courierVehicle || 'سيارة نقل / تروسيكل') : undefined,
+          hubName: selectedRoleTab === 'hub_manager' ? (existingSystemUser?.hubName || 'المستودع الرئيسي') : undefined,
           isConfirmed: false,
-          registeredAt: new Date().toISOString(),
+          registeredAt: existingSystemUser?.registeredAt || new Date().toISOString(),
         };
 
+        // 1. Direct POST to server API to guarantee instant registration & admin SSE notification
+        try {
+          await fetch('/api/users/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pendingUser),
+          });
+        } catch (serverErr) {
+          console.warn('Direct server registration sync notice:', serverErr);
+        }
+
+        // 2. Register in client local state
         if (onRegisterPendingUser) {
           onRegisterPendingUser(pendingUser);
         }
 
-        // Try Supabase signup if configured in background (non-blocking)
+        // 3. Try Supabase signup if configured in background (non-blocking & safe against duplicate errors)
         if (isSupabaseConfigured) {
           try {
             await supabase.auth.signUp({
@@ -236,8 +257,18 @@ export const LoginView: React.FC<LoginViewProps> = ({
           }
         }
 
-        setSuccessMessage('✅ تم تسجيل الحساب بنجاح! ⏳ الحساب حالياً بانتظار تفعيل وموافقة الأدمن من لوحة التحكم. ستتمكن من تسجيل الدخول فور موافقة الإدارة.');
+        if (existingSystemUser) {
+          if (existingSystemUser.isConfirmed === false) {
+            setSuccessMessage('⏳ هذا الحساب مسجل بالفعل في النظام وهو حالياً بانتظار موافقة وتفعيل الأدمن من لوحة التحكم. تم إعادة إشعار الإدارة لتأكيد وتفعيل حسابك.');
+          } else {
+            setSuccessMessage('ℹ️ هذا الحساب مسجل ومفعل بالفعل في النظام! يمكنك تسجيل الدخول مباشرة برقم هاتفك وكلمة المرور.');
+          }
+        } else {
+          setSuccessMessage('✅ تم تسجيل الحساب بنجاح! ⏳ الحساب حالياً بانتظار موافقة وتفعيل الأدمن من لوحة التحكم. ستتمكن من تسجيل الدخول فور تفعيل حسابك من قِبل الإدارة.');
+        }
+
         setIsSignUpMode(false);
+        setEmailInput(cleanPhone);
         setPasswordInput('');
         return;
       }
