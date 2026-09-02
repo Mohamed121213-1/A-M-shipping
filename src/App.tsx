@@ -158,9 +158,17 @@ export default function App() {
     loadLocalState<UserSession | null>('bosta_current_user', null)
   );
 
-  const [activeTab, setActiveTab] = useState<string>(() =>
-    loadLocalState<string>('bosta_active_tab', 'login')
-  );
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const savedUser = loadLocalState<UserSession | null>('bosta_current_user', null);
+    const savedTab = loadLocalState<string>('bosta_active_tab', 'shipments');
+    if (savedUser) {
+      if (savedTab === 'login') {
+        return savedUser.role === 'courier' ? 'courier_app' : savedUser.role === 'admin' ? 'admin_panel' : 'shipments';
+      }
+      return savedTab;
+    }
+    return 'login';
+  });
 
   // Company Treasury / Account State
   const [companyTransactions, setCompanyTransactions] = useState<CompanyTransaction[]>(() => {
@@ -458,7 +466,7 @@ export default function App() {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         const user = mapSupabaseUserToSession(session.user);
         const savedUsers = loadLocalState<UserSession[]>('bosta_users', []);
@@ -475,11 +483,10 @@ export default function App() {
           if (finalUser.role === 'courier') {
             setActiveTab('courier_app');
           }
-        } else {
-          setCurrentUser(null);
         }
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
+        setActiveTab('login');
       }
     });
 
@@ -505,6 +512,13 @@ export default function App() {
       localStorage.setItem('bosta_active_tab', activeTab);
     } catch (e) {}
   }, [activeTab]);
+
+  // If a user is logged in, ensure active tab is never 'login'
+  useEffect(() => {
+    if (currentUser && activeTab === 'login') {
+      setActiveTab(currentUser.role === 'courier' ? 'courier_app' : currentUser.role === 'admin' ? 'admin_panel' : 'shipments');
+    }
+  }, [currentUser, activeTab]);
 
   useEffect(() => {
     if (currentUser && currentUser.role !== 'admin') {

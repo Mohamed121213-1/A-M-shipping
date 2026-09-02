@@ -341,34 +341,69 @@ export const LoginView: React.FC<LoginViewProps> = ({
         return;
       }
 
-      // 2. Second priority: If not found in systemUsers and Supabase is configured, try Supabase Auth
+      // 2. Second priority: If not found in local systemUsers and Supabase is configured, check Supabase profiles or Auth
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: finalEmail,
-          password,
-        });
+        try {
+          const { data: supaProfiles } = await supabase
+            .from('profiles')
+            .select('*')
+            .or(`phone.eq.${cleanRawPhone || rawInput},email.eq.${finalEmail}`);
 
-        if (error) {
-          throw error;
-        }
+          if (supaProfiles && supaProfiles.length > 0) {
+            const prof = supaProfiles[0];
+            const isUserConfirmed = prof.role === 'admin' || prof.is_confirmed !== false;
+            if (!isUserConfirmed) {
+              setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً.');
+              recordFailedLoginAttempt();
+              return;
+            }
 
-        if (data.user) {
-          const sessionUser = mapSupabaseUserToSession(data.user, selectedRoleTab);
+            const sessionUser: UserSession = {
+              id: prof.id,
+              name: prof.name,
+              email: prof.email || `${prof.phone}@am-shipping.eg`,
+              phone: prof.phone,
+              role: prof.role || selectedRoleTab,
+              storeName: prof.store_name,
+              isConfirmed: true,
+              registeredAt: prof.created_at || new Date().toISOString(),
+              avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.name)}&background=dc2626&color=ffffff`,
+            };
 
-          const isUserConfirmed = sessionUser.role === 'admin' || sessionUser.isConfirmed !== false;
-          if (!isUserConfirmed) {
-            setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً قبل الدخول.');
-            recordFailedLoginAttempt();
-            await supabase.auth.signOut();
+            clearFailedLoginAttempts();
+            onLoginSuccess(sessionUser);
             return;
           }
+        } catch (supaProfErr) {
+          console.warn('Supabase profile query check notice:', supaProfErr);
+        }
 
-          clearFailedLoginAttempts();
-          onLoginSuccess({
-            ...sessionUser,
-            isConfirmed: true,
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: finalEmail,
+            password,
           });
-          return;
+
+          if (!error && data?.user) {
+            const sessionUser = mapSupabaseUserToSession(data.user, selectedRoleTab);
+
+            const isUserConfirmed = sessionUser.role === 'admin' || sessionUser.isConfirmed !== false;
+            if (!isUserConfirmed) {
+              setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً قبل الدخول.');
+              recordFailedLoginAttempt();
+              await supabase.auth.signOut();
+              return;
+            }
+
+            clearFailedLoginAttempts();
+            onLoginSuccess({
+              ...sessionUser,
+              isConfirmed: true,
+            });
+            return;
+          }
+        } catch (authErr) {
+          console.warn('Supabase password auth check notice:', authErr);
         }
       }
 
