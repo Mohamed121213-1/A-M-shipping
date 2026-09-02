@@ -56,6 +56,11 @@ export default function App() {
   const [users, setUsers] = useState<UserSession[]>(() => {
     const saved = loadLocalState<UserSession[]>('bosta_users', INITIAL_USERS);
     const cleaned = sanitizeUsers(saved);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('bosta_users', JSON.stringify(cleaned));
+      } catch (e) {}
+    }
     return cleaned.length > 0 ? cleaned : sanitizeUsers(INITIAL_USERS);
   });
 
@@ -1967,6 +1972,7 @@ export default function App() {
       } else {
         nextUsers = [fullUser, ...prev];
       }
+      nextUsers = sanitizeUsers(nextUsers);
 
       localStorage.setItem('bosta_users', JSON.stringify(nextUsers));
       broadcastDataChange({ users: nextUsers });

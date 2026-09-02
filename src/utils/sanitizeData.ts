@@ -16,14 +16,47 @@ export const SUPABASE_SYNCED_USERS: UserSession[] = [
   PRIMARY_ADMIN_USER,
 ];
 
+export const DEPRECATED_DUMMY_IDS = new Set([
+  '15c6e6d1-df23-4e20-a464-e4df09590e4d',
+  'b009b128-b1f5-4c03-b6ec-842d35cca9b0',
+  '16cfabd6-f309-4c09-ad2e-3ddc10338d67',
+  '8b151dbb-660d-4169-903a-647c12967504',
+  '169880e0-ba38-416e-ab42-9ae66d67b5c3',
+  'd5892b9e-760c-4a7b-a428-04916faf5513',
+  '16256cfa-8044-4607-abce-9de1335f311a',
+  '234aa881-d193-42a3-b86a-5408ba92146e',
+  '10fdf171-fb33-4ede-9d27-2fae8a2c2d4b',
+]);
+
+export const DEPRECATED_DUMMY_PHONES = new Set([
+  '01015674681',
+  '01017266727',
+  '01093383328',
+  '01121212121',
+  '01125465248',
+  '01125465676',
+  '01155219660',
+  '01234567891',
+]);
+
+export function isDeprecatedDummyUser(u: any): boolean {
+  if (!u) return true;
+  if (u.id && DEPRECATED_DUMMY_IDS.has(String(u.id))) return true;
+  if (u.phone) {
+    const cleanPhone = String(u.phone).replace(/\D/g, '');
+    if (cleanPhone && DEPRECATED_DUMMY_PHONES.has(cleanPhone)) return true;
+  }
+  return false;
+}
+
 export function sanitizeUsers(users?: UserSession[]): UserSession[] {
-  const list = Array.isArray(users) ? users : [];
+  const list = Array.isArray(users) ? users.filter((u) => !isDeprecatedDummyUser(u)) : [];
   const usersById = new Map<string, UserSession>();
   const phoneToId = new Map<string, string>();
   const emailToId = new Map<string, string>();
 
   const registerUser = (u: UserSession) => {
-    if (!u || !u.id) return;
+    if (!u || !u.id || isDeprecatedDummyUser(u)) return;
     usersById.set(u.id, u);
     if (u.phone) {
       const cleanPhone = String(u.phone).replace(/\D/g, '');
@@ -41,7 +74,7 @@ export function sanitizeUsers(users?: UserSession[]): UserSession[] {
 
   // 2. Merge incoming users with full state priority
   for (const u of list) {
-    if (!u || typeof u !== 'object') continue;
+    if (!u || typeof u !== 'object' || isDeprecatedDummyUser(u)) continue;
 
     let existingId = u.id && usersById.has(u.id) ? u.id : undefined;
     if (!existingId && u.phone) {
@@ -54,7 +87,6 @@ export function sanitizeUsers(users?: UserSession[]): UserSession[] {
 
     if (existingId) {
       const existing = usersById.get(existingId)!;
-      // If either has isConfirmed === true, preserve true so an activated user never reverts!
       const isConfirmedFinal = u.isConfirmed !== undefined 
         ? Boolean(u.isConfirmed) 
         : (existing.isConfirmed !== undefined ? Boolean(existing.isConfirmed) : true);
@@ -69,7 +101,7 @@ export function sanitizeUsers(users?: UserSession[]): UserSession[] {
     } else if (u.id && u.name) {
       registerUser({
         ...u,
-        isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : true,
+        isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : false,
       });
     }
   }

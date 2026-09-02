@@ -388,6 +388,39 @@ const SUPABASE_SYNCED_USERS = [
   },
 ];
 
+const DEPRECATED_DUMMY_IDS = new Set([
+  '15c6e6d1-df23-4e20-a464-e4df09590e4d',
+  'b009b128-b1f5-4c03-b6ec-842d35cca9b0',
+  '16cfabd6-f309-4c09-ad2e-3ddc10338d67',
+  '8b151dbb-660d-4169-903a-647c12967504',
+  '169880e0-ba38-416e-ab42-9ae66d67b5c3',
+  'd5892b9e-760c-4a7b-a428-04916faf5513',
+  '16256cfa-8044-4607-abce-9de1335f311a',
+  '234aa881-d193-42a3-b86a-5408ba92146e',
+  '10fdf171-fb33-4ede-9d27-2fae8a2c2d4b',
+]);
+
+const DEPRECATED_DUMMY_PHONES = new Set([
+  '01015674681',
+  '01017266727',
+  '01093383328',
+  '01121212121',
+  '01125465248',
+  '01125465676',
+  '01155219660',
+  '01234567891',
+]);
+
+function isDeprecatedDummyUser(u: any): boolean {
+  if (!u) return true;
+  if (u.id && DEPRECATED_DUMMY_IDS.has(String(u.id))) return true;
+  if (u.phone) {
+    const cleanPhone = String(u.phone).replace(/\D/g, '');
+    if (cleanPhone && DEPRECATED_DUMMY_PHONES.has(cleanPhone)) return true;
+  }
+  return false;
+}
+
 function sanitizeServerState(rawState: any) {
   if (!rawState) return rawState;
 
@@ -399,7 +432,7 @@ function sanitizeServerState(rawState: any) {
     const emailToId = new Map<string, string>();
 
     const registerServerUser = (u: any) => {
-      if (!u || !u.id) return;
+      if (!u || !u.id || isDeprecatedDummyUser(u)) return;
       usersById.set(u.id, u);
       if (u.phone) {
         const cleanPhone = String(u.phone).replace(/\D/g, '');
@@ -415,7 +448,7 @@ function sanitizeServerState(rawState: any) {
     }
 
     for (const u of rawState.users) {
-      if (!u || typeof u !== 'object') continue;
+      if (!u || typeof u !== 'object' || isDeprecatedDummyUser(u)) continue;
       let existingId = u.id && usersById.has(u.id) ? u.id : undefined;
       if (!existingId && u.phone) {
         const cleanPhone = String(u.phone).replace(/\D/g, '');
@@ -441,7 +474,7 @@ function sanitizeServerState(rawState: any) {
       } else if (u.id && u.name) {
         registerServerUser({
           ...u,
-          isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : true,
+          isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : false,
         });
       }
     }
