@@ -214,25 +214,42 @@ export function mergeSingleShipment(current: Shipment, incoming: Shipment): Ship
   }
   const mergedTimeline = Array.from(timelineMap.values());
 
-  // Determine winner between current and incoming
+  // PRIORITY RULE 1: Lifecycle progression protection (Anti-Rollback)
+  // Higher rank ALWAYS beats lower rank. Under no circumstances can a lower rank status overwrite a higher rank status!
   let winningObj: Shipment;
-  if (incomingTime > currentTime + 50) {
-    // Incoming is strictly newer
-    winningObj = incoming;
-  } else if (currentTime > incomingTime + 50) {
-    // Current is strictly newer (reject stale incoming rollback)
+  if (currentRank > incomingRank) {
+    // Current is further along in shipment lifecycle (e.g. delivered/out_for_delivery vs created)
     winningObj = current;
+  } else if (incomingRank > currentRank) {
+    // Incoming is further along in shipment lifecycle
+    winningObj = incoming;
   } else {
-    // Timestamps are equal/missing - higher progression rank or longer timeline wins
-    if (incomingRank > currentRank) {
+    // Ranks are identical (e.g. both rank 6: refused vs delivered, or both delivered)
+    // In this case, timestamp decides
+    if (incomingTime > currentTime + 50) {
       winningObj = incoming;
-    } else if (currentRank > incomingRank) {
+    } else if (currentTime > incomingTime + 50) {
       winningObj = current;
     } else if (incomingTimeline.length > currentTimeline.length) {
       winningObj = incoming;
     } else {
       winningObj = current;
     }
+  }
+
+  // SECONDARY SAFEGUARD: Check merged timeline for terminal statuses
+  // If the timeline contains delivered/returned/refused/partial_delivery, the shipment MUST NOT be downgraded!
+  let effectiveStatus = winningObj.status;
+  const hasDeliveredInTimeline = mergedTimeline.some((t: any) => t?.status === 'delivered');
+  const hasRefusedInTimeline = mergedTimeline.some((t: any) => t?.status === 'refused');
+  const hasReturnedInTimeline = mergedTimeline.some((t: any) => t?.status === 'returned');
+  const hasPartialInTimeline = mergedTimeline.some((t: any) => t?.status === 'partial_delivery');
+
+  if ((STATUS_RANK[effectiveStatus] || 0) < 6) {
+    if (hasDeliveredInTimeline) effectiveStatus = 'delivered';
+    else if (hasRefusedInTimeline) effectiveStatus = 'refused';
+    else if (hasReturnedInTimeline) effectiveStatus = 'returned';
+    else if (hasPartialInTimeline) effectiveStatus = 'partial_delivery';
   }
 
   const mergedFinancials: FinancialDetails = {
@@ -254,7 +271,7 @@ export function mergeSingleShipment(current: Shipment, incoming: Shipment): Ship
     ...current,
     ...incoming,
     ...winningObj,
-    status: winningObj.status,
+    status: effectiveStatus,
     updatedAt: winningObj.updatedAt || current.updatedAt || incoming.updatedAt || new Date().toISOString(),
     timeline: mergedTimeline.length > 0 ? mergedTimeline : winningObj.timeline,
     financials: mergedFinancials,

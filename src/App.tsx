@@ -993,7 +993,7 @@ export default function App() {
     let effectiveExtraOut = extraUpdates;
 
     const nextShipments = shipments.map((s) => {
-      if (s.id !== shipmentId) return s;
+      if (s.id !== shipmentId && s.trackingNumber !== shipmentId) return s;
 
       let effectiveExtra = { ...extraUpdates };
 
@@ -1228,17 +1228,29 @@ export default function App() {
         status: newStatus,
         note,
         extraUpdates: effectiveExtraOut,
+        fullShipment: updatedShipment,
         senderId: syncEngine.getInstanceId(),
       }),
     }).catch((err) => console.warn('Status update API error:', err));
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && updatedShipment) {
       Promise.resolve(
-        supabase.from('shipments').update({
+        supabase.from('shipments').upsert({
+          id: String(updatedShipment.id),
+          tracking_number: String(updatedShipment.trackingNumber || updatedShipment.id),
+          code: String(updatedShipment.code || updatedShipment.trackingNumber || updatedShipment.id),
           status: newStatus,
+          customer_name: String(updatedShipment.recipient?.name || ''),
+          customer_phone: String(updatedShipment.recipient?.phone || ''),
+          governorate: String(updatedShipment.recipient?.governorate || ''),
+          city: String(updatedShipment.recipient?.city || ''),
+          address: String(updatedShipment.recipient?.streetAddress || ''),
+          cod_amount: Number(updatedShipment.financials?.codAmount || 0),
+          shipping_fee: Number(updatedShipment.financials?.shippingFee || 0),
+          net_payout: Number(updatedShipment.financials?.netPayout || 0),
           data: updatedShipment,
           updated_at: new Date().toISOString(),
-        }).eq('id', shipmentId)
+        }, { onConflict: 'id' })
       ).catch(() => {});
     }
 

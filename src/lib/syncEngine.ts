@@ -236,8 +236,7 @@ class SyncEngine {
 
             if (timeNum >= this.latestTimestamp) {
               this.latestTimestamp = timeNum;
-              this.latestStateCache = { ...this.latestStateCache, ...incomingState };
-              this.listeners.forEach((cb) => cb(incomingState));
+              this.handleIncomingUpdate(incomingState);
             }
           } catch (err) {
             console.warn('Storage sync parse error:', err);
