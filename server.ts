@@ -669,38 +669,25 @@ async function pullStateFromSupabaseOnBoot() {
       }
     }
 
-    // Ensure profiles table rows are mirrored in users
+    // Ensure profiles table rows are mirrored and merged in users
     const { data: pRows, error: pErr } = await supabaseServer.from('profiles').select('*');
     if (!pErr && Array.isArray(pRows) && pRows.length > 0) {
       const mappedProfiles = pRows.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        email: p.email || `${p.phone}@am-shipping.eg`,
-        phone: p.phone,
-        role: p.role,
-        storeName: p.store_name,
-        isConfirmed: p.is_confirmed !== false,
+        id: String(p.id),
+        name: p.name || 'مستخدم',
+        email: p.email || (p.phone ? `${p.phone}@am-shipping.eg` : `${p.id}@am-shipping.eg`),
+        phone: p.phone ? String(p.phone) : '',
+        role: p.role || 'merchant',
+        storeName: p.store_name || undefined,
+        isConfirmed: p.is_confirmed !== undefined ? Boolean(p.is_confirmed) : true,
         registeredAt: p.created_at || new Date().toISOString(),
-        avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=dc2626&color=ffffff`
+        avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'مستخدم')}&background=dc2626&color=ffffff`
       }));
 
-      // Ensure Admin is always present
-      if (!mappedProfiles.some((u: any) => u.role === 'admin')) {
-        mappedProfiles.unshift({
-          id: 'admin_root',
-          name: 'محمد صلاح (أدمن الرئيسية)',
-          email: 'mohamedsalah565657@icloud.com',
-          phone: '01000000001',
-          role: 'admin',
-          storeName: undefined,
-          avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF+%D8%B5%D9%84%D8%A7%D8%AD&background=dc2626&color=ffffff',
-          isConfirmed: true,
-          registeredAt: '2026-08-30T00:00:00.000Z',
-        });
-      }
-
       if (!serverAppState) serverAppState = {};
-      serverAppState.users = mappedProfiles;
+      const existingUsers = Array.isArray(serverAppState.users) ? serverAppState.users : [];
+      const cleanedObj = sanitizeServerState({ users: [...mappedProfiles, ...existingUsers] });
+      serverAppState.users = cleanedObj.users;
     }
 
     // Fallback/Supplement: Ensure shipments table rows are also reflected
@@ -1515,7 +1502,7 @@ app.get("/api/users", (req, res) => {
 });
 
 // 2. Direct User Registration endpoint
-app.post("/api/users/register", (req, res) => {
+app.post("/api/users/register", async (req, res) => {
   try {
     const rawUser = req.body;
     if (!rawUser || !rawUser.name || !rawUser.phone) {
@@ -1580,23 +1567,24 @@ app.post("/api/users/register", (req, res) => {
     });
 
     saveBackupSnapshot(serverAppState, now);
-    pushStateToSupabase(serverAppState, now);
-
-    // Direct Upsert to Supabase profiles table
+    // Await Supabase state push & direct upsert to profiles table
     if (supabaseServer) {
-      Promise.resolve(
-        supabaseServer.from('profiles').upsert({
+      try {
+        await supabaseServer.from('profiles').upsert({
           id: newUser.id,
           name: newUser.name,
           email: newUser.email || null,
           phone: newUser.phone,
           role: newUser.role,
           store_name: newUser.storeName || null,
-          is_confirmed: newUser.isConfirmed,
-          created_at: newUser.registeredAt
-        }, { onConflict: 'id' })
-      ).catch(() => {});
+          is_confirmed: newUser.isConfirmed !== undefined ? Boolean(newUser.isConfirmed) : true,
+          created_at: newUser.registeredAt || new Date().toISOString()
+        }, { onConflict: 'id' });
+      } catch (profErr) {
+        console.warn('Supabase profiles direct upsert notice:', profErr);
+      }
     }
+    await pushStateToSupabase(serverAppState, now);
 
     broadcastSseState(serverAppState, now, 'server_user_register');
 
@@ -1615,7 +1603,7 @@ app.post("/api/users/register", (req, res) => {
 });
 
 // 3. User Confirmation / Approval endpoint
-app.post("/api/users/confirm", (req, res) => {
+app.post("/api/users/confirm", async (req, res) => {
   try {
     const { userId, isConfirmed = true } = req.body || {};
     if (!userId) {
@@ -1644,14 +1632,14 @@ app.post("/api/users/confirm", (req, res) => {
         if (err) console.warn("Error writing state after user confirmation:", err);
       });
       saveBackupSnapshot(serverAppState, now);
-      pushStateToSupabase(serverAppState, now);
 
       // Direct Update to Supabase profiles table
       if (supabaseServer) {
-        Promise.resolve(
-          supabaseServer.from('profiles').update({ is_confirmed: Boolean(isConfirmed) }).eq('id', userId)
-        ).catch(() => {});
+        try {
+          await supabaseServer.from('profiles').update({ is_confirmed: Boolean(isConfirmed) }).eq('id', userId);
+        } catch (err) {}
       }
+      await pushStateToSupabase(serverAppState, now);
 
       broadcastSseState(serverAppState, now, 'server_user_confirm');
     }
@@ -1663,7 +1651,7 @@ app.post("/api/users/confirm", (req, res) => {
 });
 
 // 4. User Deletion endpoint
-app.post("/api/users/delete", (req, res) => {
+app.post("/api/users/delete", async (req, res) => {
   try {
     const { userId } = req.body || {};
     if (!userId) {
@@ -1682,12 +1670,14 @@ app.post("/api/users/delete", (req, res) => {
         if (err) console.warn("Error writing state after user deletion:", err);
       });
       saveBackupSnapshot(serverAppState, now);
-      pushStateToSupabase(serverAppState, now);
 
       // Direct Delete from Supabase profiles table
       if (supabaseServer) {
-        Promise.resolve(supabaseServer.from('profiles').delete().eq('id', userId)).catch(() => {});
+        try {
+          await supabaseServer.from('profiles').delete().eq('id', userId);
+        } catch (err) {}
       }
+      await pushStateToSupabase(serverAppState, now);
 
       broadcastSseState(serverAppState, now, 'server_user_delete');
     }

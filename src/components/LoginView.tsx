@@ -230,12 +230,30 @@ export const LoginView: React.FC<LoginViewProps> = ({
           console.warn('Direct server registration sync notice:', serverErr);
         }
 
-        // 2. Register in client local state
+        // 2. Direct upsert into Supabase profiles table
+        if (isSupabaseConfigured) {
+          try {
+            await supabase.from('profiles').upsert({
+              id: pendingUser.id,
+              name: pendingUser.name,
+              email: pendingUser.email || null,
+              phone: pendingUser.phone,
+              role: pendingUser.role,
+              store_name: pendingUser.storeName || null,
+              is_confirmed: false,
+              created_at: pendingUser.registeredAt || new Date().toISOString()
+            }, { onConflict: 'id' });
+          } catch (supaProfErr) {
+            console.warn('Supabase profiles direct upsert notice:', supaProfErr);
+          }
+        }
+
+        // 3. Register in client local state
         if (onRegisterPendingUser) {
           onRegisterPendingUser(pendingUser);
         }
 
-        // 3. Try Supabase signup if configured in background (non-blocking & safe against duplicate errors)
+        // 4. Try Supabase auth signup in background (non-blocking)
         if (isSupabaseConfigured) {
           try {
             await supabase.auth.signUp({

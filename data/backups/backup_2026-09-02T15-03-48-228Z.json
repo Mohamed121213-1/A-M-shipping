@@ -47,6 +47,18 @@
         "password": "123456"
       },
       {
+        "id": "USR-TEST-1788361428181",
+        "name": "تاجر اختبار الربط",
+        "email": "merchant.test@am-shipping.eg",
+        "phone": "01099887766",
+        "role": "merchant",
+        "password": "123456",
+        "storeName": "متجر النجاح",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%AA%D8%A7%D8%AC%D8%B1%20%D8%A7%D8%AE%D8%AA%D8%A8%D8%A7%D8%B1%20%D8%A7%D9%84%D8%B1%D8%A8%D8%B7&background=dc2626&color=ffffff",
+        "isConfirmed": false,
+        "registeredAt": "2026-09-02T15:03:48.226Z"
+      },
+      {
         "id": "USR-1788361248924",
         "name": "محمد علي تاجر",
         "email": "mohamed.ali@test.com",
@@ -3624,6 +3636,6 @@
     ],
     "companyTransactions": []
   },
-  "timestamp": 1788361487272,
-  "savedAt": "2026-09-02T15:04:47.273Z"
+  "timestamp": 1788361428226,
+  "savedAt": "2026-09-02T15:03:48.227Z"
 }

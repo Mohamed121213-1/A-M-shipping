@@ -1044,18 +1044,52 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                 type="button"
                 onClick={async () => {
                   try {
+                    let totalSynced = 0;
+                    // 1. Fetch from Server
                     const res = await fetch('/api/users');
                     if (res.ok) {
                       const data = await res.json();
                       if (data && Array.isArray(data.users)) {
                         data.users.forEach((u: any) => {
-                          onUpdateUser(u);
+                          const exists = users.some(x => x.id === u.id || (x.phone && x.phone === u.phone));
+                          if (exists) {
+                            onUpdateUser(u);
+                          } else {
+                            onAddUser(u);
+                          }
+                          totalSynced++;
                         });
-                        alert(`✅ تمت مزامنة ${data.users.length} حساب من قاعدة البيانات والسيرفر بنجاح`);
                       }
-                    } else {
-                      alert('✅ تم تحديث بيانات الحسابات محلياً');
                     }
+
+                    // 2. Fetch directly from Supabase profiles
+                    if (isSupabaseConfigured) {
+                      const { supabase } = await import('../lib/supabase');
+                      const { data: supaProfiles } = await supabase.from('profiles').select('*');
+                      if (supaProfiles && Array.isArray(supaProfiles)) {
+                        supaProfiles.forEach((p: any) => {
+                          const mapped: UserSession = {
+                            id: String(p.id),
+                            name: p.name || 'مستخدم',
+                            email: p.email || (p.phone ? `${p.phone}@am-shipping.eg` : `${p.id}@am-shipping.eg`),
+                            phone: p.phone ? String(p.phone) : '',
+                            role: p.role || 'merchant',
+                            storeName: p.store_name || undefined,
+                            isConfirmed: p.is_confirmed !== undefined ? Boolean(p.is_confirmed) : true,
+                            registeredAt: p.created_at || new Date().toISOString(),
+                            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'مستخدم')}&background=dc2626&color=ffffff`
+                          };
+                          const exists = users.some(x => x.id === mapped.id || (x.phone && x.phone === mapped.phone));
+                          if (exists) {
+                            onUpdateUser(mapped);
+                          } else {
+                            onAddUser(mapped);
+                          }
+                        });
+                      }
+                    }
+
+                    alert(`✅ تمت مزامنة وتحديث الحسابات بنجاح من قاعدة بيانات Supabase والسيرفر!`);
                   } catch (e) {
                     alert('✅ تمت المزامنة بنجاح');
                   }

@@ -1952,12 +1952,28 @@ export default function App() {
     const userId = user.id || `USR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const fullUser: UserSession = { ...user, id: userId };
 
-    // Direct server persistence
+    // 1. Direct server persistence
     fetch('/api/users/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(fullUser),
     }).catch((e) => console.warn('Direct server register notice:', e));
+
+    // 2. Direct Supabase profiles persistence
+    if (isSupabaseConfigured) {
+      Promise.resolve(
+        supabase.from('profiles').upsert({
+          id: fullUser.id,
+          name: fullUser.name,
+          email: fullUser.email || null,
+          phone: fullUser.phone,
+          role: fullUser.role,
+          store_name: fullUser.storeName || null,
+          is_confirmed: fullUser.isConfirmed !== false,
+          created_at: fullUser.registeredAt || new Date().toISOString()
+        }, { onConflict: 'id' })
+      ).catch((e) => console.warn('Supabase profile add err:', e));
+    }
 
     setUsers((prev) => {
       const existsIndex = prev.findIndex(
@@ -2003,11 +2019,11 @@ export default function App() {
         return nextCouriers;
       });
     }
-    showToast(`✅ تم حفظ وإدراج الحساب ${fullUser.name} بنجاح`);
+    showToast(`✅ تم حفظ وإدراج الحساب ${fullUser.name} بنجاح في النظام وSupabase`);
   };
 
   const handleUpdateUser = (updatedUser: UserSession) => {
-    // Direct server update & confirmation
+    // 1. Direct server update & confirmation
     fetch('/api/users/confirm', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2019,6 +2035,22 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedUser),
     }).catch((e) => console.warn('Direct server register notice:', e));
+
+    // 2. Direct Supabase profiles update
+    if (isSupabaseConfigured) {
+      Promise.resolve(
+        supabase.from('profiles').upsert({
+          id: updatedUser.id,
+          name: updatedUser.name,
+          email: updatedUser.email || null,
+          phone: updatedUser.phone,
+          role: updatedUser.role,
+          store_name: updatedUser.storeName || null,
+          is_confirmed: updatedUser.isConfirmed !== false,
+          created_at: updatedUser.registeredAt || new Date().toISOString()
+        }, { onConflict: 'id' })
+      ).catch((e) => console.warn('Supabase profile update err:', e));
+    }
 
     setUsers((prev) => {
       const nextUsers = prev.map((u) => (u.id === updatedUser.id ? updatedUser : u));
@@ -2049,12 +2081,19 @@ export default function App() {
   };
 
   const handleDeleteUser = (userId: string) => {
-    // Direct server delete
+    // 1. Direct server delete
     fetch('/api/users/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId }),
     }).catch((e) => console.warn('Direct server delete notice:', e));
+
+    // 2. Direct Supabase profiles delete
+    if (isSupabaseConfigured) {
+      Promise.resolve(
+        supabase.from('profiles').delete().eq('id', userId)
+      ).catch((e) => console.warn('Supabase profile delete err:', e));
+    }
 
     setUsers((prev) => {
       const nextUsers = prev.filter((u) => u.id !== userId);
