@@ -388,6 +388,8 @@ const SUPABASE_SYNCED_USERS = [
   },
 ];
 
+const PRIMARY_ADMIN_USER = SUPABASE_SYNCED_USERS[0];
+
 const DEPRECATED_DUMMY_IDS = new Set([
   '15c6e6d1-df23-4e20-a464-e4df09590e4d',
   'b009b128-b1f5-4c03-b6ec-842d35cca9b0',
@@ -427,51 +429,81 @@ function sanitizeServerState(rawState: any) {
   if (!rawState.users || !Array.isArray(rawState.users)) {
     rawState.users = [...SUPABASE_SYNCED_USERS];
   } else {
+    const list = rawState.users.filter((u: any) => !isDeprecatedDummyUser(u));
     const usersById = new Map<string, any>();
     const phoneToId = new Map<string, string>();
     const emailToId = new Map<string, string>();
 
     const registerServerUser = (u: any) => {
       if (!u || !u.id || isDeprecatedDummyUser(u)) return;
-      usersById.set(u.id, u);
-      if (u.phone) {
-        const cleanPhone = String(u.phone).replace(/\D/g, '');
-        if (cleanPhone) phoneToId.set(cleanPhone, u.id);
+      const cleanPhone = u.phone ? String(u.phone).trim() : '';
+      const cleanEmail = u.email ? String(u.email).trim() : (cleanPhone ? `${cleanPhone.replace(/\D/g, '')}@am-shipping.eg` : `${u.id}@am-shipping.eg`);
+      const cleanName = u.name ? String(u.name).trim() : 'مستخدم';
+
+      const cleanUser = {
+        ...u,
+        id: String(u.id),
+        name: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        role: u.role || 'merchant',
+        storeName: u.storeName || (u.store_name ? String(u.store_name) : undefined),
+        hubName: u.hubName || (u.hub_name ? String(u.hub_name) : undefined),
+        courierVehicle: u.courierVehicle || (u.courier_vehicle ? String(u.courier_vehicle) : undefined),
+        password: u.password ? String(u.password) : '123456',
+        isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : (u.is_confirmed !== undefined ? Boolean(u.is_confirmed) : true),
+        avatarUrl: u.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=dc2626&color=ffffff`,
+        registeredAt: u.registeredAt || u.created_at || new Date().toISOString(),
+      };
+
+      usersById.set(cleanUser.id, cleanUser);
+      if (cleanPhone) {
+        const digits = cleanPhone.replace(/\D/g, '');
+        if (digits) phoneToId.set(digits, cleanUser.id);
       }
-      if (u.email) {
-        emailToId.set(String(u.email).toLowerCase(), u.id);
+      if (cleanEmail) {
+        emailToId.set(cleanEmail.toLowerCase(), cleanUser.id);
       }
     };
 
-    for (const sUser of SUPABASE_SYNCED_USERS) {
-      registerServerUser(sUser);
-    }
+    registerServerUser(PRIMARY_ADMIN_USER);
 
-    for (const u of rawState.users) {
+    for (const u of list) {
       if (!u || typeof u !== 'object' || isDeprecatedDummyUser(u)) continue;
-      let existingId = u.id && usersById.has(u.id) ? u.id : undefined;
+      let existingId = u.id && usersById.has(String(u.id)) ? String(u.id) : undefined;
       if (!existingId && u.phone) {
-        const cleanPhone = String(u.phone).replace(/\D/g, '');
-        if (cleanPhone) existingId = phoneToId.get(cleanPhone);
+        const digits = String(u.phone).replace(/\D/g, '');
+        if (digits) existingId = phoneToId.get(digits);
       }
       if (!existingId && u.email) {
-        existingId = emailToId.get(String(u.email).toLowerCase());
+        existingId = emailToId.get(String(u.email).toLowerCase().trim());
       }
 
       if (existingId) {
-        const existing = usersById.get(existingId);
-        const isConfirmedFinal = u.isConfirmed !== undefined 
-          ? Boolean(u.isConfirmed) 
-          : (existing?.isConfirmed !== undefined ? Boolean(existing.isConfirmed) : true);
+        if (existingId === 'admin_root') {
+          const existing = usersById.get('admin_root');
+          registerServerUser({
+            ...existing,
+            ...u,
+            id: 'admin_root',
+            role: 'admin',
+            isConfirmed: true,
+          });
+        } else {
+          const existing = usersById.get(existingId);
+          const isConfirmedFinal = u.isConfirmed !== undefined 
+            ? Boolean(u.isConfirmed) 
+            : (existing?.isConfirmed !== undefined ? Boolean(existing.isConfirmed) : true);
 
-        const merged = {
-          ...existing,
-          ...u,
-          id: existing.id,
-          isConfirmed: isConfirmedFinal,
-        };
-        registerServerUser(merged);
-      } else if (u.id && u.name) {
+          const merged = {
+            ...existing,
+            ...u,
+            id: existing.id,
+            isConfirmed: isConfirmedFinal,
+          };
+          registerServerUser(merged);
+        }
+      } else if (u.id && (u.name || u.phone)) {
         registerServerUser({
           ...u,
           isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : false,
@@ -480,9 +512,11 @@ function sanitizeServerState(rawState: any) {
     }
 
     const result = Array.from(usersById.values());
-    const adminIdx = result.findIndex((u: any) => u.role === 'admin' || u.email === 'mohamedsalah565657@icloud.com');
+    const adminIdx = result.findIndex((u: any) => u.id === 'admin_root' || u.role === 'admin' || u.email === 'mohamedsalah565657@icloud.com');
     if (adminIdx >= 0) {
       result[adminIdx] = { ...result[adminIdx], isConfirmed: true, role: 'admin' };
+    } else {
+      result.unshift(PRIMARY_ADMIN_USER);
     }
     rawState.users = result;
   }
@@ -1439,38 +1473,23 @@ app.post("/api/sync/state", (req, res) => {
         }
       }
 
-      // Intelligent Users union merge
-      if (Array.isArray(serverAppState.users) && serverAppState.users.length > 0) {
-        if (!Array.isArray(state.users) || state.users.length === 0) {
-          mergedState.users = serverAppState.users;
-        } else {
-          const usersMap = new Map<string, any>();
-          for (const u of serverAppState.users) {
-            if (u && (u.id || u.phone || u.email)) {
-              const k = u.id || u.phone || u.email;
-              usersMap.set(k, u);
-            }
-          }
-          for (const incomingU of state.users) {
-            if (incomingU && (incomingU.id || incomingU.phone || incomingU.email)) {
-              const k = incomingU.id || incomingU.phone || incomingU.email;
-              const prev = usersMap.get(k) || {};
-              usersMap.set(k, { ...prev, ...incomingU });
-            }
-          }
-          mergedState.users = Array.from(usersMap.values());
-        }
+      // Users state handling: if state.users is explicitly provided, take it as authoritative (sanitizer will ensure admin exists)
+      if (Array.isArray(state.users) && state.users.length > 0) {
+        mergedState.users = state.users;
+      } else if (Array.isArray(serverAppState.users) && serverAppState.users.length > 0) {
+        mergedState.users = serverAppState.users;
       }
 
-      if (Array.isArray(serverAppState.couriers) && serverAppState.couriers.length > 0) {
-        if (!Array.isArray(state.couriers) || state.couriers.length === 0) {
-          mergedState.couriers = serverAppState.couriers;
-        }
+      if (Array.isArray(state.couriers)) {
+        mergedState.couriers = state.couriers;
+      } else if (Array.isArray(serverAppState.couriers) && serverAppState.couriers.length > 0) {
+        mergedState.couriers = serverAppState.couriers;
       }
-      if (Array.isArray(serverAppState.companyTransactions) && serverAppState.companyTransactions.length > 0) {
-        if (!Array.isArray(state.companyTransactions) || state.companyTransactions.length === 0) {
-          mergedState.companyTransactions = serverAppState.companyTransactions;
-        }
+      
+      if (Array.isArray(state.companyTransactions)) {
+        mergedState.companyTransactions = state.companyTransactions;
+      } else if (Array.isArray(serverAppState.companyTransactions) && serverAppState.companyTransactions.length > 0) {
+        mergedState.companyTransactions = serverAppState.companyTransactions;
       }
     }
 

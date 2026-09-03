@@ -55,50 +55,79 @@ export function sanitizeUsers(users?: UserSession[]): UserSession[] {
   const phoneToId = new Map<string, string>();
   const emailToId = new Map<string, string>();
 
-  const registerUser = (u: UserSession) => {
+  const registerUser = (u: any) => {
     if (!u || !u.id || isDeprecatedDummyUser(u)) return;
-    usersById.set(u.id, u);
-    if (u.phone) {
-      const cleanPhone = String(u.phone).replace(/\D/g, '');
-      if (cleanPhone) phoneToId.set(cleanPhone, u.id);
+    const cleanPhone = u.phone ? String(u.phone).trim() : '';
+    const cleanEmail = u.email ? String(u.email).trim() : (cleanPhone ? `${cleanPhone.replace(/\D/g, '')}@am-shipping.eg` : `${u.id}@am-shipping.eg`);
+    const cleanName = u.name ? String(u.name).trim() : 'مستخدم';
+    
+    const cleanUser: UserSession = {
+      ...u,
+      id: String(u.id),
+      name: cleanName,
+      email: cleanEmail,
+      phone: cleanPhone,
+      role: u.role || 'merchant',
+      storeName: u.storeName || (u.store_name ? String(u.store_name) : undefined),
+      hubName: u.hubName || (u.hub_name ? String(u.hub_name) : undefined),
+      courierVehicle: u.courierVehicle || (u.courier_vehicle ? String(u.courier_vehicle) : undefined),
+      password: u.password ? String(u.password) : '123456',
+      isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : (u.is_confirmed !== undefined ? Boolean(u.is_confirmed) : true),
+      avatarUrl: u.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=dc2626&color=ffffff`,
+      registeredAt: u.registeredAt || u.created_at || new Date().toISOString(),
+    };
+
+    usersById.set(cleanUser.id, cleanUser);
+    if (cleanPhone) {
+      const digits = cleanPhone.replace(/\D/g, '');
+      if (digits) phoneToId.set(digits, cleanUser.id);
     }
-    if (u.email) {
-      emailToId.set(String(u.email).toLowerCase(), u.id);
+    if (cleanEmail) {
+      emailToId.set(cleanEmail.toLowerCase(), cleanUser.id);
     }
   };
 
   // 1. Seed Admin user
-  for (const sUser of SUPABASE_SYNCED_USERS) {
-    registerUser(sUser);
-  }
+  registerUser(PRIMARY_ADMIN_USER);
 
   // 2. Merge incoming users with full state priority
   for (const u of list) {
     if (!u || typeof u !== 'object' || isDeprecatedDummyUser(u)) continue;
 
-    let existingId = u.id && usersById.has(u.id) ? u.id : undefined;
+    let existingId = u.id && usersById.has(String(u.id)) ? String(u.id) : undefined;
     if (!existingId && u.phone) {
-      const cleanPhone = String(u.phone).replace(/\D/g, '');
-      if (cleanPhone) existingId = phoneToId.get(cleanPhone);
+      const digits = String(u.phone).replace(/\D/g, '');
+      if (digits) existingId = phoneToId.get(digits);
     }
     if (!existingId && u.email) {
-      existingId = emailToId.get(String(u.email).toLowerCase());
+      existingId = emailToId.get(String(u.email).toLowerCase().trim());
     }
 
     if (existingId) {
-      const existing = usersById.get(existingId)!;
-      const isConfirmedFinal = u.isConfirmed !== undefined 
-        ? Boolean(u.isConfirmed) 
-        : (existing.isConfirmed !== undefined ? Boolean(existing.isConfirmed) : true);
+      if (existingId === 'admin_root') {
+        const existing = usersById.get('admin_root')!;
+        registerUser({
+          ...existing,
+          ...u,
+          id: 'admin_root',
+          role: 'admin',
+          isConfirmed: true,
+        });
+      } else {
+        const existing = usersById.get(existingId)!;
+        const isConfirmedFinal = u.isConfirmed !== undefined 
+          ? Boolean(u.isConfirmed) 
+          : (existing.isConfirmed !== undefined ? Boolean(existing.isConfirmed) : true);
 
-      const merged: UserSession = {
-        ...existing,
-        ...u,
-        id: existing.id,
-        isConfirmed: isConfirmedFinal,
-      };
-      registerUser(merged);
-    } else if (u.id && u.name) {
+        const merged: UserSession = {
+          ...existing,
+          ...u,
+          id: existing.id,
+          isConfirmed: isConfirmedFinal,
+        };
+        registerUser(merged);
+      }
+    } else if (u.id && (u.name || u.phone)) {
       registerUser({
         ...u,
         isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : false,
@@ -109,7 +138,7 @@ export function sanitizeUsers(users?: UserSession[]): UserSession[] {
   const result = Array.from(usersById.values());
 
   // Ensure admin always exists and is always confirmed
-  const adminIndex = result.findIndex((u) => u.role === 'admin' || u.email === PRIMARY_ADMIN_USER.email);
+  const adminIndex = result.findIndex((u) => u.id === 'admin_root' || u.role === 'admin' || (u.email && u.email === PRIMARY_ADMIN_USER.email));
   if (adminIndex >= 0) {
     result[adminIndex] = { ...result[adminIndex], isConfirmed: true, role: 'admin' };
   } else {

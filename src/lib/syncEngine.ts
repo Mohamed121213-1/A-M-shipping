@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { Shipment, MerchantWallet, UserSession, CourierInfo, HubInfo, GovernorateRate, CourierNotification, CompanyTransaction } from '../types';
-import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet } from '../utils/sanitizeData';
+import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet, isDeprecatedDummyUser } from '../utils/sanitizeData';
 
 export interface SyncedAppState {
   shipments?: Shipment[];
@@ -449,30 +449,23 @@ class SyncEngine {
       // Also sync profiles table rows
       const { data: pRows } = await supabase.from('profiles').select('*');
       if (pRows && Array.isArray(pRows) && pRows.length > 0) {
-        const mappedUsers: UserSession[] = pRows.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          email: p.email || `${p.phone}@am-shipping.eg`,
-          phone: p.phone,
-          role: p.role,
-          storeName: p.store_name,
-          isConfirmed: p.is_confirmed !== false,
-          registeredAt: p.created_at || new Date().toISOString(),
-          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=dc2626&color=ffffff`
-        }));
-        if (!mappedUsers.some(u => u.role === 'admin')) {
-          mappedUsers.unshift({
-            id: 'admin_root',
-            name: 'محمد صلاح (أدمن الرئيسية)',
-            email: 'mohamedsalah565657@icloud.com',
-            phone: '01000000001',
-            role: 'admin',
-            avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF+%D8%B5%D9%84%D8%A7%D8%AD&background=dc2626&color=ffffff',
-            isConfirmed: true,
-            registeredAt: '2026-08-30T00:00:00.000Z',
-          });
-        }
-        this.handleIncomingUpdate({ users: mappedUsers, senderId: 'supabase_profiles_pull' });
+        const mappedUsers: UserSession[] = pRows
+          .filter((p: any) => p && !isDeprecatedDummyUser(p))
+          .map((p: any) => ({
+            id: String(p.id),
+            name: p.name || 'مستخدم',
+            email: p.email || (p.phone ? `${p.phone}@am-shipping.eg` : `${p.id}@am-shipping.eg`),
+            phone: p.phone ? String(p.phone) : '',
+            role: p.role || 'merchant',
+            storeName: p.store_name || undefined,
+            isConfirmed: p.is_confirmed !== undefined ? Boolean(p.is_confirmed) : true,
+            registeredAt: p.created_at || new Date().toISOString(),
+            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'مستخدم')}&background=dc2626&color=ffffff`
+          }));
+
+        const currentUsers = this.getLatestState()?.users || [];
+        const merged = sanitizeUsers([...currentUsers, ...mappedUsers]);
+        this.handleIncomingUpdate({ users: merged, senderId: 'supabase_profiles_pull' });
       }
     } catch (e) {
       // Table may not exist yet in Supabase project, ignore

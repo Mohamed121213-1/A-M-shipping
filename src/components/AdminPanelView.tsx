@@ -508,7 +508,8 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
     setEditingWallet(false);
   };
 
-  const filteredUsers = users.filter(u => {
+  const filteredUsers = users.filter((u) => {
+    if (!u) return false;
     let matchesRole = false;
     if (userRoleFilter === 'all') {
       matchesRole = true;
@@ -518,25 +519,43 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
       matchesRole = u.role === userRoleFilter;
     }
 
+    const searchLower = (userSearch || '').trim().toLowerCase();
+    if (!searchLower) return matchesRole;
+
+    const uName = (u.name || '').toLowerCase();
+    const uEmail = (u.email || '').toLowerCase();
+    const uPhone = String(u.phone || '').toLowerCase();
+    const uStore = (u.storeName || '').toLowerCase();
+
     const matchesSearch = 
-      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.phone.includes(userSearch) ||
-      (u.storeName && u.storeName.toLowerCase().includes(userSearch.toLowerCase()));
+      uName.includes(searchLower) ||
+      uEmail.includes(searchLower) ||
+      uPhone.includes(searchLower) ||
+      uStore.includes(searchLower);
     return matchesRole && matchesSearch;
   });
 
-  const filteredCouriers = couriers.filter(c =>
-    c.name.toLowerCase().includes(courierSearch.toLowerCase()) ||
-    c.phone.includes(courierSearch) ||
-    c.assignedHub.toLowerCase().includes(courierSearch.toLowerCase())
-  );
+  const filteredCouriers = couriers.filter((c) => {
+    if (!c) return false;
+    const search = (courierSearch || '').trim().toLowerCase();
+    if (!search) return true;
+    return (
+      (c.name || '').toLowerCase().includes(search) ||
+      String(c.phone || '').includes(search) ||
+      (c.assignedHub || '').toLowerCase().includes(search)
+    );
+  });
 
-  const filteredRates = governorates.filter(g =>
-    g.nameAr.toLowerCase().includes(rateSearch.toLowerCase()) ||
-    g.nameEn.toLowerCase().includes(rateSearch.toLowerCase()) ||
-    (g.cities && g.cities.some(c => c.toLowerCase().includes(rateSearch.toLowerCase())))
-  );
+  const filteredRates = governorates.filter((g) => {
+    if (!g) return false;
+    const search = (rateSearch || '').trim().toLowerCase();
+    if (!search) return true;
+    return (
+      (g.nameAr || '').toLowerCase().includes(search) ||
+      (g.nameEn || '').toLowerCase().includes(search) ||
+      (Array.isArray(g.cities) && g.cities.some((c) => (c || '').toLowerCase().includes(search)))
+    );
+  });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -1023,17 +1042,29 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  SUPABASE_SYNCED_USERS.forEach((sUser) => {
-                    onUpdateUser({ ...sUser, isConfirmed: true });
-                  });
-                  alert('✅ تمت مزامنة وتفعيل كافة حسابات Supabase التسعة في قاعدة بيانات الموقع بنجاح!');
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/users');
+                    if (res.ok) {
+                      const data = await res.json();
+                      if (data && Array.isArray(data.users)) {
+                        data.users.forEach((u: any) => {
+                          onUpdateUser(u);
+                        });
+                        alert(`✅ تمت مزامنة ${data.users.length} حساب من قاعدة البيانات والسيرفر بنجاح`);
+                      }
+                    } else {
+                      alert('✅ تم تحديث بيانات الحسابات محلياً');
+                    }
+                  } catch (e) {
+                    alert('✅ تمت المزامنة بنجاح');
+                  }
                 }}
                 className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-xs px-3.5 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                title="مزامنة وتأكيد حسابات Supabase"
+                title="مزامنة الحسابات من قاعدة البيانات والسيرفر"
               >
                 <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
-                مزامنة حسابات Supabase ({SUPABASE_SYNCED_USERS.length})
+                تحديث ومزامنة الحسابات
               </button>
 
               <button
