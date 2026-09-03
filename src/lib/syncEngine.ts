@@ -299,27 +299,12 @@ class SyncEngine {
       if (data && data.state) {
         const remoteTime = Number(data.timestamp) || Date.now();
 
-        // Check if local storage currently has shipments
-        const localShipmentsRaw = localStorage.getItem('bosta_shipments');
-        const localShipments = localShipmentsRaw ? JSON.parse(localShipmentsRaw) : [];
-        const isLocalEmpty = !Array.isArray(localShipments) || localShipments.length === 0;
-
-        const serverShipments = data.state?.shipments;
-        const isServerEmpty = !Array.isArray(serverShipments) || serverShipments.length === 0;
-
-        if (isServerEmpty && !isLocalEmpty) {
-          // If server is genuinely empty but client has local data on very first boot, seed server
-          if (this.latestStateCache) {
-            this.postStateToServer(this.latestStateCache, Date.now());
-          }
-        } else if (!isServerEmpty || remoteTime >= this.latestTimestamp) {
-          // Authoritative server state applied to client
-          this.handleIncomingUpdate({
-            ...data.state,
-            timestamp: remoteTime,
-            senderId: 'server_authoritative_sync',
-          });
-        }
+        // Authoritative server state applied to client
+        this.handleIncomingUpdate({
+          ...data.state,
+          timestamp: remoteTime,
+          senderId: 'server_authoritative_sync',
+        });
       }
     } catch (e) {
       // Network/Server offline, silently continue
@@ -383,11 +368,11 @@ class SyncEngine {
     if (typeof window !== 'undefined' && incomingTime > 0) {
       try {
         localStorage.setItem('bosta_last_updated', String(incomingTime));
-        if (data.shipments && Array.isArray(data.shipments) && data.shipments.length > 0) {
+        if (data.shipments && Array.isArray(data.shipments)) {
           localStorage.setItem('bosta_shipments', JSON.stringify(data.shipments));
         }
         if (data.wallet) localStorage.setItem('bosta_wallet', JSON.stringify(data.wallet));
-        if (data.users && Array.isArray(data.users) && data.users.length > 0) {
+        if (data.users && Array.isArray(data.users)) {
           localStorage.setItem('bosta_users', JSON.stringify(data.users));
         }
         if (data.couriers) localStorage.setItem('bosta_couriers', JSON.stringify(data.couriers));
@@ -398,7 +383,7 @@ class SyncEngine {
       } catch (e) {}
     }
 
-    if (data.shipments || data.users || data.couriers || data.wallet || data.hubs || data.governorates || data.notifications || data.companyTransactions) {
+    if (data.shipments !== undefined || data.users !== undefined || data.couriers !== undefined || data.wallet !== undefined || data.hubs !== undefined || data.governorates !== undefined || data.notifications !== undefined || data.companyTransactions !== undefined) {
       this.latestStateCache = { ...this.latestStateCache, ...data };
     }
 
@@ -440,9 +425,7 @@ class SyncEngine {
 
       if (!error && data?.state) {
         if (data.state.senderId !== this.instanceId) {
-          if (Array.isArray(data.state.shipments) && data.state.shipments.length > 0) {
-            this.handleIncomingUpdate(data.state);
-          }
+          this.handleIncomingUpdate(data.state);
         }
       }
 

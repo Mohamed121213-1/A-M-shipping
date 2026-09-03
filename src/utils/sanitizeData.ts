@@ -26,11 +26,12 @@ export const DEPRECATED_DUMMY_IDS = new Set([
   '16256cfa-8044-4607-abce-9de1335f311a',
   '234aa881-d193-42a3-b86a-5408ba92146e',
   '10fdf171-fb33-4ede-9d27-2fae8a2c2d4b',
+  'USR-1788361248924',
 ]);
 
 export const DEPRECATED_DUMMY_PHONES = new Set([
   '01015674681',
-  '01017266727',
+  '01011223344', // محمد علي تاجر (متجر علي) - dummy account to purge
   '01093383328',
   '01121212121',
   '01125465248',
@@ -46,6 +47,10 @@ export function isDeprecatedDummyUser(u: any): boolean {
     const cleanPhone = String(u.phone).replace(/\D/g, '');
     if (cleanPhone && DEPRECATED_DUMMY_PHONES.has(cleanPhone)) return true;
   }
+  if (u.name && (u.name.includes('محمد علي تاجر') || u.name === 'محمد علي')) return true;
+  if (u.storeName && u.storeName.includes('متجر علي')) return true;
+  if (u.store_name && u.store_name.includes('متجر علي')) return true;
+  if (u.email && u.email.includes('mohamed.ali@test.com')) return true;
   return false;
 }
 
@@ -160,7 +165,17 @@ export function sanitizeCompanyTxns(txns?: CompanyTransaction[]): CompanyTransac
 
 export function sanitizeShipments(shipments?: Shipment[]): Shipment[] {
   const list = Array.isArray(shipments) ? shipments : [];
-  return list.filter((s) => s && typeof s === 'object' && (s.id || s.trackingNumber));
+  return list.filter((s) => {
+    if (!s || typeof s !== 'object' || (!s.id && !s.trackingNumber)) return false;
+    if (s.sender) {
+      if (isDeprecatedDummyUser(s.sender)) return false;
+      const sPhone = (s.sender.phone ? String(s.sender.phone) : '').replace(/\D/g, '');
+      if (sPhone === '01011223344') return false;
+      if (s.sender.storeName && s.sender.storeName.includes('متجر علي')) return false;
+      if (s.sender.contactName && s.sender.contactName.includes('محمد علي تاجر')) return false;
+    }
+    return true;
+  });
 }
 
 export function sanitizeWallet(wallet?: MerchantWallet): MerchantWallet {

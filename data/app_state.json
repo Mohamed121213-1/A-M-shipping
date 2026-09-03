@@ -1,6 +1,15 @@
 {
+  "timestamp": 1788363609487,
+  "senderId": "server_seed",
   "state": {
-    "hubs": [],
+    "shipments": [],
+    "wallet": {
+      "merchantId": "merch-admin-default",
+      "merchantName": "المحفظة الرئيسية",
+      "availableBalance": 0,
+      "pendingCod": 0,
+      "totalPaidOut": 0
+    },
     "users": [
       {
         "id": "admin_root",
@@ -12,13 +21,24 @@
         "isConfirmed": true,
         "registeredAt": "2026-08-30T00:00:00+00:00",
         "password": "123456"
+      },
+      {
+        "id": "USR-1788361785496-4492",
+        "name": "ام فاتن",
+        "email": "01017266727@am-shipping.eg",
+        "phone": "01017266727",
+        "role": "merchant",
+        "storeName": "To you",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A7%D9%85+%D9%81%D8%A7%D8%AA%D9%86&background=dc2626&color=ffffff",
+        "isConfirmed": true,
+        "registeredAt": "2026-09-02T15:09:45.496+00:00",
+        "password": "123456"
       }
     ],
-    "pricing": [],
     "couriers": [],
-    "shipments": [],
-    "updatedAt": "2026-09-02T15:23:42.072Z",
+    "hubs": [],
+    "governorates": [],
+    "notifications": [],
     "companyTransactions": []
-  },
-  "timestamp": 1788362813401
+  }
 }

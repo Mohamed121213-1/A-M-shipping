@@ -20,7 +20,7 @@ import { syncEngine } from './lib/syncEngine';
 
 import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate, CompanyTransaction } from './types';
 import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES, INITIAL_USERS, INITIAL_COMPANY_TRANSACTIONS } from './data/mockData';
-import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet } from './utils/sanitizeData';
+import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet, isDeprecatedDummyUser } from './utils/sanitizeData';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
 import { DeviceNotificationBanner } from './components/DeviceNotificationBanner';
@@ -40,11 +40,28 @@ const loadLocalState = <T,>(key: string, defaultValue: T): T => {
   return defaultValue;
 };
 
+// One-time purge of legacy mock shipments & deprecated dummy accounts
+if (typeof window !== 'undefined') {
+  try {
+    const purgeKey = 'bosta_purge_clean_v6';
+    if (localStorage.getItem(purgeKey) !== 'true') {
+      localStorage.setItem('bosta_shipments', '[]');
+      localStorage.setItem('bosta_wallet', JSON.stringify({ merchantId: 'merch-admin-default', merchantName: 'المحفظة الرئيسية', availableBalance: 0, pendingCod: 0, totalPaidOut: 0 }));
+      const usersRaw = localStorage.getItem('bosta_users');
+      if (usersRaw) {
+        const cleaned = sanitizeUsers(JSON.parse(usersRaw));
+        localStorage.setItem('bosta_users', JSON.stringify(cleaned));
+      }
+      localStorage.setItem(purgeKey, 'true');
+    }
+  } catch (e) {}
+}
+
 export default function App() {
   const [shipments, setShipments] = useState<Shipment[]>(() => {
     const saved = loadLocalState<Shipment[]>('bosta_shipments', INITIAL_SHIPMENTS);
     const cleaned = sanitizeShipments(saved);
-    return cleaned.length > 0 ? cleaned : INITIAL_SHIPMENTS;
+    return cleaned;
   });
 
   const [wallet, setWallet] = useState<MerchantWallet>(() => {
@@ -335,27 +352,57 @@ export default function App() {
 
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
-    // Initial fetch of authoritative users from server
+    // Initial fetch of authoritative users from server and Supabase
     fetch('/api/users')
       .then((res) => res.json())
       .then((data) => {
-        if (data && data.success && Array.isArray(data.users) && data.users.length > 0) {
-          const cleaned = sanitizeUsers(data.users);
-          setUsers(cleaned);
-          localStorage.setItem('bosta_users', JSON.stringify(cleaned));
+        if (data && data.success && Array.isArray(data.users)) {
+          setUsers((prev) => {
+            const cleaned = sanitizeUsers([...prev, ...data.users]);
+            try { localStorage.setItem('bosta_users', JSON.stringify(cleaned)); } catch (e) {}
+            return cleaned;
+          });
         }
       })
       .catch(() => {});
 
+    if (isSupabaseConfigured) {
+      supabase
+        .from('profiles')
+        .select('*')
+        .then(({ data: pRows }) => {
+          if (pRows && Array.isArray(pRows)) {
+            const mappedUsers: UserSession[] = pRows
+              .filter((p: any) => p && !isDeprecatedDummyUser(p))
+              .map((p: any) => ({
+                id: String(p.id),
+                name: p.name || 'مستخدم',
+                email: p.email || (p.phone ? `${p.phone}@am-shipping.eg` : `${p.id}@am-shipping.eg`),
+                phone: p.phone ? String(p.phone) : '',
+                role: p.role || 'merchant',
+                storeName: p.store_name || undefined,
+                isConfirmed: p.is_confirmed !== undefined ? Boolean(p.is_confirmed) : true,
+                registeredAt: p.created_at || new Date().toISOString(),
+                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'مستخدم')}&background=dc2626&color=ffffff`
+              }));
+            setUsers((prev) => {
+              const cleaned = sanitizeUsers([...prev, ...mappedUsers]);
+              try { localStorage.setItem('bosta_users', JSON.stringify(cleaned)); } catch (e) {}
+              return cleaned;
+            });
+          }
+        });
+    }
+
     const unsubscribe = syncEngine.subscribe((incoming) => {
       isIncomingSyncRef.current = true;
-      if (incoming.shipments && Array.isArray(incoming.shipments)) {
+      if (incoming.shipments !== undefined && Array.isArray(incoming.shipments)) {
         setShipments(incoming.shipments);
       }
       if (incoming.wallet) {
         setWallet(incoming.wallet);
       }
-      if (incoming.users && Array.isArray(incoming.users)) {
+      if (incoming.users !== undefined && Array.isArray(incoming.users)) {
         setUsers(incoming.users);
       }
       if (incoming.couriers && Array.isArray(incoming.couriers)) {

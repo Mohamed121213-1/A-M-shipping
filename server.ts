@@ -400,11 +400,12 @@ const DEPRECATED_DUMMY_IDS = new Set([
   '16256cfa-8044-4607-abce-9de1335f311a',
   '234aa881-d193-42a3-b86a-5408ba92146e',
   '10fdf171-fb33-4ede-9d27-2fae8a2c2d4b',
+  'USR-1788361248924',
 ]);
 
 const DEPRECATED_DUMMY_PHONES = new Set([
   '01015674681',
-  '01017266727',
+  '01011223344', // محمد علي تاجر (متجر علي) - dummy account
   '01093383328',
   '01121212121',
   '01125465248',
@@ -420,6 +421,10 @@ function isDeprecatedDummyUser(u: any): boolean {
     const cleanPhone = String(u.phone).replace(/\D/g, '');
     if (cleanPhone && DEPRECATED_DUMMY_PHONES.has(cleanPhone)) return true;
   }
+  if (u.name && (u.name.includes('محمد علي تاجر') || u.name === 'محمد علي')) return true;
+  if (u.storeName && u.storeName.includes('متجر علي')) return true;
+  if (u.store_name && u.store_name.includes('متجر علي')) return true;
+  if (u.email && u.email.includes('mohamed.ali@test.com')) return true;
   return false;
 }
 
@@ -1494,7 +1499,16 @@ app.post("/api/sync/state", (req, res) => {
 // 1. Get all system users
 app.get("/api/users", (req, res) => {
   try {
-    const users = Array.isArray(serverAppState?.users) ? serverAppState.users : [];
+    const rawUsers = Array.isArray(serverAppState?.users) ? serverAppState.users : [];
+    const users = rawUsers.filter((u: any) => {
+      if (!u) return false;
+      const phone = (u.phone ? String(u.phone) : '').replace(/\D/g, '');
+      if (phone === '01011223344') return false;
+      if (u.name && (u.name.includes('محمد علي تاجر') || u.name === 'محمد علي')) return false;
+      if (u.storeName && u.storeName.includes('متجر علي')) return false;
+      if (u.email && u.email.includes('mohamed.ali@test.com')) return false;
+      return true;
+    });
     return res.json({ success: true, users });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
