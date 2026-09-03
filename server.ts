@@ -541,6 +541,114 @@ function sanitizeServerState(rawState: any) {
   return rawState;
 }
 
+const STATUS_RANK: Record<string, number> = {
+  'pending_approval': 1,
+  'created': 2,
+  'in_hub': 3,
+  'out_for_delivery': 4,
+  'failed_attempt': 5,
+  'partial_delivery': 6,
+  'refused': 6,
+  'returned': 6,
+  'delivered': 6,
+  'cancelled': 6,
+};
+
+// Server-side lock to guarantee courier/admin status updates are protected from rollback for at least 15 minutes
+const serverStatusLocks = new Map<string, { status: string; timestamp: number; fullShipment?: any }>();
+
+function mergeSingleShipment(current: any, incoming: any): any {
+  if (!current) return incoming;
+  if (!incoming) return current;
+
+  const id = incoming.id || incoming.trackingNumber || current.id || current.trackingNumber;
+  const lock = id ? serverStatusLocks.get(id) : null;
+  const isLocked = lock && (Date.now() - lock.timestamp < 900000);
+
+  const currentTime = new Date(current.updatedAt || current.createdAt || 0).getTime();
+  const incomingTime = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
+
+  const currentRank = STATUS_RANK[current.status] || 0;
+  const incomingRank = STATUS_RANK[incoming.status] || 0;
+
+  const currentTimeline = Array.isArray(current.timeline) ? current.timeline : [];
+  const incomingTimeline = Array.isArray(incoming.timeline) ? incoming.timeline : [];
+
+  const timelineMap = new Map<string, any>();
+  for (const t of [...currentTimeline, ...incomingTimeline]) {
+    if (t) {
+      const key = t.id || `${t.status}_${t.timestamp}_${t.title}`;
+      timelineMap.set(key, t);
+    }
+  }
+  const mergedTimeline = Array.from(timelineMap.values());
+
+  let winningObj: any;
+  if (isLocked) {
+    winningObj = lock.fullShipment ? { ...current, ...incoming, ...lock.fullShipment, status: lock.status } : { ...incoming, ...current, status: lock.status };
+  } else if (incomingTime > currentTime + 50) {
+    winningObj = incoming;
+  } else if (currentTime > incomingTime + 50) {
+    winningObj = current;
+  } else {
+    if (incomingRank > currentRank) {
+      winningObj = incoming;
+    } else if (currentRank > incomingRank) {
+      winningObj = current;
+    } else if (incomingTimeline.length > currentTimeline.length) {
+      winningObj = incoming;
+    } else {
+      winningObj = current;
+    }
+  }
+
+  const mergedFinancials = {
+    ...(current.financials || {}),
+    ...(incoming.financials || {}),
+    ...(winningObj.financials || {}),
+  };
+
+  return {
+    ...current,
+    ...incoming,
+    ...winningObj,
+    status: winningObj.status,
+    updatedAt: winningObj.updatedAt || current.updatedAt || incoming.updatedAt || new Date().toISOString(),
+    timeline: mergedTimeline.length > 0 ? mergedTimeline : winningObj.timeline,
+    financials: mergedFinancials,
+    proofOfDelivery: winningObj.proofOfDelivery || current.proofOfDelivery || incoming.proofOfDelivery,
+    refusedDetails: winningObj.refusedDetails || current.refusedDetails || incoming.refusedDetails,
+    partialDetails: winningObj.partialDetails || current.partialDetails || incoming.partialDetails,
+    assignedCourier: winningObj.assignedCourier || current.assignedCourier || incoming.assignedCourier,
+  };
+}
+
+function mergeShipmentsLists(existingList?: any[], incomingList?: any[]): any[] {
+  const existingArr = Array.isArray(existingList) ? existingList : [];
+  const incomingArr = Array.isArray(incomingList) ? incomingList : [];
+
+  const map = new Map<string, any>();
+
+  for (const s of existingArr) {
+    if (s && (s.id || s.trackingNumber)) {
+      map.set(s.id || s.trackingNumber, s);
+    }
+  }
+
+  for (const incoming of incomingArr) {
+    if (!incoming || (!incoming.id && !incoming.trackingNumber)) continue;
+    const key = incoming.id || incoming.trackingNumber;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, incoming);
+    } else {
+      map.set(key, mergeSingleShipment(existing, incoming));
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 let serverAppState: any = null;
 let serverLastUpdated = 0;
 
@@ -1143,6 +1251,12 @@ app.patch("/api/shipments/:id/status", (req, res) => {
 
     serverAppState.shipments[shipIndex] = updatedShipment;
 
+    // Lock status on server to prevent any client from rolling back this status
+    serverStatusLocks.set(updatedShipment.id, { status, timestamp: Date.now(), fullShipment: updatedShipment });
+    if (updatedShipment.trackingNumber) {
+      serverStatusLocks.set(updatedShipment.trackingNumber, { status, timestamp: Date.now(), fullShipment: updatedShipment });
+    }
+
     // Add smart notification to server state
     if (!Array.isArray(serverAppState.notifications)) serverAppState.notifications = [];
     const notifItem = {
@@ -1440,29 +1554,15 @@ app.post("/api/sync/state", (req, res) => {
     let mergedState = { ...state };
 
     if (!isExplicitClear && serverAppState) {
-      // Intelligent Shipments union merge with timestamp comparison (prevents overwriting newer status updates)
+      // Intelligent Shipments union merge with status rollback prevention
       if (Array.isArray(serverAppState.shipments) && serverAppState.shipments.length > 0) {
         if (!Array.isArray(state.shipments) || state.shipments.length === 0) {
           mergedState.shipments = serverAppState.shipments;
         } else {
-          const shipmentsMap = new Map<string, any>(serverAppState.shipments.map((s: any) => [s.id || s.trackingNumber, s]));
-          for (const incomingS of state.shipments) {
-            if (incomingS && (incomingS.id || incomingS.trackingNumber)) {
-              const key = incomingS.id || incomingS.trackingNumber;
-              const existingS = shipmentsMap.get(key);
-              if (!existingS) {
-                shipmentsMap.set(key, incomingS);
-              } else {
-                const existingTime = new Date(existingS.updatedAt || existingS.createdAt || 0).getTime();
-                const incomingTime = new Date(incomingS.updatedAt || incomingS.createdAt || 0).getTime();
-                if (incomingTime >= existingTime) {
-                  shipmentsMap.set(key, incomingS);
-                }
-              }
-            }
-          }
-          mergedState.shipments = Array.from(shipmentsMap.values());
+          mergedState.shipments = mergeShipmentsLists(serverAppState.shipments, state.shipments);
         }
+      } else if (Array.isArray(state.shipments)) {
+        mergedState.shipments = mergeShipmentsLists([], state.shipments);
       }
 
       // Users state handling: if state.users is explicitly provided, take it as authoritative (sanitizer will ensure admin exists)

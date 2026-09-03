@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { Shipment, MerchantWallet, UserSession, CourierInfo, HubInfo, GovernorateRate, CourierNotification, CompanyTransaction } from '../types';
-import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet, isDeprecatedDummyUser } from '../utils/sanitizeData';
+import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet, isDeprecatedDummyUser, mergeShipmentsLists, mergeSingleShipment } from '../utils/sanitizeData';
 
 export interface SyncedAppState {
   shipments?: Shipment[];
@@ -27,17 +27,50 @@ class SyncEngine {
   private latestTimestamp: number = 0;
   private localStatusLocks: Map<string, { status: string; timestamp: number; fullShipment?: any }> = new Map();
 
+  private loadSavedLocks() {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('bosta_status_locks');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const now = Date.now();
+        for (const [id, lock] of Object.entries(parsed) as any) {
+          if (lock && now - lock.timestamp < 900000) { // 15 minutes lock
+            this.localStatusLocks.set(id, lock);
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  private saveLocks() {
+    if (typeof window === 'undefined') return;
+    try {
+      const obj: Record<string, any> = {};
+      const now = Date.now();
+      for (const [id, lock] of this.localStatusLocks.entries()) {
+        if (now - lock.timestamp < 900000) {
+          obj[id] = lock;
+        }
+      }
+      localStorage.setItem('bosta_status_locks', JSON.stringify(obj));
+    } catch (e) {}
+  }
+
   public lockShipmentStatus(shipmentId: string, status: string, fullShipment?: any) {
     this.localStatusLocks.set(shipmentId, { status, timestamp: Date.now(), fullShipment });
+    this.saveLocks();
     setTimeout(() => {
       const lock = this.localStatusLocks.get(shipmentId);
-      if (lock && Date.now() - lock.timestamp >= 19000) {
+      if (lock && Date.now() - lock.timestamp >= 890000) {
         this.localStatusLocks.delete(shipmentId);
+        this.saveLocks();
       }
-    }, 20000);
+    }, 900000);
   }
 
   constructor() {
+    this.loadSavedLocks();
     // 0. Initialize latest timestamp & full state cache from localStorage if available
     if (typeof window !== 'undefined') {
       try {
@@ -342,18 +375,23 @@ class SyncEngine {
 
     // Sanitize state entities to purge dummy accounts and mock data
     if (data.shipments) {
-      data.shipments = sanitizeShipments(data.shipments);
-      // Protect recently updated local statuses from being reverted by stale snapshots
-      data.shipments = data.shipments.map((s: Shipment) => {
+      const sanitizedIncoming = sanitizeShipments(data.shipments);
+      const currentList = this.latestStateCache?.shipments || [];
+      // Merge intelligently with rollback prevention
+      let mergedShipments = mergeShipmentsLists(currentList, sanitizedIncoming);
+
+      // Enforce persistent local locks
+      mergedShipments = mergedShipments.map((s: Shipment) => {
         const id = s.id || s.trackingNumber;
         const lock = this.localStatusLocks.get(id);
-        if (lock && Date.now() - lock.timestamp < 20000) {
+        if (lock && Date.now() - lock.timestamp < 900000) {
           if (s.status !== lock.status) {
             return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
           }
         }
         return s;
       });
+      data.shipments = mergedShipments;
     }
     if (data.users) data.users = sanitizeUsers(data.users);
     if (data.couriers) data.couriers = sanitizeCouriers(data.couriers);
@@ -464,8 +502,21 @@ class SyncEngine {
       } catch (e) {}
     }
 
+    let payloadShipments = state.shipments;
+    if (payloadShipments && Array.isArray(payloadShipments)) {
+      payloadShipments = sanitizeShipments(payloadShipments).map((s: Shipment) => {
+        const id = s.id || s.trackingNumber;
+        const lock = this.localStatusLocks.get(id);
+        if (lock && Date.now() - lock.timestamp < 900000) {
+          return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
+        }
+        return s;
+      });
+    }
+
     const payload: SyncedAppState = {
       ...state,
+      shipments: payloadShipments,
       senderId: this.instanceId,
       timestamp: now,
     };

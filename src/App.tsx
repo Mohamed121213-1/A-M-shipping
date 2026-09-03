@@ -20,7 +20,7 @@ import { syncEngine } from './lib/syncEngine';
 
 import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate, CompanyTransaction } from './types';
 import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES, INITIAL_USERS, INITIAL_COMPANY_TRANSACTIONS } from './data/mockData';
-import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet, isDeprecatedDummyUser } from './utils/sanitizeData';
+import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet, isDeprecatedDummyUser, mergeShipmentsLists } from './utils/sanitizeData';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
 import { DeviceNotificationBanner } from './components/DeviceNotificationBanner';
@@ -397,7 +397,7 @@ export default function App() {
     const unsubscribe = syncEngine.subscribe((incoming) => {
       isIncomingSyncRef.current = true;
       if (incoming.shipments !== undefined && Array.isArray(incoming.shipments)) {
-        setShipments(incoming.shipments);
+        setShipments((prev) => mergeShipmentsLists(prev, incoming.shipments));
       }
       if (incoming.wallet) {
         setWallet(incoming.wallet);
@@ -452,15 +452,6 @@ export default function App() {
     };
   }, []);
 
-  const hasInitialHydratedRef = useRef<boolean>(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      hasInitialHydratedRef.current = true;
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, []);
-
   // Broadcast state changes whenever core data is modified
   const broadcastDataChange = (overrideState?: Partial<{
     shipments: Shipment[];
@@ -483,13 +474,6 @@ export default function App() {
       companyTransactions: overrideState?.companyTransactions || companyTransactions,
     });
   };
-
-  // Automatically broadcast local mutations across all connected devices only after initial hydration
-  useEffect(() => {
-    if (!isIncomingSyncRef.current && hasInitialHydratedRef.current) {
-      broadcastDataChange();
-    }
-  }, [shipments, wallet, users, couriers, hubs, governorates, courierNotifications, companyTransactions]);
 
   // Handlers perform explicit broadcasts on local mutations; no automatic re-broadcast loop on incoming state
 
@@ -1247,6 +1231,16 @@ export default function App() {
         senderId: syncEngine.getInstanceId(),
       }),
     }).catch((err) => console.warn('Status update API error:', err));
+
+    if (isSupabaseConfigured) {
+      Promise.resolve(
+        supabase.from('shipments').update({
+          status: newStatus,
+          data: updatedShipment,
+          updated_at: new Date().toISOString(),
+        }).eq('id', shipmentId)
+      ).catch(() => {});
+    }
 
     // Also update current active detail modal if open
     if (selectedDetailShipment && selectedDetailShipment.id === shipmentId) {

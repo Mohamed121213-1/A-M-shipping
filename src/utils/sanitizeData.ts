@@ -1,4 +1,4 @@
-import { UserSession, CourierInfo, CompanyTransaction, Shipment, MerchantWallet } from '../types';
+import { UserSession, CourierInfo, CompanyTransaction, Shipment, MerchantWallet, FinancialDetails, PaidStatus } from '../types';
 
 export const PRIMARY_ADMIN_USER: UserSession = {
   id: 'admin_root',
@@ -176,6 +176,119 @@ export function sanitizeShipments(shipments?: Shipment[]): Shipment[] {
     }
     return true;
   });
+}
+
+export const STATUS_RANK: Record<string, number> = {
+  'pending_approval': 1,
+  'created': 2,
+  'in_hub': 3,
+  'out_for_delivery': 4,
+  'failed_attempt': 5,
+  'partial_delivery': 6,
+  'refused': 6,
+  'returned': 6,
+  'delivered': 6,
+  'cancelled': 6,
+};
+
+export function mergeSingleShipment(current: Shipment, incoming: Shipment): Shipment {
+  if (!current) return incoming;
+  if (!incoming) return current;
+
+  const currentTime = new Date(current.updatedAt || current.createdAt || 0).getTime();
+  const incomingTime = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
+
+  const currentRank = STATUS_RANK[current.status] || 0;
+  const incomingRank = STATUS_RANK[incoming.status] || 0;
+
+  const currentTimeline = Array.isArray(current.timeline) ? current.timeline : [];
+  const incomingTimeline = Array.isArray(incoming.timeline) ? incoming.timeline : [];
+
+  // Merge timelines without losing events
+  const timelineMap = new Map<string, any>();
+  for (const t of [...currentTimeline, ...incomingTimeline]) {
+    if (t) {
+      const key = t.id || `${t.status}_${t.timestamp}_${t.title}`;
+      timelineMap.set(key, t);
+    }
+  }
+  const mergedTimeline = Array.from(timelineMap.values());
+
+  // Determine winner between current and incoming
+  let winningObj: Shipment;
+  if (incomingTime > currentTime + 50) {
+    // Incoming is strictly newer
+    winningObj = incoming;
+  } else if (currentTime > incomingTime + 50) {
+    // Current is strictly newer (reject stale incoming rollback)
+    winningObj = current;
+  } else {
+    // Timestamps are equal/missing - higher progression rank or longer timeline wins
+    if (incomingRank > currentRank) {
+      winningObj = incoming;
+    } else if (currentRank > incomingRank) {
+      winningObj = current;
+    } else if (incomingTimeline.length > currentTimeline.length) {
+      winningObj = incoming;
+    } else {
+      winningObj = current;
+    }
+  }
+
+  const mergedFinancials: FinancialDetails = {
+    codAmount: Number(winningObj.financials?.codAmount ?? incoming.financials?.codAmount ?? current.financials?.codAmount ?? 0),
+    shippingFee: Number(winningObj.financials?.shippingFee ?? incoming.financials?.shippingFee ?? current.financials?.shippingFee ?? 0),
+    codFee: Number(winningObj.financials?.codFee ?? incoming.financials?.codFee ?? current.financials?.codFee ?? 0),
+    insuranceFee: Number(winningObj.financials?.insuranceFee ?? incoming.financials?.insuranceFee ?? current.financials?.insuranceFee ?? 0),
+    netPayout: Number(winningObj.financials?.netPayout ?? incoming.financials?.netPayout ?? current.financials?.netPayout ?? 0),
+    paidStatus: (winningObj.financials?.paidStatus ?? incoming.financials?.paidStatus ?? current.financials?.paidStatus ?? 'unpaid') as any,
+    settlementDate: winningObj.financials?.settlementDate ?? incoming.financials?.settlementDate ?? current.financials?.settlementDate,
+  };
+
+  const mergedProof = winningObj.proofOfDelivery || current.proofOfDelivery || incoming.proofOfDelivery;
+  const mergedRefused = winningObj.refusedDetails || current.refusedDetails || incoming.refusedDetails;
+  const mergedPartial = winningObj.partialDetails || current.partialDetails || incoming.partialDetails;
+  const mergedCourier = winningObj.assignedCourier || current.assignedCourier || incoming.assignedCourier;
+
+  return {
+    ...current,
+    ...incoming,
+    ...winningObj,
+    status: winningObj.status,
+    updatedAt: winningObj.updatedAt || current.updatedAt || incoming.updatedAt || new Date().toISOString(),
+    timeline: mergedTimeline.length > 0 ? mergedTimeline : winningObj.timeline,
+    financials: mergedFinancials,
+    proofOfDelivery: mergedProof,
+    refusedDetails: mergedRefused,
+    partialDetails: mergedPartial,
+    assignedCourier: mergedCourier,
+  };
+}
+
+export function mergeShipmentsLists(existingList?: Shipment[], incomingList?: Shipment[]): Shipment[] {
+  const existingArr = Array.isArray(existingList) ? sanitizeShipments(existingList) : [];
+  const incomingArr = Array.isArray(incomingList) ? sanitizeShipments(incomingList) : [];
+
+  const map = new Map<string, Shipment>();
+
+  for (const s of existingArr) {
+    if (s && (s.id || s.trackingNumber)) {
+      map.set(s.id || s.trackingNumber, s);
+    }
+  }
+
+  for (const incoming of incomingArr) {
+    if (!incoming || (!incoming.id && !incoming.trackingNumber)) continue;
+    const key = incoming.id || incoming.trackingNumber;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, incoming);
+    } else {
+      map.set(key, mergeSingleShipment(existing, incoming));
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 export function sanitizeWallet(wallet?: MerchantWallet): MerchantWallet {
