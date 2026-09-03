@@ -566,30 +566,27 @@ export default function App() {
         const sSenderId = (s.sender as any)?.id?.trim();
 
         // 1. Direct ID match
-        if (userId && sSenderId && (sSenderId === userId || sSenderId.endsWith(userId) || userId.endsWith(sSenderId))) return true;
+        if (userId && sSenderId && sSenderId === userId) return true;
 
-        // 2. Normalized store name match
-        if (cleanStore && sCleanStore && (sCleanStore === cleanStore || sCleanStore.includes(cleanStore) || cleanStore.includes(sCleanStore))) {
-          return true;
-        }
-        if (storeName && sStore && (sStore === storeName || sStore.includes(storeName) || storeName.includes(sStore))) {
+        // 2. Exact phone match
+        if (userPhone && sPhone && (sPhone === userPhone || (userPhone.length >= 10 && sPhone.slice(-10) === userPhone.slice(-10)))) {
           return true;
         }
 
-        // 3. Contact name match
-        if (userName && sContact && (sContact === userName || sContact.includes(userName) || userName.includes(sContact))) {
+        // 3. Exact store name match
+        if (cleanStore && sCleanStore && sCleanStore === cleanStore) {
           return true;
         }
-        if (cleanUserName && sCleanStore && (sCleanStore === cleanUserName || sCleanStore.includes(cleanUserName) || cleanUserName.includes(sCleanStore))) {
+        if (storeName && sStore && sStore === storeName) {
           return true;
         }
 
-        // 4. Phone number match (full or last 9 digits)
-        if (userPhone && sPhone) {
-          if (sPhone === userPhone || sPhone.includes(userPhone) || userPhone.includes(sPhone)) return true;
-          const uSuffix = userPhone.slice(-9);
-          const sSuffix = sPhone.slice(-9);
-          if (uSuffix && sSuffix && uSuffix === sSuffix) return true;
+        // 4. Exact contact name match
+        if (userName && sContact && sContact === userName) {
+          return true;
+        }
+        if (cleanUserName && sCleanStore && sCleanStore === cleanUserName) {
+          return true;
         }
 
         return false;

@@ -364,33 +364,43 @@ export const LoginView: React.FC<LoginViewProps> = ({
         try {
           const { data: supaProfiles } = await supabase
             .from('profiles')
-            .select('*')
-            .or(`phone.eq.${cleanRawPhone || rawInput},email.eq.${finalEmail}`);
+            .select('*');
 
           if (supaProfiles && supaProfiles.length > 0) {
-            const prof = supaProfiles[0];
-            const isUserConfirmed = prof.role === 'admin' || prof.is_confirmed !== false;
-            if (!isUserConfirmed) {
-              setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً.');
-              recordFailedLoginAttempt();
+            const prof = supaProfiles.find((p) => {
+              const pCleanPhone = (p.phone || '').replace(/\D/g, '');
+              return (
+                (p.phone && (p.phone === rawInput || (cleanRawPhone && pCleanPhone === cleanRawPhone))) ||
+                (p.email && (p.email.toLowerCase() === rawInput.toLowerCase() || p.email.toLowerCase() === finalEmail.toLowerCase())) ||
+                (p.name && p.name.toLowerCase() === rawInput.toLowerCase()) ||
+                (p.id && p.id === rawInput)
+              );
+            });
+
+            if (prof) {
+              const isUserConfirmed = prof.role === 'admin' || prof.is_confirmed !== false;
+              if (!isUserConfirmed) {
+                setErrorMessage('⚠️ عذراً، حسابك بانتظار تفعيل وموافقة الأدمن. يرجى التواصل مع إدارة الشركة لتأكيد وتفعيل الحساب أولاً.');
+                recordFailedLoginAttempt();
+                return;
+              }
+
+              const sessionUser: UserSession = {
+                id: prof.id,
+                name: prof.name,
+                email: prof.email || `${prof.phone}@am-shipping.eg`,
+                phone: prof.phone,
+                role: prof.role || selectedRoleTab,
+                storeName: prof.store_name,
+                isConfirmed: true,
+                registeredAt: prof.created_at || new Date().toISOString(),
+                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.name)}&background=dc2626&color=ffffff`,
+              };
+
+              clearFailedLoginAttempts();
+              onLoginSuccess(sessionUser);
               return;
             }
-
-            const sessionUser: UserSession = {
-              id: prof.id,
-              name: prof.name,
-              email: prof.email || `${prof.phone}@am-shipping.eg`,
-              phone: prof.phone,
-              role: prof.role || selectedRoleTab,
-              storeName: prof.store_name,
-              isConfirmed: true,
-              registeredAt: prof.created_at || new Date().toISOString(),
-              avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.name)}&background=dc2626&color=ffffff`,
-            };
-
-            clearFailedLoginAttempts();
-            onLoginSuccess(sessionUser);
-            return;
           }
         } catch (supaProfErr) {
           console.warn('Supabase profile query check notice:', supaProfErr);
