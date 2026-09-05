@@ -188,6 +188,11 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
     storeName?: string;
     hubName?: string;
     courierVehicle?: string;
+    hasCustomShippingRate?: boolean;
+    customShippingRate?: number | string;
+    customGovernorateRates?: Record<string, number>;
+    shippingPricingType?: 'fixed' | 'governorates';
+    shippingNotes?: string;
   }>({
     name: '',
     email: '',
@@ -197,7 +202,67 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
     storeName: '',
     hubName: '',
     courierVehicle: '',
+    hasCustomShippingRate: false,
+    customShippingRate: '',
+    customGovernorateRates: {},
+    shippingPricingType: 'fixed',
+    shippingNotes: '',
   });
+
+  // Dedicated Merchant Shipping Customization Modal State
+  const [isMerchantShippingModalOpen, setIsMerchantShippingModalOpen] = useState(false);
+  const [editingMerchantShippingUser, setEditingMerchantShippingUser] = useState<UserSession | null>(null);
+  const [merchantShippingFormData, setMerchantShippingFormData] = useState<{
+    hasCustomShippingRate: boolean;
+    shippingPricingType: 'fixed' | 'governorates';
+    customShippingRate: number | string;
+    customGovernorateRates: Record<string, number>;
+    shippingNotes: string;
+  }>({
+    hasCustomShippingRate: false,
+    shippingPricingType: 'fixed',
+    customShippingRate: '',
+    customGovernorateRates: {},
+    shippingNotes: '',
+  });
+
+  const openMerchantShippingModal = (merchUser: UserSession) => {
+    setEditingMerchantShippingUser(merchUser);
+    setMerchantShippingFormData({
+      hasCustomShippingRate: merchUser.hasCustomShippingRate ?? (merchUser.customShippingRate !== undefined && merchUser.customShippingRate !== null ? true : false),
+      shippingPricingType: merchUser.shippingPricingType || (merchUser.customGovernorateRates && Object.keys(merchUser.customGovernorateRates).length > 0 ? 'governorates' : 'fixed'),
+      customShippingRate: merchUser.customShippingRate !== undefined && merchUser.customShippingRate !== null ? merchUser.customShippingRate : '',
+      customGovernorateRates: merchUser.customGovernorateRates ? { ...merchUser.customGovernorateRates } : {},
+      shippingNotes: merchUser.shippingNotes || '',
+    });
+    setIsMerchantShippingModalOpen(true);
+  };
+
+  const handleSaveMerchantShippingRate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMerchantShippingUser) return;
+
+    const parsedRate = merchantShippingFormData.customShippingRate !== '' 
+      ? parseFloat(String(merchantShippingFormData.customShippingRate)) 
+      : undefined;
+
+    const updatedUser: UserSession = {
+      ...editingMerchantShippingUser,
+      hasCustomShippingRate: merchantShippingFormData.hasCustomShippingRate,
+      shippingPricingType: merchantShippingFormData.shippingPricingType,
+      customShippingRate: (merchantShippingFormData.hasCustomShippingRate && parsedRate !== undefined && !isNaN(parsedRate))
+        ? parsedRate
+        : undefined,
+      customGovernorateRates: (merchantShippingFormData.hasCustomShippingRate && merchantShippingFormData.shippingPricingType === 'governorates')
+        ? merchantShippingFormData.customGovernorateRates
+        : undefined,
+      shippingNotes: merchantShippingFormData.shippingNotes.trim() || undefined,
+    };
+
+    onUpdateUser(updatedUser);
+    setIsMerchantShippingModalOpen(false);
+    setEditingMerchantShippingUser(null);
+  };
 
   const togglePasswordVisibility = (id: string) => {
     setVisiblePasswords(prev => ({ ...prev, [id]: !prev[id] }));
@@ -285,6 +350,9 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
     if (!userFormData.name || !userFormData.phone) return;
 
     const finalPassword = userFormData.password?.trim() || '123456';
+    const parsedCustomRate = userFormData.customShippingRate !== '' && userFormData.customShippingRate !== undefined
+      ? parseFloat(String(userFormData.customShippingRate))
+      : undefined;
 
     if (editingUser) {
       onUpdateUser({
@@ -298,6 +366,15 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
         hubName: userFormData.role === 'hub_manager' || userFormData.role === 'admin' ? userFormData.hubName?.trim() : undefined,
         courierVehicle: userFormData.role === 'courier' ? userFormData.courierVehicle?.trim() : undefined,
         isConfirmed: editingUser.isConfirmed !== undefined ? editingUser.isConfirmed : true,
+        hasCustomShippingRate: userFormData.role === 'merchant' ? userFormData.hasCustomShippingRate : undefined,
+        customShippingRate: (userFormData.role === 'merchant' && userFormData.hasCustomShippingRate && parsedCustomRate !== undefined && !isNaN(parsedCustomRate))
+          ? parsedCustomRate
+          : undefined,
+        customGovernorateRates: (userFormData.role === 'merchant' && userFormData.hasCustomShippingRate && userFormData.shippingPricingType === 'governorates')
+          ? userFormData.customGovernorateRates
+          : undefined,
+        shippingPricingType: userFormData.role === 'merchant' ? userFormData.shippingPricingType : undefined,
+        shippingNotes: userFormData.role === 'merchant' ? userFormData.shippingNotes?.trim() : undefined,
       });
     } else {
       onAddUser({
@@ -312,12 +389,35 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
         courierVehicle: userFormData.role === 'courier' ? (userFormData.courierVehicle?.trim() || 'سيارة نقل / تروسيكل') : undefined,
         isConfirmed: true,
         registeredAt: new Date().toISOString(),
+        hasCustomShippingRate: userFormData.role === 'merchant' ? userFormData.hasCustomShippingRate : undefined,
+        customShippingRate: (userFormData.role === 'merchant' && userFormData.hasCustomShippingRate && parsedCustomRate !== undefined && !isNaN(parsedCustomRate))
+          ? parsedCustomRate
+          : undefined,
+        customGovernorateRates: (userFormData.role === 'merchant' && userFormData.hasCustomShippingRate && userFormData.shippingPricingType === 'governorates')
+          ? userFormData.customGovernorateRates
+          : undefined,
+        shippingPricingType: userFormData.role === 'merchant' ? userFormData.shippingPricingType : undefined,
+        shippingNotes: userFormData.role === 'merchant' ? userFormData.shippingNotes?.trim() : undefined,
       });
     }
 
     setIsUserModalOpen(false);
     setEditingUser(null);
-    setUserFormData({ name: '', email: '', phone: '', password: '123456', role: 'merchant', storeName: '', hubName: '', courierVehicle: '' });
+    setUserFormData({
+      name: '',
+      email: '',
+      phone: '',
+      password: '123456',
+      role: 'merchant',
+      storeName: '',
+      hubName: '',
+      courierVehicle: '',
+      hasCustomShippingRate: false,
+      customShippingRate: '',
+      customGovernorateRates: {},
+      shippingPricingType: 'fixed',
+      shippingNotes: '',
+    });
   };
 
   const openEditUser = (user: UserSession) => {
@@ -331,6 +431,11 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
       storeName: user.storeName || '',
       hubName: user.hubName || '',
       courierVehicle: user.courierVehicle || '',
+      hasCustomShippingRate: user.hasCustomShippingRate ?? (user.customShippingRate !== undefined && user.customShippingRate !== null ? true : false),
+      customShippingRate: user.customShippingRate !== undefined && user.customShippingRate !== null ? user.customShippingRate : '',
+      customGovernorateRates: user.customGovernorateRates ? { ...user.customGovernorateRates } : {},
+      shippingPricingType: user.shippingPricingType || (user.customGovernorateRates && Object.keys(user.customGovernorateRates).length > 0 ? 'governorates' : 'fixed'),
+      shippingNotes: user.shippingNotes || '',
     });
     setIsUserModalOpen(true);
   };
@@ -1224,6 +1329,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                   <th className="p-3.5">المستخدم</th>
                   <th className="p-3.5">الدور في النظام</th>
                   <th className="p-3.5">تفاصيل التخصيص</th>
+                  <th className="p-3.5">سعر شحن التاجر</th>
                   <th className="p-3.5">الهاتف والبريد</th>
                   <th className="p-3.5">بيانات الدخول (كلمة المرور)</th>
                   <th className="p-3.5">الحالة والتفعيل</th>
@@ -1233,7 +1339,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
               <tbody className="divide-y divide-slate-100 font-bold text-slate-800">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">
+                    <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
                       لا يوجد حسابات مطابقة للبحث
                     </td>
                   </tr>
@@ -1278,6 +1384,36 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                           {u.hubName && <span className="block text-xs font-bold text-slate-700">المستودع: {u.hubName}</span>}
                           {u.courierVehicle && <span className="block text-xs font-bold text-slate-700">المركبة: {u.courierVehicle}</span>}
                           {!u.storeName && !u.hubName && !u.courierVehicle && <span className="text-slate-400">-</span>}
+                        </td>
+                        <td className="p-3.5">
+                          {u.role === 'merchant' ? (
+                            <div className="space-y-1">
+                              {u.hasCustomShippingRate && u.customShippingRate ? (
+                                <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-lg text-[11px] font-black">
+                                  <span>{u.customShippingRate} ج.م</span>
+                                  <span className="text-[9px] text-emerald-600 font-bold">(موحد)</span>
+                                </span>
+                              ) : u.hasCustomShippingRate && u.shippingPricingType === 'governorates' && u.customGovernorateRates && Object.keys(u.customGovernorateRates).length > 0 ? (
+                                <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded-lg text-[11px] font-black">
+                                  مخصص بالمحافظات
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                                  تسعيرة النظام الافتراضية
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openMerchantShippingModal(u)}
+                                className="text-[10px] text-red-600 hover:text-red-800 hover:underline font-extrabold flex items-center gap-1 cursor-pointer"
+                              >
+                                <DollarSign className="w-3 h-3 text-red-500" />
+                                {u.hasCustomShippingRate ? 'تعديل السعر' : 'تخصيص سعر'}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-xs">-</span>
+                          )}
                         </td>
                         <td className="p-3.5">
                           <p className="font-mono text-slate-900 dir-ltr text-right">{u.phone}</p>
@@ -1732,6 +1868,101 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                 );
               })}
             </div>
+          </div>
+
+          {/* Section: Per-Merchant Custom Shipping Rates */}
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50/50 border border-amber-200 rounded-3xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-amber-200/80 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-amber-950 flex items-center gap-2">
+                  <Store className="w-4 h-4 text-red-600" />
+                  أسعار الشحن المخصصة للتجار (اتفاقيات خاصة)
+                </h3>
+                <p className="text-[11px] font-bold text-amber-800">
+                  يمكنك تحديد سعر شحن خاص ومستقل لكل تاجر (سعر موحد أو تسعيرة مخصصة لكل محافظة)
+                </p>
+              </div>
+              <span className="text-xs bg-amber-200/70 text-amber-900 font-extrabold px-3 py-1 rounded-xl">
+                {users.filter((u) => u.role === 'merchant' && u.hasCustomShippingRate).length} تجار لديهم سعر مخصص من إجمالي {users.filter((u) => u.role === 'merchant').length} تاجر
+              </span>
+            </div>
+
+            {users.filter((u) => u.role === 'merchant').length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-4">لا يوجد تجار مسجلين حالياً بالنظام.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {users.filter((u) => u.role === 'merchant').map((merch) => {
+                  const hasCustom = merch.hasCustomShippingRate;
+                  const isFixed = merch.shippingPricingType !== 'governorates';
+                  return (
+                    <div
+                      key={merch.id}
+                      className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                        hasCustom
+                          ? 'bg-white border-emerald-300 shadow-xs'
+                          : 'bg-white/80 border-slate-200'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-black text-xs text-slate-900">{merch.storeName || merch.name}</p>
+                            <p className="text-[10px] text-slate-500">{merch.name} • <span className="font-mono">{merch.phone}</span></p>
+                          </div>
+                          {hasCustom ? (
+                            <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-md shrink-0">
+                              سعر خاص مفعّل
+                            </span>
+                          ) : (
+                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0">
+                              تسعيرة عامة
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="bg-slate-50 p-2 rounded-xl text-xs">
+                          {hasCustom && isFixed && merch.customShippingRate !== undefined ? (
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] text-slate-600 font-bold">سعر الشحن الموحد:</span>
+                              <span className="font-black text-emerald-700 font-mono text-sm">{merch.customShippingRate} ج.م</span>
+                            </div>
+                          ) : hasCustom && !isFixed ? (
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] text-slate-600 font-bold">نظام التسعير:</span>
+                              <span className="font-black text-blue-700 text-xs">مخصص لكل محافظة</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] text-slate-500">حساب الشحن:</span>
+                              <span className="font-bold text-slate-700 text-[11px]">حسب جدول المحافظات أدناه</span>
+                            </div>
+                          )}
+
+                          {merch.shippingNotes && (
+                            <p className="text-[10px] text-amber-800 mt-1 truncate border-t border-slate-200/60 pt-1">
+                              📝 {merch.shippingNotes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => openMerchantShippingModal(merch)}
+                        className={`w-full py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          hasCustom
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            : 'bg-slate-900 hover:bg-slate-800 text-white'
+                        }`}
+                      >
+                        <DollarSign className="w-3.5 h-3.5" />
+                        {hasCustom ? 'تعديل سعر شحن التاجر' : 'تخصيص سعر شحن خاص'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Governorates Table */}
@@ -2451,16 +2682,135 @@ CREATE POLICY "Allow public all profiles" ON public.profiles FOR ALL USING (true
               </div>
 
               {userFormData.role === 'merchant' && (
-                <div className="space-y-1">
-                  <label className="text-xs font-extrabold text-slate-700">اسم المتجر التجاري:</label>
-                  <input
-                    type="text"
-                    value={userFormData.storeName}
-                    onChange={(e) => setUserFormData({ ...userFormData, storeName: e.target.value })}
-                    placeholder="مثال: متجر الملابس الأنيقة"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-red-600"
-                  />
-                </div>
+                <>
+                  <div className="space-y-1">
+                    <label className="text-xs font-extrabold text-slate-700">اسم المتجر التجاري:</label>
+                    <input
+                      type="text"
+                      value={userFormData.storeName}
+                      onChange={(e) => setUserFormData({ ...userFormData, storeName: e.target.value })}
+                      placeholder="مثال: متجر الملابس الأنيقة"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-red-600"
+                    />
+                  </div>
+
+                  {/* Merchant Custom Shipping Rate Options */}
+                  <div className="bg-amber-50/80 border border-amber-200 p-3.5 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-black text-amber-950">
+                        <DollarSign className="w-4 h-4 text-red-600" />
+                        <span>تخصيص سعر شحن خاص لهذا التاجر</span>
+                      </div>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-800 bg-white/80 px-2.5 py-1 rounded-lg border border-amber-200">
+                        <input
+                          type="checkbox"
+                          checked={userFormData.hasCustomShippingRate || false}
+                          onChange={(e) => setUserFormData({ ...userFormData, hasCustomShippingRate: e.target.checked })}
+                          className="rounded text-red-600 focus:ring-red-500 w-4 h-4 cursor-pointer"
+                        />
+                        <span>تفعيل سعر مخصص</span>
+                      </label>
+                    </div>
+
+                    {userFormData.hasCustomShippingRate ? (
+                      <div className="space-y-3 pt-1 border-t border-amber-200/60">
+                        <div className="flex items-center gap-4 text-xs font-bold text-slate-800">
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="pricingTypeUserModal"
+                              checked={userFormData.shippingPricingType === 'fixed'}
+                              onChange={() => setUserFormData({ ...userFormData, shippingPricingType: 'fixed' })}
+                              className="text-red-600 focus:ring-red-500 cursor-pointer"
+                            />
+                            <span>سعر موحد لجميع المحافظات</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="pricingTypeUserModal"
+                              checked={userFormData.shippingPricingType === 'governorates'}
+                              onChange={() => setUserFormData({ ...userFormData, shippingPricingType: 'governorates' })}
+                              className="text-red-600 focus:ring-red-500 cursor-pointer"
+                            />
+                            <span>تسعيرة مخصصة لكل محافظة</span>
+                          </label>
+                        </div>
+
+                        {userFormData.shippingPricingType === 'fixed' ? (
+                          <div className="space-y-1">
+                            <label className="block text-xs font-extrabold text-slate-800">
+                              سعر الشحن المخصص للتاجر (ج.م):
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={userFormData.customShippingRate ?? ''}
+                                onChange={(e) => setUserFormData({ ...userFormData, customShippingRate: e.target.value })}
+                                placeholder="أدخل سعر الشحن المتفق عليه للتاجر"
+                                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-red-600 font-mono"
+                              />
+                              <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">ج.م</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500">
+                              * سيتم محاسبة هذا التاجر بهذا السعر في كافة الشحنات تلقائياً دون الرجوع لتسعيرة المحافظات العامة.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <label className="block text-xs font-extrabold text-slate-800">
+                              أسعار المحافظات الخاصة بالتاجر:
+                            </label>
+                            <div className="max-h-44 overflow-y-auto space-y-1.5 border border-slate-200 rounded-xl p-2 bg-white">
+                              {governorates.map((gov) => (
+                                <div key={gov.code} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
+                                  <span className="font-bold text-slate-700">{gov.nameAr} (العام: {gov.baseRate} ج.م)</span>
+                                  <div className="flex items-center gap-1 w-28">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      placeholder={String(gov.baseRate)}
+                                      value={userFormData.customGovernorateRates?.[gov.code] ?? ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                        const updatedRates = { ...userFormData.customGovernorateRates };
+                                        if (val === undefined) {
+                                          delete updatedRates[gov.code];
+                                        } else {
+                                          updatedRates[gov.code] = val;
+                                        }
+                                        setUserFormData({ ...userFormData, customGovernorateRates: updatedRates });
+                                      }}
+                                      className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold text-slate-900 outline-none focus:border-red-600 text-center"
+                                    />
+                                    <span className="text-[10px] text-slate-400">ج.م</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-slate-700">ملاحظات الاتفاق المالي للشحن:</label>
+                          <input
+                            type="text"
+                            value={userFormData.shippingNotes || ''}
+                            onChange={(e) => setUserFormData({ ...userFormData, shippingNotes: e.target.value })}
+                            placeholder="مثال: خصم خاص متفق عليه بحجم شحنات شهري"
+                            className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-900 outline-none focus:border-red-600"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        يحاسب التاجر حالياً وفق <strong>أسعار النظام الافتراضية للمحافظات</strong>.
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
 
               {userFormData.role === 'courier' && (
@@ -2503,6 +2853,218 @@ CREATE POLICY "Allow public all profiles" ON public.profiles FOR ALL USING (true
                 >
                   حفظ البيانات
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CUSTOMIZE MERCHANT SHIPPING RATE */}
+      {isMerchantShippingModalOpen && editingMerchantShippingUser && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full border border-slate-200 shadow-2xl space-y-5 my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-red-100 text-red-600 rounded-xl">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    تخصيص سعر الشحن للتاجر
+                  </h3>
+                  <p className="text-xs text-slate-500 font-semibold">
+                    {editingMerchantShippingUser.storeName || editingMerchantShippingUser.name} ({editingMerchantShippingUser.phone})
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsMerchantShippingModalOpen(false)} 
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMerchantShippingRate} className="space-y-4">
+              {/* Active Toggle */}
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-black text-slate-900">تفعيل سعر شحن مخصص للتاجر</h4>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    عند التفعيل، يتم تجاوز تسعيرة المحافظات العامة واستخدام السعر المتفق عليه
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={merchantShippingFormData.hasCustomShippingRate}
+                    onChange={(e) => setMerchantShippingFormData({ ...merchantShippingFormData, hasCustomShippingRate: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                </label>
+              </div>
+
+              {merchantShippingFormData.hasCustomShippingRate ? (
+                <div className="space-y-4 bg-amber-50/70 border border-amber-200 p-4 rounded-2xl">
+                  {/* Pricing Type Selection */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-800 block">نظام التسعير المخصص للتاجر:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMerchantShippingFormData({ ...merchantShippingFormData, shippingPricingType: 'fixed' })}
+                        className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+                          merchantShippingFormData.shippingPricingType === 'fixed'
+                            ? 'bg-red-600 text-white border-red-600 shadow-sm'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="block text-xs font-extrabold">سعر موحد ثابت</span>
+                        <span className={`text-[10px] block mt-0.5 ${merchantShippingFormData.shippingPricingType === 'fixed' ? 'text-red-100' : 'text-slate-400'}`}>
+                          سعر واحد لكافة المحافظات
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setMerchantShippingFormData({ ...merchantShippingFormData, shippingPricingType: 'governorates' })}
+                        className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+                          merchantShippingFormData.shippingPricingType === 'governorates'
+                            ? 'bg-red-600 text-white border-red-600 shadow-sm'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="block text-xs font-extrabold">تسعيرة لكل محافظة</span>
+                        <span className={`text-[10px] block mt-0.5 ${merchantShippingFormData.shippingPricingType === 'governorates' ? 'text-red-100' : 'text-slate-400'}`}>
+                          تحديد سعر خاص لكل منطقة
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Fixed Rate Field */}
+                  {merchantShippingFormData.shippingPricingType === 'fixed' ? (
+                    <div className="space-y-2">
+                      <label className="text-xs font-extrabold text-slate-900 block">
+                        قيمة سعر الشحن للتاجر (ج.م):
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          required
+                          value={merchantShippingFormData.customShippingRate}
+                          onChange={(e) => setMerchantShippingFormData({ ...merchantShippingFormData, customShippingRate: e.target.value })}
+                          placeholder="أدخل السعر المتفق عليه (مثلاً 50، 60، إلخ)"
+                          className="w-full bg-white border border-slate-300 rounded-xl pr-4 pl-12 py-2.5 text-sm font-black text-slate-900 outline-none focus:border-red-600 font-mono shadow-xs"
+                        />
+                        <span className="absolute left-3.5 top-2.5 text-xs font-bold text-slate-400">ج.م</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium">
+                        💡 عند إنشاء أي بوليصة لهذا التاجر، سيتم حساب الشحن تلقائياً بهذا السعر ({merchantShippingFormData.customShippingRate || '...'} ج.م) لأي محافظة.
+                      </p>
+                    </div>
+                  ) : (
+                    /* Per Governorate Rates */
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-extrabold text-slate-900">
+                          حدد السعر المخصص لكل محافظة:
+                        </label>
+                        <span className="text-[10px] text-slate-500 font-bold">
+                          اترك الحقل فارغاً لاستخدام سعر النظام
+                        </span>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto space-y-1.5 border border-slate-200 rounded-xl p-2.5 bg-white">
+                        {governorates.map((gov) => (
+                          <div key={gov.code} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-50 last:border-0">
+                            <span className="font-bold text-slate-700">
+                              {gov.nameAr}{' '}
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                (العام: {gov.baseRate} ج.م)
+                              </span>
+                            </span>
+                            <div className="flex items-center gap-1.5 w-32">
+                              <input
+                                type="number"
+                                min="0"
+                                placeholder={String(gov.baseRate)}
+                                value={merchantShippingFormData.customGovernorateRates?.[gov.code] ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                  const updatedRates = { ...merchantShippingFormData.customGovernorateRates };
+                                  if (val === undefined) {
+                                    delete updatedRates[gov.code];
+                                  } else {
+                                    updatedRates[gov.code] = val;
+                                  }
+                                  setMerchantShippingFormData({ ...merchantShippingFormData, customGovernorateRates: updatedRates });
+                                }}
+                                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-mono font-black text-red-600 outline-none focus:border-red-600 text-center"
+                              />
+                              <span className="text-[10px] text-slate-400 font-bold">ج.م</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Agreement Notes */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 block">ملاحظات الاتفاق:</label>
+                    <input
+                      type="text"
+                      value={merchantShippingFormData.shippingNotes}
+                      onChange={(e) => setMerchantShippingFormData({ ...merchantShippingFormData, shippingNotes: e.target.value })}
+                      placeholder="مثال: خصم متفق عليه بشرط تسليم 100 أوردر شهرياً"
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 outline-none focus:border-red-600"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center space-y-1 text-xs text-slate-600">
+                  <p className="font-bold text-slate-800">هذا التاجر يحاسب حالياً بأسعار المحافظات القياسية للنظام</p>
+                  <p className="text-[11px] text-slate-500">قم بتفعيل المفتاح أعلاه لإدخال سعر شحن متفق عليه خاص به.</p>
+                </div>
+              )}
+
+              <div className="pt-3 flex items-center justify-between border-t border-slate-100">
+                {merchantShippingFormData.hasCustomShippingRate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMerchantShippingFormData({
+                        hasCustomShippingRate: false,
+                        shippingPricingType: 'fixed',
+                        customShippingRate: '',
+                        customGovernorateRates: {},
+                        shippingNotes: '',
+                      });
+                    }}
+                    className="text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                  >
+                    إعادة ضبط لأسعار النظام العامة
+                  </button>
+                )}
+                <div className="flex items-center gap-2 mr-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsMerchantShippingModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-red-600 hover:bg-red-700 text-white font-black text-xs px-5 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    حفظ سعر التاجر
+                  </button>
+                </div>
               </div>
             </form>
           </div>

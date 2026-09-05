@@ -199,6 +199,13 @@ export interface UserSession {
   courierVehicle?: string;
   isConfirmed?: boolean; // حالة تأكيد وتفعيل الحساب من خلال الأدمن
   registeredAt?: string;
+
+  // Custom Merchant Shipping Rates (تسعيرة الشحن المخصصة للتاجر)
+  hasCustomShippingRate?: boolean;                 // هل تم تفعيل سعر شحن مخصص للتاجر؟
+  customShippingRate?: number;                     // سعر الشحن الموحد المخصص للتاجر (ج.م)
+  customGovernorateRates?: Record<string, number>; // أسعار شحن مخصصة لكل محافظة لهذا التاجر
+  shippingPricingType?: 'fixed' | 'governorates';  // نوع التسعيرة: موحدة لكل المحافظات أو مخصصة لكل محافظة
+  shippingNotes?: string;                          // ملاحظات وتفاصيل الاتفاق مع التاجر
 }
 
 export interface CourierNotification {

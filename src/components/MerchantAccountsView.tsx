@@ -59,6 +59,12 @@ interface MerchantSummary {
   vodafoneCash?: string;
   instaPay?: string;
   bankAccount?: string;
+  // Custom shipping configuration
+  hasCustomShippingRate?: boolean;
+  customShippingRate?: number;
+  shippingPricingType?: 'fixed' | 'governorates';
+  customGovernorateRates?: Record<string, number>;
+  shippingNotes?: string;
   // Financial metrics
   totalShipmentsCount: number;
   deliveredCount: number;
@@ -126,6 +132,11 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
           phone: u.phone || '',
           governorate: u.hubName || '',
           email: u.email || '',
+          hasCustomShippingRate: u.hasCustomShippingRate,
+          customShippingRate: u.customShippingRate,
+          shippingPricingType: u.shippingPricingType,
+          customGovernorateRates: u.customGovernorateRates,
+          shippingNotes: u.shippingNotes,
           totalShipmentsCount: 0,
           deliveredCount: 0,
           partialCount: 0,
@@ -894,6 +905,28 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                       <span className="flex items-center gap-1">
                         <Building2 className="w-4 h-4 text-slate-400" />
                         المنطقة: <strong>{selectedMerchant.governorate} {selectedMerchant.city ? `- ${selectedMerchant.city}` : ''}</strong>
+                      </span>
+                    )}
+
+                    {selectedMerchant.hasCustomShippingRate && selectedMerchant.customShippingRate !== undefined ? (
+                      <span className="flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-lg text-xs font-black">
+                        <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                        سعر الشحن المتفق عليه: {selectedMerchant.customShippingRate} ج.م (موحد لجميع المحافظات)
+                      </span>
+                    ) : selectedMerchant.hasCustomShippingRate && selectedMerchant.shippingPricingType === 'governorates' ? (
+                      <span className="flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-300 px-2.5 py-0.5 rounded-lg text-xs font-black">
+                        <DollarSign className="w-3.5 h-3.5 text-blue-600" />
+                        سعر الشحن المتفق عليه: تسعيرة مخصصة لكل محافظة
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 rounded-lg text-xs font-bold">
+                        سعر الشحن: تسعيرة النظام العامة
+                      </span>
+                    )}
+
+                    {selectedMerchant.shippingNotes && (
+                      <span className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg text-[11px] font-bold">
+                        📝 {selectedMerchant.shippingNotes}
                       </span>
                     )}
                   </div>

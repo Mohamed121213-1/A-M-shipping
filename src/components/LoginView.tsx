@@ -491,529 +491,398 @@ export const LoginView: React.FC<LoginViewProps> = ({
   };
 
   return (
-    <div className="min-h-[85vh] bg-slate-900/95 rounded-3xl overflow-hidden border border-slate-800 shadow-2xl my-4 grid grid-cols-1 lg:grid-cols-12 text-right dir-rtl">
-      {/* Right Form Section */}
-      <div className="lg:col-span-7 bg-white p-6 sm:p-10 lg:p-12 flex flex-col justify-between">
-        <div className="space-y-6">
-          {/* Header Brand */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 rounded-2xl bg-[#091524] border border-slate-750 shadow-sm overflow-hidden flex items-center justify-center p-0.5 shrink-0">
-                <img 
-                  src={droplineLogoImg} 
-                  alt="DropLine Logo"
-                  className="w-full h-full object-cover rounded-xl"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div>
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">
-                  Drop<span className="text-red-600">Line</span>
-                </h1>
-                <p className="text-xs font-bold text-slate-500">منصة إدارة اللوجستيات وتتبع الشحنات</p>
-              </div>
+    <div className="max-w-2xl mx-auto my-6 bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden p-6 sm:p-10 text-right dir-rtl">
+      <div className="space-y-6">
+        {/* Header Brand */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-[#091524] border border-slate-750 shadow-sm overflow-hidden flex items-center justify-center p-0.5 shrink-0">
+              <img 
+                src={droplineLogoImg} 
+                alt="DropLine Logo"
+                className="w-full h-full object-cover rounded-xl"
+                referrerPolicy="no-referrer"
+              />
             </div>
-
-            <div className="flex items-center gap-2">
-              {/* Supabase Connection Status Badge */}
-              <span className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl border ${
-                isSupabaseConfigured 
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
-                  : 'bg-amber-50 text-amber-800 border-amber-200'
-              }`}>
-                <Database className={`w-4 h-4 ${isSupabaseConfigured ? 'text-emerald-600' : 'text-amber-600'}`} />
-                {isSupabaseConfigured ? 'Supabase Auth ⚡' : 'إعداد Supabase'}
-              </span>
+            <div>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight">
+                Drop<span className="text-red-600">Line</span>
+              </h1>
+              <p className="text-xs font-bold text-slate-500">منصة إدارة اللوجستيات وتتبع الشحنات</p>
             </div>
           </div>
+        </div>
 
-          {/* Supabase Config Warning Box if not configured */}
-          {!isSupabaseConfigured && (
-            <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 text-xs font-bold text-amber-900 space-y-2">
-              <div className="flex items-center gap-2 font-black text-amber-950">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                تنبيه ربط Supabase Authentication:
-              </div>
-              <p className="text-amber-800 leading-relaxed font-medium">
-                يظهر هذا التنبيه لأن مفاتيح Supabase غير مضافة بعد في متغيرة البيئة. لربط حسابك الحقيقي، افتح قائمة <strong>الإعدادات (Settings)</strong> في المنصة وأضف المتغيرين التاليين:
+        {/* Role Selection Tabs */}
+        <div className="space-y-3">
+          <label className="text-xs font-black text-slate-700 block">
+            اختر نوع الحساب اللوجستي:
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => handleTabChange('admin')}
+              className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                selectedRoleTab === 'admin'
+                  ? 'bg-slate-900 text-white shadow-md'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span>أدمن النظام</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTabChange('merchant')}
+              className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                selectedRoleTab === 'merchant'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>التجار</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTabChange('courier')}
+              className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                selectedRoleTab === 'courier'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <Truck className="w-3.5 h-3.5" />
+              <span>المندوب</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTabChange('hub_manager')}
+              className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                selectedRoleTab === 'hub_manager'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>المستودع</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTabChange('public_tracker')}
+              className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 col-span-2 sm:col-span-1 cursor-pointer ${
+                selectedRoleTab === 'public_tracker'
+                  ? 'bg-slate-900 text-white shadow-md'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <SearchCode className="w-3.5 h-3.5 text-amber-400" />
+              <span>تتبع زائر</span>
+            </button>
+          </div>
+        </div>
+
+        {/* PUBLIC TRACKER OPTION */}
+        {selectedRoleTab === 'public_tracker' ? (
+          <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4">
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                <SearchCode className="w-5 h-5 text-red-600" />
+                تتبع الشحنة بدون تسجيل دخول
+              </h3>
+              <p className="text-xs text-slate-500">
+                أدخل رقم البوليصة لمتابعة حالة الطرد وموقعه الحالي مباشرة.
               </p>
-              <div className="bg-white/80 border border-amber-200 p-2.5 rounded-xl font-mono text-[11px] text-slate-800 space-y-1 dir-ltr text-left">
-                <div>VITE_SUPABASE_URL=https://your-project.supabase.co</div>
-                <div>VITE_SUPABASE_ANON_KEY=your-anon-key</div>
+            </div>
+
+            <form onSubmit={handleGuestTrackingSubmit} className="space-y-3">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={guestTrackingInput}
+                  onChange={(e) => setGuestTrackingInput(e.target.value)}
+                  placeholder="مثال: BST-804101"
+                  className="w-full bg-white border border-slate-300 focus:border-red-600 focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-3 text-sm font-extrabold dir-ltr text-right pr-11 text-slate-900 outline-none transition-all"
+                />
+                <Package className="w-5 h-5 text-slate-400 absolute right-3.5 top-3.5" />
               </div>
-            </div>
-          )}
-
-          {/* Role Selection Tabs */}
-          <div className="space-y-3">
-            <label className="text-xs font-black text-slate-700 block">
-              اختر نوع الحساب اللوجستي:
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-              <button
-                type="button"
-                onClick={() => handleTabChange('admin')}
-                className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
-                  selectedRoleTab === 'admin'
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>أدمن النظام</span>
-              </button>
 
               <button
-                type="button"
-                onClick={() => handleTabChange('merchant')}
-                className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
-                  selectedRoleTab === 'merchant'
-                    ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
+                type="submit"
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm py-3 px-6 rounded-2xl shadow-md shadow-red-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Store className="w-3.5 h-3.5" />
-                <span>التجار</span>
+                <SearchCode className="w-4 h-4" />
+                تتبع الشحنة الآن
               </button>
-
-              <button
-                type="button"
-                onClick={() => handleTabChange('courier')}
-                className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
-                  selectedRoleTab === 'courier'
-                    ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                <Truck className="w-3.5 h-3.5" />
-                <span>المندوب</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleTabChange('hub_manager')}
-                className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
-                  selectedRoleTab === 'hub_manager'
-                    ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                <span>المستودع</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleTabChange('public_tracker')}
-                className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 col-span-2 sm:col-span-1 ${
-                  selectedRoleTab === 'public_tracker'
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                <SearchCode className="w-3.5 h-3.5 text-amber-400" />
-                <span>تتبع زائر</span>
-              </button>
-            </div>
+            </form>
           </div>
-
-          {/* PUBLIC TRACKER OPTION */}
-          {selectedRoleTab === 'public_tracker' ? (
-            <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4">
-              <div className="space-y-1">
-                <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                  <SearchCode className="w-5 h-5 text-red-600" />
-                  تتبع الشحنة بدون تسجيل دخول
-                </h3>
+        ) : (
+          /* AUTHENTICATION FORM (LOGIN & SIGN-UP) */
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Header Title & Switcher between Login / Signup */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-lg font-black text-slate-900">
+                  {isSignUpMode 
+                    ? `إنشاء حساب جديد (${selectedRoleTab === 'merchant' ? 'تاجر' : selectedRoleTab === 'courier' ? 'مندوب' : 'مدير فرع'})`
+                    : `تسجيل الدخول (${selectedRoleTab === 'admin' ? 'أدمن' : selectedRoleTab === 'merchant' ? 'تاجر' : selectedRoleTab === 'courier' ? 'مندوب' : 'مدير فرع'})`
+                  }
+                </h2>
                 <p className="text-xs text-slate-500">
-                  أدخل رقم البوليصة لمتابعة حالة الطرد وموقعه الحالي بدون الحاجة لإنشاء حساب.
+                  {isSignUpMode 
+                    ? 'أدخل بياناتك لإنشاء حساب جديد والبدء فوراً.' 
+                    : 'أدخل رقم الهاتف أو البريد وكلمة المرور للمتابعة.'}
                 </p>
               </div>
 
-              <form onSubmit={handleGuestTrackingSubmit} className="space-y-3">
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={guestTrackingInput}
-                    onChange={(e) => setGuestTrackingInput(e.target.value)}
-                    placeholder="مثال: BST-804101"
-                    className="w-full bg-white border border-slate-300 focus:border-red-600 focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-3 text-sm font-extrabold dir-ltr text-right pr-11 text-slate-900 outline-none transition-all"
-                  />
-                  <Package className="w-5 h-5 text-slate-400 absolute right-3.5 top-3.5" />
-                </div>
-
+              {/* Mode Switcher Button - Only shown for non-admin roles */}
+              {selectedRoleTab !== 'admin' && (
                 <button
-                  type="submit"
-                  className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm py-3 px-6 rounded-2xl shadow-md shadow-red-600/20 transition-all flex items-center justify-center gap-2"
+                  type="button"
+                  onClick={() => {
+                    setIsSignUpMode(!isSignUpMode);
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                  }}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
                 >
-                  <SearchCode className="w-4 h-4" />
-                  تتبع الشحنة الآن
-                </button>
-              </form>
-            </div>
-          ) : (
-            /* SUPABASE AUTHENTICATION FORM */
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Header Title & Switcher between Login / Signup */}
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h2 className="text-lg font-black text-slate-900">
-                    {isSignUpMode 
-                      ? `إنشاء حساب جديد (${selectedRoleTab === 'merchant' ? 'تاجر' : selectedRoleTab === 'courier' ? 'مندوب' : 'مدير فرع'})`
-                      : `تسجيل الدخول عبر Supabase (${selectedRoleTab === 'admin' ? 'أدمن' : selectedRoleTab === 'merchant' ? 'تاجر' : selectedRoleTab === 'courier' ? 'مندوب' : 'مدير فرع'})`
-                    }
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    {isSignUpMode 
-                      ? 'أدخل بياناتك لإنشاء حساب حقيقي وموثق بـ Supabase Auth.' 
-                      : 'أدخل البريد وكلمة المرور للتحقق عبر Supabase Auth.'}
-                  </p>
-                </div>
-
-                {/* Mode Switcher Button - Only shown for non-admin roles */}
-                {selectedRoleTab !== 'admin' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSignUpMode(!isSignUpMode);
-                      setErrorMessage(null);
-                      setSuccessMessage(null);
-                    }}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-                  >
-                    {isSignUpMode ? (
-                      <>
-                        <User className="w-3.5 h-3.5 text-red-600" />
-                        <span>لديك حساب؟ تسجيل الدخول</span>
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus className="w-3.5 h-3.5 text-red-600" />
-                        <span>حساب جديد؟ إنشاء حساب</span>
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              {/* Admin Note Badge */}
-              {selectedRoleTab === 'admin' && (
-                <div className="bg-slate-100 border border-slate-200 text-slate-700 p-2.5 rounded-2xl text-[11px] font-bold flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span>تنبيه: يتم إضافة وإدارة حسابات الأدمن حصراً من داخل لوحة تحكم الأدمن بواسطة أدمن رئيسي.</span>
-                </div>
-              )}
-
-              {/* Status Notifications */}
-              {defenseStatus.isLocked && (
-                <div className="bg-rose-500/10 border border-rose-500/30 text-rose-700 p-4 rounded-2xl text-xs font-black flex items-start gap-3 animate-pulse">
-                  <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="font-black text-rose-900">🛡️ درع الحماية ضد الاختراق نشط</p>
-                    <p className="text-[11px] font-bold text-rose-700">
-                      تم رصد محاولات دخول متكررة غير صحيحة. تم إغلاق النموذج مؤقتاً لحماية الحساب.
-                    </p>
-                    <div className="flex items-center gap-1.5 text-rose-900 font-black text-xs pt-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>متبقي لإعادة الفتح: {defenseStatus.remainingSeconds} ثانية</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {errorMessage && !defenseStatus.isLocked && (
-                <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-2xl text-xs font-bold flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-rose-600 shrink-0"></span>
-                  {errorMessage}
-                </div>
-              )}
-
-              {successMessage && (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-xs font-bold flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  {successMessage}
-                </div>
-              )}
-
-              {/* Form Fields according to Sign-Up or Login mode */}
-              {isSignUpMode ? (
-                <div className="space-y-3.5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                        <User className="w-3.5 h-3.5 text-slate-500" />
-                        الاسم الكامل *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={fullNameInput}
-                        onChange={(e) => setFullNameInput(e.target.value)}
-                        placeholder="مثال: أحمد محمود"
-                        className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white rounded-2xl px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                        <Phone className="w-3.5 h-3.5 text-red-600" />
-                        رقم الهاتف (أساسي) *
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        value={phoneInput}
-                        onChange={(e) => setPhoneInput(e.target.value)}
-                        placeholder="01012345678"
-                        className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white rounded-2xl px-3.5 py-2.5 text-xs font-black text-slate-900 outline-none dir-ltr text-right"
-                      />
-                    </div>
-                  </div>
-
-                  {selectedRoleTab === 'merchant' && (
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                        <Store className="w-3.5 h-3.5 text-slate-500" />
-                        اسم المتجر / العلامة التجارية *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={storeNameInput}
-                        onChange={(e) => setStoreNameInput(e.target.value)}
-                        placeholder="مثال: متجر الأناقة"
-                        className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white rounded-2xl px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none"
-                      />
-                    </div>
+                  {isSignUpMode ? (
+                    <>
+                      <User className="w-3.5 h-3.5 text-red-600" />
+                      <span>لديك حساب؟ تسجيل الدخول</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-3.5 h-3.5 text-red-600" />
+                      <span>حساب جديد؟ إنشاء حساب</span>
+                    </>
                   )}
+                </button>
+              )}
+            </div>
 
-                  {/* Optional Email Field for Signup */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5 text-slate-500" />
-                        البريد الإلكتروني <span className="text-amber-600 font-extrabold">(اختياري)</span>
-                      </label>
-                      <span className="text-[10px] font-bold text-slate-400">غير إجباري</span>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="email"
-                        value={emailInput}
-                        onChange={(e) => setEmailInput(e.target.value)}
-                        placeholder="اختياري - name@domain.com"
-                        className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-2.5 text-xs font-bold text-slate-900 outline-none transition-all pr-10 dir-ltr text-right"
-                      />
-                      <Mail className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-medium">
-                      إذا تركته فارغاً، سيتم إنشاء بريد توثيق تلقائي مرتبط برقم الهاتف لسهولة الدخول.
-                    </p>
+            {/* Admin Note Badge */}
+            {selectedRoleTab === 'admin' && (
+              <div className="bg-slate-100 border border-slate-200 text-slate-700 p-2.5 rounded-2xl text-[11px] font-bold flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
+                <span>تنبيه: يتم إضافة وإدارة حسابات الأدمن حصراً من داخل لوحة تحكم الأدمن بواسطة أدمن رئيسي.</span>
+              </div>
+            )}
+
+            {/* Status Notifications */}
+            {defenseStatus.isLocked && (
+              <div className="bg-rose-500/10 border border-rose-500/30 text-rose-700 p-4 rounded-2xl text-xs font-black flex items-start gap-3 animate-pulse">
+                <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-black text-rose-900">🛡️ درع الحماية نشط</p>
+                  <p className="text-[11px] font-bold text-rose-700">
+                    تم رصد محاولات دخول متكررة غير صحيحة. تم إغلاق النموذج مؤقتاً لحماية الحساب.
+                  </p>
+                  <div className="flex items-center gap-1.5 text-rose-900 font-black text-xs pt-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>متبقي لإعادة الفتح: {defenseStatus.remainingSeconds} ثانية</span>
                   </div>
                 </div>
-              ) : (
-                /* Login Mode Identifier Field (Phone or Email) */
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-red-600" />
-                    رقم الهاتف أو البريد الإلكتروني
-                  </label>
-                  <div className="relative">
+              </div>
+            )}
+
+            {errorMessage && !defenseStatus.isLocked && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-rose-600 shrink-0"></span>
+                {errorMessage}
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                {successMessage}
+              </div>
+            )}
+
+            {/* Form Fields according to Sign-Up or Login mode */}
+            {isSignUpMode ? (
+              <div className="space-y-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                      <User className="w-3.5 h-3.5 text-slate-500" />
+                      الاسم الكامل *
+                    </label>
                     <input
                       type="text"
                       required
+                      value={fullNameInput}
+                      onChange={(e) => setFullNameInput(e.target.value)}
+                      placeholder="مثال: أحمد محمود"
+                      className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white rounded-2xl px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                      <Phone className="w-3.5 h-3.5 text-red-600" />
+                      رقم الهاتف (أساسي) *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
+                      placeholder="01012345678"
+                      className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white rounded-2xl px-3.5 py-2.5 text-xs font-black text-slate-900 outline-none dir-ltr text-right"
+                    />
+                  </div>
+                </div>
+
+                {selectedRoleTab === 'merchant' && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                      <Store className="w-3.5 h-3.5 text-slate-500" />
+                      اسم المتجر / العلامة التجارية *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={storeNameInput}
+                      onChange={(e) => setStoreNameInput(e.target.value)}
+                      placeholder="مثال: متجر الأناقة"
+                      className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white rounded-2xl px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none"
+                    />
+                  </div>
+                )}
+
+                {/* Optional Email Field for Signup */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-slate-500" />
+                      البريد الإلكتروني <span className="text-slate-400 font-normal">(اختياري)</span>
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="email"
                       value={emailInput}
                       onChange={(e) => setEmailInput(e.target.value)}
-                      placeholder="01012345678 أو name@domain.com"
-                      className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-3 text-xs sm:text-sm font-bold text-slate-900 outline-none transition-all pr-10 dir-ltr text-right"
+                      placeholder="اختياري - name@domain.com"
+                      className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-2.5 text-xs font-bold text-slate-900 outline-none transition-all pr-10 dir-ltr text-right"
                     />
-                    <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+                    <Mail className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Login Mode Identifier Field (Phone or Email) */
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-red-600" />
+                  رقم الهاتف أو البريد الإلكتروني
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="01012345678 أو name@domain.com"
+                    className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-3 text-xs sm:text-sm font-bold text-slate-900 outline-none transition-all pr-10 dir-ltr text-right"
+                  />
+                  <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+                </div>
+              </div>
+            )}
+
+            {/* Password Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-slate-500" />
+                  كلمة المرور
+                </label>
+                {!isSignUpMode && (
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPasswordModal(true)}
+                    className="text-[11px] font-bold text-red-600 hover:text-red-700 cursor-pointer"
+                  >
+                    نسيت كلمة المرور؟
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-3 text-xs sm:text-sm font-bold text-slate-900 outline-none transition-all pr-10 pl-10"
+                />
+                <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute left-3.5 top-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* Password Strength Meter for Sign-up */}
+              {isSignUpMode && passwordInput && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between text-[11px] font-black">
+                    <span className="text-slate-500">قوة كلمة المرور:</span>
+                    <span className={passwordStrength.color}>{passwordStrength.label}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        passwordStrength.score >= 80
+                          ? 'bg-emerald-500'
+                          : passwordStrength.score >= 60
+                          ? 'bg-teal-500'
+                          : passwordStrength.score >= 40
+                          ? 'bg-amber-500'
+                          : 'bg-rose-500'
+                      }`}
+                      style={{ width: `${passwordStrength.score}%` }}
+                    />
                   </div>
                 </div>
               )}
-
-              {/* Password Field */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-slate-500" />
-                    كلمة المرور
-                  </label>
-                  {!isSignUpMode && (
-                    <button
-                      type="button"
-                      onClick={() => setShowForgotPasswordModal(true)}
-                      className="text-[11px] font-bold text-red-600 hover:text-red-700"
-                    >
-                      نسيت كلمة المرور؟
-                    </button>
-                  )}
-                </div>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-slate-50 border border-slate-300 focus:border-red-600 focus:bg-white focus:ring-2 focus:ring-red-600/20 rounded-2xl px-4 py-3 text-xs sm:text-sm font-bold text-slate-900 outline-none transition-all pr-10 pl-10"
-                  />
-                  <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute left-3.5 top-3.5 text-slate-400 hover:text-slate-600"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-
-                {/* Password Strength Meter for Sign-up */}
-                {isSignUpMode && passwordInput && (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between text-[11px] font-black">
-                      <span className="text-slate-500">قوة كلمة المرور:</span>
-                      <span className={passwordStrength.color}>{passwordStrength.label}</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className={`h-full transition-all duration-300 ${
-                          passwordStrength.score >= 80
-                            ? 'bg-emerald-500'
-                            : passwordStrength.score >= 60
-                            ? 'bg-teal-500'
-                            : passwordStrength.score >= 40
-                            ? 'bg-amber-500'
-                            : 'bg-rose-500'
-                        }`}
-                        style={{ width: `${passwordStrength.score}%` }}
-                      />
-                    </div>
-                    {passwordStrength.feedback.length > 0 && (
-                      <p className="text-[10px] text-slate-500 font-medium">
-                        💡 {passwordStrength.feedback.join(' • ')}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting || defenseStatus.isLocked}
-                className="w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-extrabold text-sm py-3 px-6 rounded-2xl shadow-lg shadow-red-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-2"
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    جاري التوثيق وفحص الأمان...
-                  </span>
-                ) : defenseStatus.isLocked ? (
-                  <span className="flex items-center gap-2 text-white">
-                    <ShieldAlert className="w-4 h-4" />
-                    المحاولة محظورة مؤقتاً ({defenseStatus.remainingSeconds} ثانية)
-                  </span>
-                ) : (
-                  <>
-                    <span>{isSignUpMode ? 'تسجيل حساب جديد' : 'تسجيل الدخول'}</span>
-                    <ArrowLeft className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          {/* Security & Anti-Hacking Certified Badge */}
-          <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-2.5 flex items-center justify-between text-[11px] text-emerald-800 font-black">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>اتصال مشفر 256-bit SSL | درع الحماية ضد الاختراق نشط</span>
-            </div>
-            <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-full text-[9px]">حماية 100%</span>
-          </div>
-        </div>
-
-        {/* Footer info */}
-        <div className="pt-6 text-center sm:text-right text-[11px] text-slate-400 font-bold border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2 mt-6">
-          <span>© 2026 DropLine. جميع الحقوق محفوظة.</span>
-          <div className="flex items-center gap-3">
-            <span className="hover:underline cursor-pointer">Supabase Auth Integrated</span>
-            <span>•</span>
-            <span className="hover:underline cursor-pointer">سياسة الخصوصية</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Left Marketing & Stats Showcase Banner */}
-      <div className="lg:col-span-5 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-8 lg:p-12 text-white flex flex-col justify-between border-t lg:border-t-0 lg:border-r border-slate-800 relative overflow-hidden">
-        {/* Background Decorative Rings */}
-        <div className="absolute -top-20 -left-20 w-80 h-80 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 space-y-8">
-          <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-extrabold px-3.5 py-1.5 rounded-full">
-            <Sparkles className="w-3.5 h-3.5" />
-            منظومة توثيق الحسابات المتقدمة
-          </div>
-
-          <div className="space-y-3">
-            <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight">
-              تكامل مباشر مع Supabase Authentication
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed font-medium">
-              حماية مشفرة لبيانات التوثيق وجلسات المستخدمين عبر Supabase، مع توزيع الصلاحيات الدقيقة لكل من الأدمن، التجار، والمناديب.
-            </p>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div className="bg-slate-800/60 border border-slate-700/60 backdrop-blur-xs p-4 rounded-2xl space-y-1">
-              <div className="text-xl sm:text-2xl font-black text-white">27</div>
-              <div className="text-[11px] font-bold text-slate-400">محافظة مغطاة بالكامـل</div>
             </div>
 
-            <div className="bg-slate-800/60 border border-slate-700/60 backdrop-blur-xs p-4 rounded-2xl space-y-1">
-              <div className="text-xl sm:text-2xl font-black text-emerald-400">99.4%</div>
-              <div className="text-[11px] font-bold text-slate-400">نسبة التسليم الناجح</div>
-            </div>
-
-            <div className="bg-slate-800/60 border border-slate-700/60 backdrop-blur-xs p-4 rounded-2xl space-y-1">
-              <div className="text-xl sm:text-2xl font-black text-amber-400">فوري</div>
-              <div className="text-[11px] font-bold text-slate-400">تحويل كاش COD يومياً</div>
-            </div>
-
-            <div className="bg-slate-800/60 border border-slate-700/60 backdrop-blur-xs p-4 rounded-2xl space-y-1">
-              <div className="text-xl sm:text-2xl font-black text-red-400">24h</div>
-              <div className="text-[11px] font-bold text-slate-400">دعم موظفين مباشر</div>
-            </div>
-          </div>
-
-          {/* Value Bullet Points */}
-          <div className="space-y-2.5 pt-2">
-            <div className="flex items-center gap-2 text-xs font-extrabold text-slate-200">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              ربط مباشر بقاعدة بيانات Supabase Auth
-            </div>
-            <div className="flex items-center gap-2 text-xs font-extrabold text-slate-200">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              جلسات آمنة ومشفرة للمستخدمين
-            </div>
-            <div className="flex items-center gap-2 text-xs font-extrabold text-slate-200">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              فصل أدوار الأدمن والتجار والمناديب
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Trust Badge */}
-        <div className="relative z-10 pt-8 mt-6 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 font-bold">
-          <div className="flex items-center gap-2">
-            <Globe className="w-4 h-4 text-red-500" />
-            <span>خدمة العملاء: 19882</span>
-          </div>
-          <span className="text-emerald-400 font-mono">Supabase Auth: Active 🟢</span>
-        </div>
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isSubmitting || defenseStatus.isLocked}
+              className="w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-extrabold text-sm py-3.5 px-6 rounded-2xl shadow-lg shadow-red-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-2"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  جاري تسجيل الدخول...
+                </span>
+              ) : defenseStatus.isLocked ? (
+                <span className="flex items-center gap-2 text-white">
+                  <ShieldAlert className="w-4 h-4" />
+                  المحاولة محظورة مؤقتاً ({defenseStatus.remainingSeconds} ثانية)
+                </span>
+              ) : (
+                <>
+                  <span>{isSignUpMode ? 'تسجيل حساب جديد' : 'تسجيل الدخول'}</span>
+                  <ArrowLeft className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+        )}
       </div>
 
       {/* Forgot Password Modal */}
@@ -1023,7 +892,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
                 <KeyRound className="w-5 h-5 text-red-600" />
-                استعادة كلمة المرور عبر Supabase
+                استعادة كلمة المرور
               </h3>
               <button
                 onClick={() => {
@@ -1041,7 +910,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
                 <h4 className="font-extrabold text-sm text-emerald-900">تم إرسال رابط إعادة التعيين</h4>
                 <p className="text-xs text-emerald-700">
-                  يرجى مراجعة بريدك الإلكتروني لاتمام عملية تغيير كلمة المرور عبر Supabase.
+                  يرجى مراجعة بريدك الإلكتروني لاتمام عملية تغيير كلمة المرور.
                 </p>
                 <button
                   onClick={() => {
@@ -1056,7 +925,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             ) : (
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <p className="text-xs text-slate-500">
-                  أدخل بريدك الإلكتروني المسجل في Supabase لتلقي رابط إعـادة ضبط كلمة المرور.
+                  أدخل بريدك الإلكتروني لتلقي رابط إعـادة ضبط كلمة المرور.
                 </p>
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700">البريد الإلكتروني</label>

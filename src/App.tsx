@@ -2694,28 +2694,20 @@ export default function App() {
         onRestoreState={handleRestoreState}
       />
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#091524] overflow-hidden border border-slate-750 shadow-2xs flex items-center justify-center p-0.5 shrink-0">
-              <img
-                src={droplineLogoImg}
-                alt="DropLine Logo"
-                className="w-full h-full object-cover rounded-md"
-                referrerPolicy="no-referrer"
-              />
+      {/* Footer - Only shown when logged in and without image or hotline */}
+      {currentUser && (
+        <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500 mt-auto">
+          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-slate-900">Drop<span className="text-red-600">Line</span></span>
+              <span>© 2026 جميع الحقوق محفوظة لمنصة DropLine للشحن واللوجستيات</span>
             </div>
-            <span className="font-black text-slate-900">Drop<span className="text-red-600">Line</span></span>
-            <span>© 2026 جميع الحقوق محفوظة لمنصة DropLine للشحن واللوجستيات</span>
+            <div className="flex items-center gap-2 text-slate-400 font-medium">
+              <span>نظام إدارة الشحنات والعمليات</span>
+            </div>
           </div>
-          <div className="flex items-center gap-4 text-slate-400 font-medium">
-            <span>الخط الساخن: 19001</span>
-            <span>•</span>
-            <span>dropline.eg</span>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

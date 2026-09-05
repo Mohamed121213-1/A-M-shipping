@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Shipment, GovernorateRate, AddressInfo, PackageDetails, DeliveryType, HubInfo, AppUserRole, UserSession } from '../types';
 import { EGYPT_GOVERNORATES, BOSTA_HUBS } from '../data/mockData';
@@ -89,6 +89,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 
   const handleSelectMerchant = (merchantId: string) => {
     setSelectedMerchantId(merchantId);
+    setCustomShippingFee(null); // Reset manual override to adapt to newly selected merchant's custom rate
     const found = registeredMerchants.find((m) => m.id === merchantId);
     if (found) {
       setMerchantStoreName(found.storeName || `متجر ${found.name}`);
@@ -104,30 +105,38 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   const [aiImageMimeType, setAiImageMimeType] = useState<string>('image/jpeg');
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [aiSuccessMessage, setAiSuccessMessage] = useState('');
+  const [isImageDragOver, setIsImageDragOver] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('يرجى اختيار صورة صحيحة (JPG, PNG, WEBP, إلخ)');
       return;
     }
 
-    setAiImageMimeType(file.type || 'image/jpeg');
+    const mime = file.type || 'image/jpeg';
+    setAiImageMimeType(mime);
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
       setAiImagePreview(result);
       setAiImageBase64(result);
+      // Automatically trigger smart extraction immediately
+      handleAiParse(result, mime, aiRawText);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    handleImageFile(file);
   };
 
   const handleRemoveImage = () => {
     setAiImagePreview(null);
     setAiImageBase64(null);
+    setAiSuccessMessage('');
     if (imageInputRef.current) {
       imageInputRef.current.value = '';
     }
@@ -164,12 +173,50 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 
   const governoratesList = governorates && governorates.length > 0 ? governorates : EGYPT_GOVERNORATES;
 
+  // Currently Selected Merchant Object
+  const currentSelectedMerchant = useMemo(() => {
+    if (currentUser && currentUser.role === 'merchant') {
+      return currentUser;
+    }
+    return registeredMerchants.find((m) => m.id === selectedMerchantId) || registeredMerchants[0] || null;
+  }, [currentUser, registeredMerchants, selectedMerchantId]);
+
   // Selected Governorate Object
   const selectedGov = governoratesList.find((g) => g.code === governorateCode) || governoratesList[0];
 
+  // Check if current merchant has custom shipping rate for this governorate
+  const merchantCustomRate = useMemo(() => {
+    if (!currentSelectedMerchant) return null;
+
+    // 1. Check custom per-governorate rates first
+    if (
+      currentSelectedMerchant.shippingPricingType === 'governorates' &&
+      currentSelectedMerchant.customGovernorateRates &&
+      currentSelectedMerchant.customGovernorateRates[governorateCode] !== undefined &&
+      currentSelectedMerchant.customGovernorateRates[governorateCode] !== null
+    ) {
+      return Number(currentSelectedMerchant.customGovernorateRates[governorateCode]);
+    }
+
+    // 2. Check unified custom rate
+    if (
+      currentSelectedMerchant.hasCustomShippingRate &&
+      currentSelectedMerchant.customShippingRate !== undefined &&
+      currentSelectedMerchant.customShippingRate !== null &&
+      Number(currentSelectedMerchant.customShippingRate) > 0
+    ) {
+      return Number(currentSelectedMerchant.customShippingRate);
+    }
+
+    return null;
+  }, [currentSelectedMerchant, governorateCode]);
+
+  // Effective Base Shipping Rate
+  const effectiveBaseRate = merchantCustomRate !== null ? merchantCustomRate : selectedGov.baseRate;
+
   // Calculated / Custom Shipping Fee
   const autoShippingFee = Math.round(
-    selectedGov.baseRate + Math.max(0, weightKg - 3) * selectedGov.additionalKgRate + (deliveryType === 'express' ? 25 : 0)
+    effectiveBaseRate + Math.max(0, weightKg - 3) * selectedGov.additionalKgRate + (deliveryType === 'express' ? 25 : 0)
   );
   const [customShippingFee, setCustomShippingFee] = useState<number | null>(null);
   const calculatedShippingFee = customShippingFee !== null ? customShippingFee : autoShippingFee;
@@ -178,8 +225,12 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   const calculatedNetPayout = Math.max(0, codAmount - calculatedShippingFee);
 
   // AI Address & Image OCR Parsing Handler
-  const handleAiParse = async () => {
-    if (!aiRawText.trim() && !aiImageBase64) return;
+  const handleAiParse = async (overrideImageBase64?: string, overrideMimeType?: string, overrideRawText?: string) => {
+    const targetImage = overrideImageBase64 !== undefined ? overrideImageBase64 : aiImageBase64;
+    const targetMime = overrideMimeType !== undefined ? overrideMimeType : aiImageMimeType;
+    const targetText = overrideRawText !== undefined ? overrideRawText : aiRawText;
+
+    if (!targetText?.trim() && !targetImage) return;
     setIsAiParsing(true);
     setAiSuccessMessage('');
 
@@ -188,48 +239,56 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rawText: aiRawText,
-          imageBase64: aiImageBase64,
-          mimeType: aiImageMimeType,
+          rawText: targetText,
+          imageBase64: targetImage,
+          mimeType: targetMime,
         }),
       });
 
-      if (!res.ok) throw new Error('فشل في الاتصال بخدمة التحليل الذكي وتفريغ البيانات');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'فشل في الاتصال بخدمة التحليل الذكي وتفريغ البيانات');
+      }
+
       const data = await res.json();
+      let extractedCount = 0;
 
-      if (data.recipientName) setRecipientName(data.recipientName);
-      if (data.phone) setPhone(data.phone);
-      if (data.secondaryPhone) setSecondaryPhone(data.secondaryPhone);
-      if (data.city) setCity(data.city);
-      if (data.district) setDistrict(data.district);
-      if (data.streetAddress) setStreetAddress(data.streetAddress);
-      if (data.buildingNo) setBuildingNo(data.buildingNo);
-      if (data.apartmentNo) setApartmentNo(data.apartmentNo);
-      if (data.deliveryNotes) setNotes(data.deliveryNotes);
+      if (data.recipientName) { setRecipientName(data.recipientName); extractedCount++; }
+      if (data.phone) { setPhone(data.phone); extractedCount++; }
+      if (data.secondaryPhone) { setSecondaryPhone(data.secondaryPhone); extractedCount++; }
+      if (data.city) { setCity(data.city); extractedCount++; }
+      if (data.district) { setDistrict(data.district); extractedCount++; }
+      if (data.streetAddress) { setStreetAddress(data.streetAddress); extractedCount++; }
+      if (data.buildingNo) { setBuildingNo(data.buildingNo); }
+      if (data.apartmentNo) { setApartmentNo(data.apartmentNo); }
+      if (data.deliveryNotes) { setNotes(data.deliveryNotes); }
 
-      if (data.description) setDescription(data.description);
-      if (typeof data.codAmount === 'number' && data.codAmount > 0) setCodAmount(data.codAmount);
-      if (typeof data.itemsCount === 'number' && data.itemsCount > 0) setItemsCount(data.itemsCount);
+      if (data.description) { setDescription(data.description); }
+      if (typeof data.codAmount === 'number' && data.codAmount > 0) { setCodAmount(data.codAmount); extractedCount++; }
+      if (typeof data.itemsCount === 'number' && data.itemsCount > 0) { setItemsCount(data.itemsCount); }
 
       // Match governorate
       if (data.governorate || data.city) {
-        const govTerm = data.governorate || '';
-        const cityTerm = data.city || '';
+        const govTerm = (data.governorate || '').trim();
+        const cityTerm = (data.city || '').trim();
         const matchedGov = governoratesList.find((g) =>
           (govTerm && (g.nameAr.includes(govTerm) || govTerm.includes(g.nameAr))) ||
           (cityTerm && g.cities?.some((c) => c.toLowerCase().includes(cityTerm.toLowerCase()) || cityTerm.toLowerCase().includes(c.toLowerCase())))
         );
-        if (matchedGov) setGovernorateCode(matchedGov.code);
+        if (matchedGov) {
+          setGovernorateCode(matchedGov.code);
+          extractedCount++;
+        }
       }
 
       setAiSuccessMessage(
-        aiImageBase64
-          ? '✨ تم تفريغ البيانات واستخراج العنوان بنجاح من الصورة بواسطة الذكاء الاصطناعي!'
-          : '✨ تم استخراج وتعبئة بيانات العنوان بنجاح بواسطة الذكاء الاصطناعي!'
+        extractedCount > 0
+          ? '✨ تم استخراج وتعبئة بيانات الشحنة من الصورة بنجاح!'
+          : '✨ تم استخراج البيانات، يرجى مراجعة الحقول وتأكيدها.'
       );
     } catch (err: any) {
-      console.error(err);
-      setAiSuccessMessage('تعذر تفريغ البيانات تلقائياً، يرجى ملء الحقول يدوياً');
+      console.warn('AI Parsing notice:', err.message || err);
+      setAiSuccessMessage('تم فحص الصورة، يمكنك إكمال أو تعديل أي حقول يدوياً');
     } finally {
       setIsAiParsing(false);
     }
@@ -517,8 +576,21 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 
     const batchToCreate: Omit<Shipment, 'id' | 'trackingNumber' | 'createdAt' | 'updatedAt' | 'timeline'>[] = validRows.map((row) => {
       const govObj = EGYPT_GOVERNORATES.find((g) => g.code === row.governorateCode) || EGYPT_GOVERNORATES[0];
+      
+      // Determine merchant custom rate for this governorate
+      const rowMerchCustomRate = currentSelectedMerchant?.shippingPricingType === 'governorates' &&
+        currentSelectedMerchant?.customGovernorateRates &&
+        currentSelectedMerchant.customGovernorateRates[govObj.code] !== undefined &&
+        currentSelectedMerchant.customGovernorateRates[govObj.code] !== null
+          ? Number(currentSelectedMerchant.customGovernorateRates[govObj.code])
+          : (currentSelectedMerchant?.hasCustomShippingRate && currentSelectedMerchant?.customShippingRate !== undefined && currentSelectedMerchant?.customShippingRate !== null && Number(currentSelectedMerchant.customShippingRate) > 0
+              ? Number(currentSelectedMerchant.customShippingRate)
+              : null);
+
+      const effectiveRowBaseRate = rowMerchCustomRate !== null ? rowMerchCustomRate : govObj.baseRate;
+
       const autoShippingFee = Math.round(
-        govObj.baseRate + Math.max(0, row.weightKg - 3) * govObj.additionalKgRate + (row.deliveryType === 'express' ? 25 : 0)
+        effectiveRowBaseRate + Math.max(0, row.weightKg - 3) * govObj.additionalKgRate + (row.deliveryType === 'express' ? 25 : 0)
       );
       const shippingFee = row.customShippingFee !== undefined && row.customShippingFee !== null ? row.customShippingFee : autoShippingFee;
       const codFee = 0;
@@ -584,7 +656,17 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   const totalStagedPieces = stagedRows.reduce((sum, r) => sum + (r.itemsCount || 1), 0);
   const totalStagedShippingFees = stagedRows.reduce((sum, r) => {
     const govObj = governoratesList.find((g) => g.code === r.governorateCode) || governoratesList[0];
-    const autoFee = Math.round(govObj.baseRate + Math.max(0, r.weightKg - 3) * govObj.additionalKgRate);
+    const rowMerchCustomRate = currentSelectedMerchant?.shippingPricingType === 'governorates' &&
+      currentSelectedMerchant?.customGovernorateRates &&
+      currentSelectedMerchant.customGovernorateRates[govObj.code] !== undefined &&
+      currentSelectedMerchant.customGovernorateRates[govObj.code] !== null
+        ? Number(currentSelectedMerchant.customGovernorateRates[govObj.code])
+        : (currentSelectedMerchant?.hasCustomShippingRate && currentSelectedMerchant?.customShippingRate !== undefined && currentSelectedMerchant?.customShippingRate !== null && Number(currentSelectedMerchant.customShippingRate) > 0
+            ? Number(currentSelectedMerchant.customShippingRate)
+            : null);
+
+    const baseRate = rowMerchCustomRate !== null ? rowMerchCustomRate : govObj.baseRate;
+    const autoFee = Math.round(baseRate + Math.max(0, r.weightKg - 3) * govObj.additionalKgRate + (r.deliveryType === 'express' ? 25 : 0));
     const rowFee = r.customShippingFee !== undefined && r.customShippingFee !== null ? r.customShippingFee : autoFee;
     return sum + rowFee;
   }, 0);
@@ -657,30 +739,30 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         {activeTab === 'single' && (
           <form onSubmit={handleSingleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1">
             {/* AI Smart Address & Image OCR Parser Section */}
-            <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-indigo-200 rounded-xl p-4 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 font-extrabold text-indigo-950 text-xs sm:text-sm">
-                  <Sparkles className="w-4 h-4 text-indigo-600 animate-bounce" />
-                  المحلل الذكي وتفريغ البيانات من الصورة والنص (Gemini AI Vision & OCR)
-                </span>
-                <span className="text-[11px] text-indigo-700 font-bold bg-indigo-100/80 px-2 py-0.5 rounded-full">
-                  استخراج فوري للعنوان، الهاتف، والمبلغ
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 space-y-4 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-7 h-7 rounded-lg bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                    <Sparkles className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">تفريغ بيانات الشحنة تلقائياً (اختياري)</h4>
+                    <p className="text-[11px] text-slate-500">ارفع صورة بوليصة/سكرين شوت أو الصق نص رسالة العميل لملء البيانات بضغطة زر</p>
+                  </div>
+                </div>
+                <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-full self-start sm:self-auto">
+                  توفير الوقت والجهد
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-start">
-                <div className="md:col-span-8 space-y-2">
-                  <textarea
-                    value={aiRawText}
-                    onChange={(e) => setAiRawText(e.target.value)}
-                    rows={2}
-                    placeholder="الصق نص الرسالة أو عنوان الواتساب... مثال: أحمد سامي 01012345678 شارع التحرير عمارة 12 شقة 4 الدقي الجيزة (مبلغ التحصيل 1400 ج.م)"
-                    className="w-full text-xs p-2.5 bg-white border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500/30 focus:outline-none"
-                  />
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Option 1: Image Upload (File / Drag & Drop) */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                    <ImageIcon className="w-3.5 h-3.5 text-red-600" />
+                    خيار 1: صورة البوليصة أو المحادثة
+                  </span>
 
-                {/* Image Upload / Preview Controls */}
-                <div className="md:col-span-4 flex flex-col justify-between gap-2 h-full">
                   <input
                     type="file"
                     ref={imageInputRef}
@@ -690,63 +772,117 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                   />
 
                   {aiImagePreview ? (
-                    <div className="relative group bg-white border border-indigo-200 rounded-lg p-1.5 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="bg-white border border-slate-300 rounded-xl p-3 flex items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-center gap-2.5 overflow-hidden">
                         <img
                           src={aiImagePreview}
                           alt="صورة البوليصة"
-                          className="w-10 h-10 object-cover rounded-md border border-slate-200 shrink-0"
+                          className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
                         />
-                        <div className="text-[11px] font-bold text-slate-700 truncate">
-                          صورة مرفقة للذكاء الاصطناعي
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900 truncate">تم اختيار الصورة بنجاح</p>
+                          <p className="text-[10px] text-slate-500">جاهزة للقراءة والاستخراج</p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleRemoveImage}
-                        className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded-lg transition-colors shrink-0"
-                        title="إزالة الصورة"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleAiParse(aiImageBase64 || undefined, aiImageMimeType, aiRawText)}
+                          disabled={isAiParsing}
+                          className="text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          إعادة الاستخراج
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveImage}
+                          className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                          title="إزالة الصورة"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <button
-                      type="button"
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsImageDragOver(true);
+                      }}
+                      onDragLeave={() => setIsImageDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsImageDragOver(false);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) handleImageFile(file);
+                      }}
                       onClick={() => imageInputRef.current?.click()}
-                      className="w-full bg-white hover:bg-indigo-50 text-indigo-700 border border-dashed border-indigo-300 font-bold text-xs p-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                      className={`border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1 ${
+                        isImageDragOver
+                          ? 'border-red-500 bg-red-50/60'
+                          : 'border-slate-300 bg-white hover:border-red-400 hover:bg-slate-50/50'
+                      }`}
                     >
-                      <ImageIcon className="w-4 h-4 text-indigo-600" />
-                      تفريغ بيانات من صورة / بوليصة
-                    </button>
+                      <ImageIcon className="w-5 h-5 text-red-600" />
+                      <span className="text-xs font-bold text-slate-800">
+                        اضغط لرفع صورة أو اسحبها هنا
+                      </span>
+                      <span className="text-[10px] text-slate-400">يدعم JPG و PNG وسكرين شوت الواتساب</span>
+                    </div>
                   )}
+                </div>
 
-                  <button
-                    type="button"
-                    onClick={handleAiParse}
-                    disabled={isAiParsing || (!aiRawText.trim() && !aiImageBase64)}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold text-xs py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-xs"
-                  >
-                    {isAiParsing ? (
-                      <>
-                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                        جاري تفريغ البيانات...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        تفريغ بالذكاء الاصطناعي
-                      </>
+                {/* Option 2: Raw Text Paste */}
+                <div className="space-y-1.5 flex flex-col">
+                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                    <FileText className="w-3.5 h-3.5 text-red-600" />
+                    خيار 2: لصق نص الرسالة أو العنوان
+                  </span>
+                  <div className="relative flex-1 flex flex-col">
+                    <textarea
+                      value={aiRawText}
+                      onChange={(e) => setAiRawText(e.target.value)}
+                      rows={2}
+                      placeholder="مثال: أحمد سامي 01012345678 شارع التحرير الدقي الجيزة (مبلغ التحصيل 1200 ج)"
+                      className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none flex-1 resize-none"
+                    />
+                    {aiRawText.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => handleAiParse(aiImageBase64 || undefined, aiImageMimeType, aiRawText)}
+                        disabled={isAiParsing}
+                        className="mt-1.5 self-end bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Sparkles className="w-3 h-3 text-yellow-400" />
+                        استخراج من النص
+                      </button>
                     )}
-                  </button>
+                  </div>
                 </div>
               </div>
 
-              {aiSuccessMessage && (
-                <p className="text-xs text-indigo-800 font-bold mt-1 flex items-center gap-1.5 bg-indigo-100/60 p-2 rounded-lg border border-indigo-200">
-                  <CheckCircle className="w-4 h-4 text-indigo-600 shrink-0" />
-                  {aiSuccessMessage}
-                </p>
+              {/* Status or Progress Feedback */}
+              {isAiParsing && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2.5 text-xs font-bold text-red-800">
+                  <span className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin shrink-0"></span>
+                  <span>جاري تحليل وقراءة بيانات الشحنة واستخراج الاسم والهاتف والعنوان تلقائياً...</span>
+                </div>
+              )}
+
+              {aiSuccessMessage && !isAiParsing && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs font-bold text-emerald-800">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{aiSuccessMessage}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAiSuccessMessage('')}
+                    className="text-emerald-500 hover:text-emerald-700 text-xs px-2"
+                  >
+                    إغلاق
+                  </button>
+                </div>
               )}
             </div>
 
@@ -772,7 +908,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                   >
                     {registeredMerchants.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.storeName || `متجر ${m.name}`} - ({m.name} | {m.phone})
+                        {m.storeName || `متجر ${m.name}`} - ({m.name} | {m.phone}) {m.hasCustomShippingRate && m.customShippingRate ? `[سعر شحن خاص: ${m.customShippingRate} ج.م]` : ''}
                       </option>
                     ))}
                     <option value="custom">-- إدخال اسم متجر يدوي جديد --</option>
@@ -782,6 +918,30 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                 <div className="text-xs font-bold text-slate-800 bg-red-50 border border-red-200 p-2.5 rounded-lg flex items-center gap-2">
                   <Store className="w-4 h-4 text-red-600 shrink-0" />
                   <span>الشحنة سيتم تسجيلها باسم متجرك: <strong className="text-red-700">{merchantStoreName}</strong> ({merchantPhone})</span>
+                </div>
+              ) : null}
+
+              {/* Custom Shipping Rate Indicator for Selected Merchant */}
+              {merchantCustomRate !== null ? (
+                <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 text-emerald-950 font-bold">
+                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      سعر الشحن المخصص للتاجر ({currentSelectedMerchant?.storeName || currentSelectedMerchant?.name}):{' '}
+                      <strong className="text-emerald-700 font-black text-sm">{merchantCustomRate} ج.م</strong>{' '}
+                      {currentSelectedMerchant?.shippingPricingType === 'governorates' ? '(تسعيرة المحافظة)' : '(سعر موحد متفق عليه)'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] bg-emerald-200/70 text-emerald-900 font-black px-2 py-0.5 rounded-md">
+                    مطبق تلقائياً
+                  </span>
+                </div>
+              ) : currentSelectedMerchant?.role === 'merchant' ? (
+                <div className="bg-slate-100 border border-slate-200 p-2 rounded-lg flex items-center justify-between text-[11px] text-slate-600">
+                  <span>سعر الشحن لهذا التاجر: <strong>حسب تسعيرة المحافظات العامة للنظام ({selectedGov.baseRate} ج.م)</strong></span>
+                  {currentRole === 'admin' && (
+                    <span className="text-[10px] text-red-600 font-bold">يمكنك تخصيص سعر ثابت للتاجر من لوحة الأدمن</span>
+                  )}
                 </div>
               ) : null}
 
@@ -821,48 +981,53 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
               </div>
             </div>
 
-            {/* Recipient Information */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-2">
-                <User className="w-4 h-4 text-red-600" />
-                بيانات العميل المستلم
-              </h4>
+            {/* STEP 1: Recipient Information */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
+              <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
+                <span className="w-6 h-6 rounded-full bg-red-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                  1
+                </span>
+                <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <User className="w-4 h-4 text-red-600" />
+                  بيانات العميل المستلم
+                </h4>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">اسم المستلم الثلاثي *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">اسم العميل (المستلم) *</label>
                   <input
                     type="text"
                     required
                     value={recipientName}
                     onChange={(e) => setRecipientName(e.target.value)}
-                    placeholder="محمد أحمد علي"
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-red-500/20"
+                    placeholder="مثال: أحمد محمد محمود"
+                    className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف الرئيسي *</label>
                   <input
-                    type="text"
+                    type="tel"
                     required
                     dir="ltr"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="01012345678"
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-red-500/20"
+                    className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم هاتف إضافي (اختياري)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم هاتف بديل (اختياري)</label>
                   <input
-                    type="text"
+                    type="tel"
                     dir="ltr"
                     value={secondaryPhone}
                     onChange={(e) => setSecondaryPhone(e.target.value)}
-                    placeholder="01198765432"
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-red-500/20"
+                    placeholder="01123456789"
+                    className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
                   />
                 </div>
 
@@ -877,267 +1042,264 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                         setCity(newGov.cities[0]);
                       }
                     }}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-red-500/20"
+                    className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-extrabold text-slate-900 focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all cursor-pointer"
                   >
                     {governoratesList.map((g) => (
                       <option key={g.code} value={g.code}>
-                        {g.nameAr} ({g.baseRate} ج.م)
+                        {g.nameAr} (سعر الشحن: {g.baseRate} ج.م)
                       </option>
                     ))}
                   </select>
                 </div>
 
+                <div className="sm:col-span-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700">المدينة / المركز / المنطقة *</label>
+                    <span className="text-[11px] text-slate-400">اختر من المقترحات السريعة أو اكتب مباشرة</span>
+                  </div>
+                  <input
+                    type="text"
+                    list="city-suggestions"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder={selectedGov.cities && selectedGov.cities.length > 0 ? `مثال: ${selectedGov.cities.slice(0, 3).join('، ')}` : "اكتب اسم المدينة أو المركز"}
+                    className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
+                  />
+                  <datalist id="city-suggestions">
+                    {selectedGov.cities?.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+
+                  {/* Auto-suggested Centers Chips */}
+                  {selectedGov.cities && selectedGov.cities.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[10px] font-bold text-slate-400">شائع في {selectedGov.nameAr}:</span>
+                      {selectedGov.cities.slice(0, 8).map((cityName) => (
+                        <button
+                          key={cityName}
+                          type="button"
+                          onClick={() => setCity(cityName)}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                            city === cityName
+                              ? 'bg-red-600 text-white shadow-xs'
+                              : 'bg-slate-100 text-slate-700 hover:bg-red-50 hover:text-red-700'
+                          }`}
+                        >
+                          {cityName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                    <span>المدينة / المركز *</span>
-                    <span className="text-[11px] text-red-600 font-extrabold flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 text-red-500" />
-                      عرض تلقائي للمراكز والمدن (التجمع، أكتوبر...)
-                    </span>
-                  </label>
-                  <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">العنوان بالتفصيل والعلامة المميزة *</label>
+                  <input
+                    type="text"
+                    required
+                    value={streetAddress}
+                    onChange={(e) => setStreetAddress(e.target.value)}
+                    placeholder="اسم الشارع، رقم العمارة، بجوار علامة مميزة (مسجد، مدرسة، صيدلية)"
+                    className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:col-span-2">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">رقم المبنى / العمارة</label>
                     <input
                       type="text"
-                      list="city-suggestions"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder={selectedGov.cities && selectedGov.cities.length > 0 ? `اختر من مدن ${selectedGov.nameAr} أو اكتب...` : "اسم المدينة / المركز"}
-                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-red-500/20 font-bold text-slate-900"
+                      value={buildingNo}
+                      onChange={(e) => setBuildingNo(e.target.value)}
+                      placeholder="15"
+                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
                     />
-                    <datalist id="city-suggestions">
-                      {selectedGov.cities?.map((c) => (
-                        <option key={c} value={c} />
-                      ))}
-                    </datalist>
-
-                    {/* Auto-suggested Centers & Cities Chips */}
-                    {selectedGov.cities && selectedGov.cities.length > 0 && (
-                      <div className="bg-red-50/60 border border-red-200/80 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
-                        <div className="flex items-center justify-between text-[11px] font-extrabold text-red-950">
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5 text-red-600" />
-                            المراكز والمدن المقترحة داخل {selectedGov.nameAr} (اضغط للاختيار):
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {selectedGov.cities.map((cityName) => (
-                            <button
-                              key={cityName}
-                              type="button"
-                              onClick={() => setCity(cityName)}
-                              className={`text-[11px] px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                                city === cityName
-                                  ? 'bg-red-600 text-white shadow-xs scale-105'
-                                  : 'bg-white text-slate-800 border border-red-200 hover:bg-red-100 hover:border-red-300'
-                              }`}
-                            >
-                              {cityName}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الحي / المنطقة</label>
-                  <input
-                    type="text"
-                    value={district}
-                    onChange={(e) => setDistrict(e.target.value)}
-                    placeholder="مثال: الحي السابع / شارع مصدق"
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white"
-                  />
-                </div>
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">رقم الشقة / الدور</label>
+                    <input
+                      type="text"
+                      value={apartmentNo}
+                      onChange={(e) => setApartmentNo(e.target.value)}
+                      placeholder="شقة 3 الدور 2"
+                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">العنوان التفصيلي والعلامة المميزة *</label>
-                <input
-                  type="text"
-                  required
-                  value={streetAddress}
-                  onChange={(e) => setStreetAddress(e.target.value)}
-                  placeholder="اسم الشارع، رقم العمارة، بجوار المسجد أو المستشفى"
-                  className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم المبنى</label>
-                  <input
-                    type="text"
-                    value={buildingNo}
-                    onChange={(e) => setBuildingNo(e.target.value)}
-                    placeholder="15"
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم الشقة/الدور</label>
-                  <input
-                    type="text"
-                    value={apartmentNo}
-                    onChange={(e) => setApartmentNo(e.target.value)}
-                    placeholder="شقة 4 الدور 3"
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
-                  />
-                </div>
-
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">تعليمات التسليم</label>
-                  <input
-                    type="text"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="الاتصال قبل الوصول..."
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
-                  />
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-xs font-bold text-slate-600 mb-1">ملاحظات للمندوب</label>
+                    <input
+                      type="text"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="الاتصال قبل الوصول..."
+                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Package Details & Type */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-2">
-                <Package className="w-4 h-4 text-red-600" />
-                مواصفات الطرد والشحن
-              </h4>
+            {/* STEP 2: Package Details & Pricing */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
+              <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
+                <span className="w-6 h-6 rounded-full bg-red-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                  2
+                </span>
+                <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <Package className="w-4 h-4 text-red-600" />
+                  مواصفات الطرد ومبلغ التحصيل
+                </h4>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">وصف الطرد / المحتويات</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">وصف محتويات الطرد</label>
                   <input
                     type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="فستان زارا + حذاء مقاس 38"
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
+                    placeholder="مثال: عباية سوداء مقاس XL + طرحة"
+                    className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
                   />
                 </div>
 
+                {/* PROMINENT COD AMOUNT INPUT */}
+                <div className="bg-emerald-50/70 border-2 border-emerald-300 rounded-2xl p-4 sm:col-span-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                    <div>
+                      <label className="block text-xs font-black text-emerald-950">
+                        مبلغ التحصيل المطلوب من العميل نقداً (COD) *
+                      </label>
+                      <p className="text-[11px] text-emerald-700">المبلغ الإجمالي شاملاً ثمن المنتج ومصاريف الشحن المتفق عليها</p>
+                    </div>
+                    <span className="text-xs font-extrabold text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-emerald-200 self-start sm:self-auto">
+                      بالجنيه المصري (EGP)
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      required
+                      min={0}
+                      step="any"
+                      value={codAmount === 0 ? '' : codAmount}
+                      onChange={(e) => setCodAmount(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      className="w-full text-2xl font-black text-emerald-900 bg-white border border-emerald-300 rounded-xl p-3 pl-16 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-600 outline-none"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-extrabold text-emerald-700 pointer-events-none">
+                      ج.م
+                    </span>
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">نوع الخدمة</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">نوع الشحنة والخدمة</label>
                   <select
                     value={deliveryType}
                     onChange={(e) => setDeliveryType(e.target.value as DeliveryType)}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-bold"
+                    className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white outline-none"
                   >
-                    <option value="standard">عادي (Standard) - {selectedGov.estDays}</option>
-                    <option value="express">سريع (Express) - إضافة 25 ج.م</option>
-                    <option value="exchange">طلب استبدال (Exchange)</option>
-                    <option value="return">طلب إرجاع (Return)</option>
+                    <option value="standard">شحن عادي ({selectedGov.estDays})</option>
+                    <option value="express">شحن سريع VIP (+25 ج.م)</option>
+                    <option value="exchange">طلب استبدال واسترجاع قديم</option>
+                    <option value="return">طلب مرتجع فقط</option>
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">عدد القطع داخل الطرد</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={itemsCount}
-                    onChange={(e) => setItemsCount(parseInt(e.target.value) || 1)}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الوزن التقديري (كجم)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min={0.1}
-                    value={weightKg}
-                    onChange={(e) => setWeightKg(parseFloat(e.target.value) || 1)}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
-                  />
-                </div>
-
-                <div className="flex flex-col justify-end gap-2">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                <div className="flex items-center gap-4 pt-4">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800 bg-slate-50 hover:bg-slate-100 p-2.5 rounded-xl border border-slate-200 transition-colors flex-1">
                     <input
                       type="checkbox"
                       checked={allowOpening}
                       onChange={(e) => setAllowOpening(e.target.checked)}
                       className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500"
                     />
-                    السماح بفتح المعاينة للعميل
+                    <span>السماح بفتح المعاينة</span>
                   </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800 bg-slate-50 hover:bg-slate-100 p-2.5 rounded-xl border border-slate-200 transition-colors flex-1">
                     <input
                       type="checkbox"
                       checked={isFragile}
                       onChange={(e) => setIsFragile(e.target.checked)}
                       className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500"
                     />
-                    طرد قابل للكسر / حساس
+                    <span>طرد حساس / قابل للكسر</span>
                   </label>
                 </div>
               </div>
             </div>
 
-            {/* Financials & Rate Calculation Preview */}
-            <div className="bg-slate-900 text-white p-4 rounded-xl space-y-3">
-              <h4 className="text-xs font-bold text-slate-300 flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="flex items-center gap-1.5">
-                  <DollarSign className="w-4 h-4 text-emerald-400" />
-                  حاسبة التحصيل والمستحقات المالية
-                </span>
-                <span className="text-[11px] text-slate-400">حساب آلي بنظام بوسطة</span>
-              </h4>
+            {/* STEP 3: Financial Summary & Confirmation */}
+            <div className="bg-slate-900 text-white p-5 rounded-2xl space-y-4 shadow-md">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 font-black text-xs flex items-center justify-center shrink-0">
+                    3
+                  </span>
+                  <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-emerald-400" />
+                    الملخص المالي وصافي المستحقات
+                  </h4>
+                </div>
+                <span className="text-[11px] text-slate-400">حساب فوري وتلقائي</span>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[11px] text-slate-300 mb-1">المبلغ المحصل (COD) *</label>
-                  <input
-                    type="number"
-                    value={codAmount}
-                    onChange={(e) => setCodAmount(parseFloat(e.target.value) || 0)}
-                    className="w-full text-sm font-extrabold text-slate-900 p-2 bg-white rounded-lg focus:ring-2 focus:ring-emerald-400"
-                  />
+                <div className="bg-slate-800/80 border border-slate-700/80 p-3 rounded-xl">
+                  <span className="text-[11px] text-slate-400 block mb-1">المبلغ المحصل من العميل</span>
+                  <span className="text-lg font-black text-white">{codAmount.toLocaleString()} ج.م</span>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] text-slate-300 mb-1">قيمة الشحن (ج.م) *</label>
-                  <input
-                    type="number"
-                    value={calculatedShippingFee}
-                    readOnly={currentRole === 'merchant'}
-                    onChange={(e) => setCustomShippingFee(parseFloat(e.target.value) || 0)}
-                    className={`w-full text-sm font-extrabold text-slate-900 p-2 rounded-lg ${
-                      currentRole === 'merchant'
-                        ? 'bg-slate-200 text-slate-800 cursor-not-allowed'
-                        : 'bg-white focus:ring-2 focus:ring-red-400'
-                    }`}
-                  />
+                <div className="bg-slate-800/80 border border-slate-700/80 p-3 rounded-xl">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] text-slate-400">تكلفة الشحن لـ {selectedGov.nameAr}</span>
+                    {merchantCustomRate !== null ? (
+                      <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40 flex items-center gap-1">
+                        ✨ سعر خاص للتاجر
+                      </span>
+                    ) : currentRole === 'admin' ? (
+                      <span className="text-[10px] text-red-400 font-bold">(قابل للتعديل للمدير)</span>
+                    ) : null}
+                  </div>
+                  {currentRole === 'admin' ? (
+                    <input
+                      type="number"
+                      value={calculatedShippingFee}
+                      onChange={(e) => setCustomShippingFee(parseFloat(e.target.value) || 0)}
+                      className="w-full text-base font-black text-slate-900 p-1.5 bg-white rounded-lg"
+                    />
+                  ) : (
+                    <span className="text-lg font-black text-red-400">{calculatedShippingFee.toLocaleString()} ج.م</span>
+                  )}
                 </div>
 
-                <div className="bg-emerald-950/60 border border-emerald-500/40 p-2.5 rounded-lg flex flex-col justify-center">
-                  <span className="text-[10px] text-emerald-300 block font-bold">رصيد المستحقات للتاجر (المبلغ المحصل - قيمة الشحن):</span>
-                  <span className="text-base font-black text-emerald-400">{calculatedNetPayout.toLocaleString()} ج.م</span>
+                <div className="bg-emerald-950/80 border border-emerald-500/50 p-3 rounded-xl flex flex-col justify-center">
+                  <span className="text-[11px] text-emerald-300 block mb-1 font-bold">صافي المستحق لك (أرباحك):</span>
+                  <span className="text-xl font-black text-emerald-400">{calculatedNetPayout.toLocaleString()} ج.م</span>
                 </div>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+            {/* Form Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 إلغاء
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-700 active:bg-red-800 shadow-md transition-all flex items-center gap-2"
+                className="px-8 py-3 rounded-xl text-xs sm:text-sm font-extrabold text-white bg-red-600 hover:bg-red-700 active:bg-red-800 shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer"
               >
-                <Package className="w-4 h-4" />
-                إنشاء وحفظ بوليصة الشحن
+                <Package className="w-4.5 h-4.5" />
+                تأكيد وإنشاء الشحنة الآن
               </button>
             </div>
           </form>

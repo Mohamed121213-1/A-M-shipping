@@ -403,6 +403,39 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
       {activeSubTab === 'merchant' ? (
         <>
+          {/* Merchant Agreed Shipping Rate Notice (if merchant logged in) */}
+          {currentUser && currentUser.role === 'merchant' && (
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 rounded-2xl border border-slate-700 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-600/20 text-red-400 rounded-xl border border-red-500/30">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-white">
+                    تسعيرة الشحن المعتمدة لمتجرك ({currentUser.storeName || currentUser.name})
+                  </h4>
+                  <div className="text-[11px] text-slate-300 font-medium mt-0.5">
+                    {currentUser.hasCustomShippingRate && currentUser.customShippingRate !== undefined ? (
+                      <span>سعر شحن خاص متفق عليه: <strong className="text-emerald-400 font-bold">{currentUser.customShippingRate} ج.م</strong> (موحد لجميع المحافظات)</span>
+                    ) : currentUser.hasCustomShippingRate && currentUser.shippingPricingType === 'governorates' ? (
+                      <span className="text-blue-300 font-bold">تسعيرة شحن خاصة مخصصة لكل محافظة وفق الاتفاق المالي</span>
+                    ) : (
+                      <span>تخضع شحناتك لأسعار الشحن القياسية المعتمدة بالمحافظات</span>
+                    )}
+                    {currentUser.shippingNotes && <p className="text-[10px] text-amber-300 mt-0.5 font-bold">ملاحظات الاتفاق: {currentUser.shippingNotes}</p>}
+                  </div>
+                </div>
+              </div>
+              <span className={`text-[10px] px-3 py-1 rounded-lg font-bold border ${
+                currentUser.hasCustomShippingRate
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                  : 'bg-white/10 text-slate-300 border-white/10'
+              }`}>
+                {currentUser.hasCustomShippingRate ? 'سعر مخصص للتاجر' : 'تسعيرة المحافظات العامة'}
+              </span>
+            </div>
+          )}
+
           {/* Action Bar for Freedom of Control (Admin Only) */}
           {isAdmin && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-amber-50 border border-amber-200 p-3 rounded-2xl gap-3">

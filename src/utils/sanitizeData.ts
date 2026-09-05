@@ -80,6 +80,17 @@ export function sanitizeUsers(users?: UserSession[]): UserSession[] {
       isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : (u.is_confirmed !== undefined ? Boolean(u.is_confirmed) : true),
       avatarUrl: u.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=dc2626&color=ffffff`,
       registeredAt: u.registeredAt || u.created_at || new Date().toISOString(),
+      hasCustomShippingRate: u.hasCustomShippingRate !== undefined 
+        ? Boolean(u.hasCustomShippingRate) 
+        : (u.customShippingRate !== undefined && u.customShippingRate !== null ? true : false),
+      customShippingRate: (u.customShippingRate !== undefined && u.customShippingRate !== null && !isNaN(Number(u.customShippingRate)))
+        ? Number(u.customShippingRate)
+        : (u.custom_shipping_rate !== undefined && u.custom_shipping_rate !== null && !isNaN(Number(u.custom_shipping_rate))
+          ? Number(u.custom_shipping_rate)
+          : undefined),
+      customGovernorateRates: u.customGovernorateRates || u.custom_governorate_rates || undefined,
+      shippingPricingType: u.shippingPricingType || u.shipping_pricing_type || (u.customGovernorateRates ? 'governorates' : 'fixed'),
+      shippingNotes: u.shippingNotes || u.shipping_notes || undefined,
     };
 
     usersById.set(cleanUser.id, cleanUser);

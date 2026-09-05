@@ -2125,29 +2125,47 @@ app.post("/api/parse-address", async (req, res) => {
     }
 
     const ai = getGenAIClient();
-    if (!ai) {
-      // Fallback simple parsing if no API key is available
-      const text = rawText || "";
-      return res.json({
-        recipientName: "عميل بوسطة",
-        phone: text.match(/01[0125]\d{8}/)?.[0] || "",
-        governorate: text.includes("القاهرة") ? "القاهرة" : text.includes("الجيزة") ? "الجيزة" : text.includes("الإسكندرية") ? "الإسكندرية" : "القاهرة",
-        city: "مدينة نصر",
+    
+    // Heuristic regex extractor for fallback
+    const extractFallbackData = (text: string) => {
+      const phoneMatch = text.match(/01[0125]\d{8}/);
+      const secondaryPhoneMatch = text.match(/(?:01[0125]\d{8}.*?)(01[0125]\d{8})/);
+      const codMatch = text.match(/(?:تحصيل|مبلغ|إجمالي|سعر|مطلوب|المطلوب|المبلغ|COD|LE|L\.E|جنيه)?\s*[:=]?\s*(\d{2,5})\s*(?:ج|جنيه|LE|L\.E)?/i);
+      
+      const govs = ["القاهرة", "الجيزة", "الإسكندرية", "الدقهلية", "الغربية", "الشرقية", "المنوفية", "القليوبية", "البحيرة", "كفر الشيخ", "دمياط", "بورسعيد", "الإسماعيلية", "السويس", "الفيوم", "بني سويف", "المنيا", "أسيوط", "سوهاج", "قنا", "الأقصر", "أسوان", "مطروح", "البحر الأحمر", "الوادي الجديد", "شمال سيناء", "جنوب سيناء"];
+      let detectedGov = "";
+      for (const g of govs) {
+        if (text.includes(g)) {
+          detectedGov = g;
+          break;
+        }
+      }
+
+      return {
+        recipientName: text.split(/[\n،,]/)[0]?.trim().slice(0, 30) || "عميل",
+        phone: phoneMatch ? phoneMatch[0] : "",
+        secondaryPhone: secondaryPhoneMatch ? secondaryPhoneMatch[1] : "",
+        governorate: detectedGov || "القاهرة",
+        city: "",
         district: "",
-        streetAddress: text || "عنوان مفرغ من الصورة",
+        streetAddress: text.slice(0, 100) || "عنوان مستخرج من البيانات",
         buildingNo: "",
         apartmentNo: "",
-        deliveryNotes: "تم التحليل اليدوي التلقائي",
-        description: "طرد ملابس واكسسوارات",
-        codAmount: 500,
+        deliveryNotes: "",
+        description: "طرد شحن",
+        codAmount: codMatch ? parseInt(codMatch[1], 10) : 0,
         itemsCount: 1,
-      });
+      };
+    };
+
+    if (!ai) {
+      return res.json(extractFallbackData(rawText || ""));
     }
 
-    const systemPrompt = `أنت مساعد خبير ومتخصص في تفريغ واستخراج بيانات بوليصات الشحن والفواتير ومحادثات الواتساب لشحنات بوسطة و A&M shipping في مصر.
+    const systemPrompt = `أنت مساعد خبير ومتخصص في تفريغ واستخراج بيانات بوليصات الشحن والفواتير ومحادثات الواتساب للشحن في مصر.
 قم باستخراج وتفريغ البيانات التالية بدقة عالية سواء من النص أو من الصورة المرفقة:
 - recipientName: اسم المستلم الكامل.
-- phone: رقم الهاتف المصري الأساسي (يبدأ بـ 010 أو 011 أو 012 أو 015).
+- phone: رقم الهاتف المصري الأساسي (يبدأ بـ 010 أو 011 أو 012 أو 015 من 11 رقم).
 - secondaryPhone: رقم هاتف إضافي إن وجد.
 - governorate: المحافظة المصرية (مثل: القاهرة، الجيزة، الإسكندرية، الدقهلية، الغربية، الشرقية، المنوفية، أسيوط، البحيرة، إلخ).
 - city: المدينة أو المركز (مثل: مدينة نصر، المعادي، التجمع، الدقي، 6 أكتوبر، سموحة، طنطا، المنصورة، إلخ).
@@ -2155,66 +2173,80 @@ app.post("/api/parse-address", async (req, res) => {
 - streetAddress: العنوان التفصيلي للشارع مع العلامات المميزة.
 - buildingNo: رقم المبنى أو العمارة إن وجد.
 - apartmentNo: رقم الشقة أو الدور إن وجد.
-- deliveryNotes: أية تعليمات خاصة للتسليم (مثل الاتصال قبل الوصول، معاينة الطرد، التسليم مساءً).
-- description: وصف الطرد أو المحتويات (مثل: فستان، ساعة، ملابس أطفال، إلكترونيات).
-- codAmount: مبلغ التحصيل المطلوب (الدفع عند الاستلام / COD) بالأرقام فقط إن وجد.
-- itemsCount: عدد القطع داخل الطرد (أرقام فقط).`;
+- deliveryNotes: أية تعليمات خاصة للتسليم.
+- description: وصف المحتويات أو الطرد.
+- codAmount: مبلغ التحصيل المطلوب (الدفع عند الاستلام COD) كرقم فقط إن وجد.
+- itemsCount: عدد القطع داخل الطرد كأرقام فقط.`;
 
     let contentsPayload: any;
     if (imageBase64) {
-      // Clean base64 string if it contains data prefix
       const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-      contentsPayload = {
-        parts: [
-          {
-            inlineData: {
-              data: cleanBase64,
-              mimeType: mimeType || "image/jpeg",
-            },
+      contentsPayload = [
+        {
+          inlineData: {
+            data: cleanBase64,
+            mimeType: mimeType || "image/jpeg",
           },
-          {
-            text: rawText
-              ? `قم بتفريغ بيانات الشحنة والعنوان والمستلم ومبلغ التحصيل من هذه الصورة والنص المرفق: ${rawText}`
-              : "قم بتفريغ وتفريغ كافة بيانات بوليصة الشحن أو الرسالة الموضحة في الصورة بدقة.",
-          },
-        ],
-      };
+        },
+        {
+          text: rawText
+            ? `قم بتفريغ بيانات الشحنة من هذه الصورة والنص: ${rawText}`
+            : "قم بتفريغ بيانات بوليصة الشحن أو الفاتورة الموضحة في الصورة بدقة واستخرج اسم المستلم، رقم الموبايل، المحافظة، العنوان، ومبلغ التحصيل.",
+        },
+      ];
     } else {
       contentsPayload = rawText;
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: contentsPayload,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            recipientName: { type: Type.STRING, description: "اسم المستلم" },
-            phone: { type: Type.STRING, description: "رقم الهاتف الرئيسي" },
-            secondaryPhone: { type: Type.STRING, description: "رقم هاتف إضافي" },
-            governorate: { type: Type.STRING, description: "اسم المحافظة" },
-            city: { type: Type.STRING, description: "المدينة أو المركز" },
-            district: { type: Type.STRING, description: "الحي أو المنطقة" },
-            streetAddress: { type: Type.STRING, description: "العنوان التفصيلي" },
-            buildingNo: { type: Type.STRING, description: "رقم المبنى" },
-            apartmentNo: { type: Type.STRING, description: "رقم الشقة" },
-            deliveryNotes: { type: Type.STRING, description: "ملاحظات التسليم" },
-            description: { type: Type.STRING, description: "وصف المحتويات والطرد" },
-            codAmount: { type: Type.NUMBER, description: "مبلغ التحصيل النقدي COD" },
-            itemsCount: { type: Type.NUMBER, description: "عدد القطع داخل الطرد" },
-          },
-          required: ["recipientName", "phone", "governorate", "streetAddress"],
-        },
-      },
-    });
+    const modelsToTry = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-2.5-flash"];
+    let lastError: any = null;
 
-    const parsedJson = JSON.parse(response.text || "{}");
-    return res.json(parsedJson);
+    for (const model of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: contentsPayload,
+          config: {
+            systemInstruction: systemPrompt,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                recipientName: { type: Type.STRING, description: "اسم المستلم" },
+                phone: { type: Type.STRING, description: "رقم الهاتف الرئيسي" },
+                secondaryPhone: { type: Type.STRING, description: "رقم هاتف إضافي" },
+                governorate: { type: Type.STRING, description: "اسم المحافظة" },
+                city: { type: Type.STRING, description: "المدينة أو المركز" },
+                district: { type: Type.STRING, description: "الحي أو المنطقة" },
+                streetAddress: { type: Type.STRING, description: "العنوان التفصيلي" },
+                buildingNo: { type: Type.STRING, description: "رقم المبنى" },
+                apartmentNo: { type: Type.STRING, description: "رقم الشقة" },
+                deliveryNotes: { type: Type.STRING, description: "ملاحظات التسليم" },
+                description: { type: Type.STRING, description: "وصف المحتويات والطرد" },
+                codAmount: { type: Type.NUMBER, description: "مبلغ التحصيل النقدي COD" },
+                itemsCount: { type: Type.NUMBER, description: "عدد القطع داخل الطرد" },
+              },
+            },
+          },
+        });
+
+        if (response.text) {
+          const parsedJson = JSON.parse(response.text);
+          return res.json(parsedJson);
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Attempt with ${model} failed:`, err.message || err);
+        // Continue to next model
+      }
+    }
+
+    // If all models fail, return fallback extracted data rather than failing completely
+    console.error("All Gemini models failed for parse-address, falling back to heuristics:", lastError?.message);
+    const fallback = extractFallbackData(rawText || "");
+    return res.json(fallback);
   } catch (error: any) {
-    console.error("Error parsing address with Gemini:", error);
+    console.error("Error in parse-address handler:", error);
     return res.status(500).json({
       error: "فشل في تفريغ بيانات الصورة أو العنوان بواسطة الذكاء الاصطناعي",
       details: error.message,
@@ -2249,7 +2281,7 @@ app.post("/api/ai-risk-check", async (req, res) => {
 قم بتقييم درجة خطورة عدم التسليم أو مشاكل تحصيل الكاش من 0 إلى 100، واقترح 2-3 نصائح عمليّة لمدير عمليات بوسطة أو المندوب.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: "gemini-3.1-flash-lite",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
