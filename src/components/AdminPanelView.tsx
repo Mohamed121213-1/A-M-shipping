@@ -68,7 +68,8 @@ interface AdminPanelViewProps {
   onDeleteHub: (hubId: string) => void;
 
   governorates: GovernorateRate[];
-  onUpdateGovernorateRate: (updatedGov: GovernorateRate) => void;
+  onUpdateGovernorateRate: (updatedGov: GovernorateRate | GovernorateRate[]) => void;
+  onResetAllGovernorateRates?: () => void;
 
   wallet: MerchantWallet;
   onUpdateWallet: (updatedWallet: MerchantWallet) => void;
@@ -96,6 +97,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
   onDeleteHub,
   governorates,
   onUpdateGovernorateRate,
+  onResetAllGovernorateRates,
   wallet,
   onUpdateWallet,
   shipments,
@@ -314,8 +316,8 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
     estDays: string;
     citiesStr: string;
   }>({
-    baseRate: 45,
-    additionalKgRate: 7,
+    baseRate: 0,
+    additionalKgRate: 0,
     estDays: '24 ساعة',
     citiesStr: '',
   });
@@ -326,8 +328,8 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
     code: '',
     nameAr: '',
     nameEn: '',
-    baseRate: 50,
-    additionalKgRate: 8,
+    baseRate: 0,
+    additionalKgRate: 0,
     estDays: '24-48 ساعة',
     citiesStr: '',
   });
@@ -583,8 +585,8 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
       code: '',
       nameAr: '',
       nameEn: '',
-      baseRate: 50,
-      additionalKgRate: 8,
+      baseRate: 0,
+      additionalKgRate: 0,
       estDays: '24-48 ساعة',
       citiesStr: '',
     });
@@ -1813,6 +1815,24 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 تطبيق على الكل ({governorates.length} محافظة)
+              </button>
+
+              <button
+                onClick={() => {
+                  if (confirm('هل أنت متأكد من رغبتك في تصفير وحذف جميع أسعار الشحن لكافة المحافظات لتصبح (0 ج.م)؟ ستتمكن من وضع أسعارك الخاصة وتظل ثابتة دائماً.')) {
+                    if (onResetAllGovernorateRates) {
+                      onResetAllGovernorateRates();
+                    } else {
+                      const zeroed = governorates.map((g) => ({ ...g, baseRate: 0, additionalKgRate: 0 }));
+                      onUpdateGovernorateRate(zeroed);
+                    }
+                  }
+                }}
+                className="bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 font-extrabold text-xs px-3.5 py-2 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                title="تصفير كل أسعار الشحن لتصبح 0 ج.م وإدخال أسعارك الخاصة يدوياً"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-amber-600" />
+                تصفير جميع الأسعار (0 ج.م)
               </button>
             </div>
           </div>

@@ -3287,8 +3287,8 @@
         "nameAr": "القاهرة",
         "nameEn": "Cairo",
         "estDays": "24 ساعة",
-        "baseRate": 45,
-        "additionalKgRate": 7
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "NCW",
@@ -3304,8 +3304,8 @@
         "nameAr": "المدن الجديدة",
         "nameEn": "New Cities",
         "estDays": "24-48 ساعة",
-        "baseRate": 50,
-        "additionalKgRate": 8
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "GZA",
@@ -3324,8 +3324,8 @@
         "nameAr": "الجيزة",
         "nameEn": "Giza",
         "estDays": "24 ساعة",
-        "baseRate": 45,
-        "additionalKgRate": 7
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "QLB",
@@ -3342,8 +3342,8 @@
         "nameAr": "القليوبية",
         "nameEn": "Qalyubia",
         "estDays": "24-48 ساعة",
-        "baseRate": 50,
-        "additionalKgRate": 8
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "ALX",
@@ -3360,8 +3360,8 @@
         "nameAr": "الإسكندرية",
         "nameEn": "Alexandria",
         "estDays": "24-48 ساعة",
-        "baseRate": 55,
-        "additionalKgRate": 9
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "BHG",
@@ -3376,8 +3376,8 @@
         "nameAr": "البحيرة",
         "nameEn": "Beheira",
         "estDays": "2-3 أيام",
-        "baseRate": 60,
-        "additionalKgRate": 10
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "MNS",
@@ -3393,8 +3393,8 @@
         "nameAr": "الدقهلية",
         "nameEn": "Dakahlia",
         "estDays": "2-3 أيام",
-        "baseRate": 60,
-        "additionalKgRate": 10
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "GHB",
@@ -3409,8 +3409,8 @@
         "nameAr": "الغربية",
         "nameEn": "Gharbia",
         "estDays": "2-3 أيام",
-        "baseRate": 60,
-        "additionalKgRate": 10
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "MNF",
@@ -3425,8 +3425,8 @@
         "nameAr": "المنوفية",
         "nameEn": "Monufia",
         "estDays": "2-3 أيام",
-        "baseRate": 60,
-        "additionalKgRate": 10
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "SHR",
@@ -3441,8 +3441,8 @@
         "nameAr": "الشرقية",
         "nameEn": "Sharqia",
         "estDays": "2-3 أيام",
-        "baseRate": 60,
-        "additionalKgRate": 10
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "SUZ",
@@ -3456,8 +3456,8 @@
         "nameAr": "السويس",
         "nameEn": "Suez",
         "estDays": "2-3 أيام",
-        "baseRate": 65,
-        "additionalKgRate": 11
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "ISM",
@@ -3471,8 +3471,8 @@
         "nameAr": "الإسماعيلية",
         "nameEn": "Ismailia",
         "estDays": "2-3 أيام",
-        "baseRate": 65,
-        "additionalKgRate": 11
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "PTS",
@@ -3486,8 +3486,8 @@
         "nameAr": "بورسعيد",
         "nameEn": "Port Said",
         "estDays": "2-3 أيام",
-        "baseRate": 65,
-        "additionalKgRate": 11
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "DMT",
@@ -3501,8 +3501,8 @@
         "nameAr": "دمياط",
         "nameEn": "Damietta",
         "estDays": "2-3 أيام",
-        "baseRate": 60,
-        "additionalKgRate": 10
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "KFS",
@@ -3517,8 +3517,8 @@
         "nameAr": "كفر الشيخ",
         "nameEn": "Kafr El Sheikh",
         "estDays": "2-3 أيام",
-        "baseRate": 60,
-        "additionalKgRate": 10
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "FYM",
@@ -3532,8 +3532,8 @@
         "nameAr": "الفيوم",
         "nameEn": "Fayoum",
         "estDays": "2-3 أيام",
-        "baseRate": 70,
-        "additionalKgRate": 11
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "BNS",
@@ -3547,8 +3547,8 @@
         "nameAr": "بني سويف",
         "nameEn": "Beni Suef",
         "estDays": "2-3 أيام",
-        "baseRate": 70,
-        "additionalKgRate": 11
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "MNY",
@@ -3563,8 +3563,8 @@
         "nameAr": "المنيا",
         "nameEn": "Minya",
         "estDays": "3-4 أيام",
-        "baseRate": 75,
-        "additionalKgRate": 12
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "ASY",
@@ -3579,8 +3579,8 @@
         "nameAr": "أسيوط",
         "nameEn": "Asyut",
         "estDays": "3-4 أيام",
-        "baseRate": 75,
-        "additionalKgRate": 12
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "SHG",
@@ -3595,8 +3595,8 @@
         "nameAr": "سوهاج",
         "nameEn": "Sohag",
         "estDays": "3-4 أيام",
-        "baseRate": 75,
-        "additionalKgRate": 12
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "QNA",
@@ -3610,8 +3610,8 @@
         "nameAr": "قنا",
         "nameEn": "Qena",
         "estDays": "3-4 أيام",
-        "baseRate": 80,
-        "additionalKgRate": 14
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "LXR",
@@ -3624,8 +3624,8 @@
         "nameAr": "الأقصر",
         "nameEn": "Luxor",
         "estDays": "3-5 أيام",
-        "baseRate": 85,
-        "additionalKgRate": 15
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "ASW",
@@ -3639,8 +3639,8 @@
         "nameAr": "أسوان",
         "nameEn": "Aswan",
         "estDays": "3-5 أيام",
-        "baseRate": 90,
-        "additionalKgRate": 15
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "RSE",
@@ -3654,8 +3654,8 @@
         "nameAr": "البحر الأحمر",
         "nameEn": "Red Sea",
         "estDays": "3-5 أيام",
-        "baseRate": 95,
-        "additionalKgRate": 16
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "MTR",
@@ -3669,8 +3669,8 @@
         "nameAr": "مطروح والساحل الشمالي",
         "nameEn": "Matrouh",
         "estDays": "3-5 أيام",
-        "baseRate": 85,
-        "additionalKgRate": 14
+        "baseRate": 0,
+        "additionalKgRate": 0
       },
       {
         "code": "SSH",
@@ -3685,8 +3685,8 @@
         "nameAr": "جنوب سيناء",
         "nameEn": "South Sinai",
         "estDays": "3-5 أيام",
-        "baseRate": 95,
-        "additionalKgRate": 16
+        "baseRate": 0,
+        "additionalKgRate": 0
       }
     ],
     "notifications": [

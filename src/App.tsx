@@ -93,6 +93,21 @@ export default function App() {
 
   const [governorates, setGovernorates] = useState<GovernorateRate[]>(() => {
     let saved = loadLocalState<GovernorateRate[]>('bosta_governorates', EGYPT_GOVERNORATES);
+
+    // One-time clear of previous hardcoded rates to 0 per user requirement
+    const isRatesZeroed = localStorage.getItem('bosta_rates_cleared_zero_v2');
+    if (!isRatesZeroed) {
+      saved = saved.map((g) => ({
+        ...g,
+        baseRate: 0,
+        additionalKgRate: 0,
+      }));
+      try {
+        localStorage.setItem('bosta_rates_cleared_zero_v2', 'true');
+        localStorage.setItem('bosta_governorates', JSON.stringify(saved));
+      } catch (e) {}
+    }
+
     const hasNCW = saved.some((g) => g.code === 'NCW' || g.nameAr === 'المدن الجديدة');
     if (!hasNCW) {
       const newCitiesList = ['مدينتي', 'بدر', 'الشروق', 'العاصمة الإدارية الجديدة', 'مدينة المستقبل', 'الرحاب', 'حدائق العاصمة'];
@@ -109,8 +124,8 @@ export default function App() {
         code: 'NCW',
         nameAr: 'المدن الجديدة',
         nameEn: 'New Cities',
-        baseRate: 50,
-        additionalKgRate: 8,
+        baseRate: 0,
+        additionalKgRate: 0,
         estDays: '24-48 ساعة',
         cities: ['العاصمة الإدارية الجديدة', 'مدينتي', 'الشروق', 'بدر', 'مدينة المستقبل', 'الرحاب', 'حدائق العاصمة'],
       };
@@ -362,6 +377,17 @@ export default function App() {
             try { localStorage.setItem('bosta_users', JSON.stringify(cleaned)); } catch (e) {}
             return cleaned;
           });
+        }
+      })
+      .catch(() => {});
+
+    // Initial fetch of authoritative governorates from server
+    fetch('/api/governorates')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.governorates) && data.governorates.length > 0) {
+          setGovernorates(data.governorates);
+          try { localStorage.setItem('bosta_governorates', JSON.stringify(data.governorates)); } catch (e) {}
         }
       })
       .catch(() => {});
@@ -2086,6 +2112,22 @@ export default function App() {
       body: JSON.stringify(updatedUser),
     }).catch((e) => console.warn('Direct server register notice:', e));
 
+    if (updatedUser.hasCustomShippingRate !== undefined || updatedUser.customShippingRate !== undefined) {
+      fetch('/api/users/shipping-rate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: updatedUser.id,
+          hasCustomShippingRate: updatedUser.hasCustomShippingRate,
+          customShippingRate: updatedUser.customShippingRate,
+          shippingPricingType: updatedUser.shippingPricingType,
+          customGovernorateRates: updatedUser.customGovernorateRates,
+          shippingNotes: updatedUser.shippingNotes,
+          senderId: syncEngine.getInstanceId(),
+        }),
+      }).catch((e) => console.warn('Direct server shipping-rate notice:', e));
+    }
+
     // 2. Direct Supabase profiles update
     if (isSupabaseConfigured) {
       Promise.resolve(
@@ -2241,24 +2283,72 @@ export default function App() {
     baseRate?: number,
     additionalKgRate?: number
   ) => {
-    if (Array.isArray(updatedGov)) {
-      setGovernorates(updatedGov);
-      showToast('💰 تم تحديث أسعار الشحن لجميع المحافظات بنجاح');
-    } else if (typeof updatedGov === 'object') {
-      setGovernorates((prev) => {
+    setGovernorates((prev) => {
+      let nextGovs: GovernorateRate[] = [];
+
+      if (Array.isArray(updatedGov)) {
+        nextGovs = updatedGov;
+      } else if (typeof updatedGov === 'object') {
         const exists = prev.some((g) => g.code === updatedGov.code);
-        if (exists) {
-          return prev.map((g) => (g.code === updatedGov.code ? updatedGov : g));
-        }
-        return [...prev, updatedGov];
-      });
-      showToast(`💰 تم تحديث سعر الشحن لمحافظة ${updatedGov.nameAr}`);
+        nextGovs = exists
+          ? prev.map((g) => (g.code === updatedGov.code ? updatedGov : g))
+          : [...prev, updatedGov];
+      } else {
+        nextGovs = prev.map((g) =>
+          g.code === updatedGov
+            ? { ...g, baseRate: Number(baseRate ?? 0), additionalKgRate: Number(additionalKgRate ?? 0) }
+            : g
+        );
+      }
+
+      try {
+        localStorage.setItem('bosta_governorates', JSON.stringify(nextGovs));
+      } catch (e) {}
+
+      broadcastDataChange({ governorates: nextGovs });
+
+      fetch('/api/governorates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ governorates: nextGovs, senderId: syncEngine.getInstanceId() }),
+      }).catch((e) => console.warn('Direct server governorates persist notice:', e));
+
+      return nextGovs;
+    });
+
+    if (Array.isArray(updatedGov)) {
+      showToast('💰 تم تحديث وتثبيت أسعار الشحن لجميع المحافظات بنجاح');
+    } else if (typeof updatedGov === 'object') {
+      showToast(`💰 تم تحديث وتثبيت سعر الشحن لمحافظة ${updatedGov.nameAr}`);
     } else {
-      setGovernorates((prev) =>
-        prev.map((g) => (g.code === updatedGov ? { ...g, baseRate: baseRate!, additionalKgRate: additionalKgRate! } : g))
-      );
-      showToast(`💰 تم تحديث تسعيرة الشحن للمحافظة`);
+      showToast(`💰 تم تحديث وتثبيت تسعيرة الشحن للمحافظة`);
     }
+  };
+
+  const handleResetAllGovernorateRatesToZero = () => {
+    setGovernorates((prev) => {
+      const nextGovs = prev.map((g) => ({
+        ...g,
+        baseRate: 0,
+        additionalKgRate: 0,
+      }));
+
+      try {
+        localStorage.setItem('bosta_governorates', JSON.stringify(nextGovs));
+      } catch (e) {}
+
+      broadcastDataChange({ governorates: nextGovs });
+
+      fetch('/api/governorates/reset-zero', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
+      }).catch((e) => console.warn('Reset zero server notice:', e));
+
+      return nextGovs;
+    });
+
+    showToast('🗑️ تم تصفير جميع أسعار الشحن لكافة المحافظات بنجاح (0 ج.م)');
   };
 
   const handleUpdateWallet = (updatedWallet: MerchantWallet) => {
@@ -2490,6 +2580,8 @@ export default function App() {
                     onToggleMerchantSettlement={handleToggleMerchantSettlement}
                     onUpdateWallet={handleUpdateWallet}
                     onRequestPayout={handleRequestPayout}
+                    onUpdateUser={handleUpdateUser}
+                    governorates={governorates}
                   />
                 )}
 
@@ -2561,6 +2653,7 @@ export default function App() {
                     onDeleteHub={handleDeleteHub}
                     governorates={governorates}
                     onUpdateGovernorateRate={handleUpdateGovernorateRate}
+                    onResetAllGovernorateRates={handleResetAllGovernorateRatesToZero}
                     wallet={wallet}
                     onUpdateWallet={handleUpdateWallet}
                     shipments={shipments}
@@ -2622,6 +2715,8 @@ export default function App() {
                     onToggleMerchantSettlement={handleToggleMerchantSettlement}
                     onUpdateWallet={handleUpdateWallet}
                     onRequestPayout={handleRequestPayout}
+                    onUpdateUser={handleUpdateUser}
+                    governorates={governorates}
                   />
                 )}
 
@@ -2654,6 +2749,7 @@ export default function App() {
         currentRole={currentRole}
         systemUsers={users}
         currentUser={currentUser}
+        onUpdateUser={handleUpdateUser}
       />
 
       <ShipmentDetailModal

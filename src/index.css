@@ -17,3 +17,50 @@
     font-family: inherit;
   }
 }
+
+/* Print-specific Styles for Clean, Compact Thermal / Shipping Waybills */
+@media print {
+  @page {
+    size: auto;
+    margin: 3mm;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  /* Hide entire page content and show ONLY the printable waybill */
+  body * {
+    visibility: hidden;
+  }
+
+  #printable-airbill,
+  #printable-airbill * {
+    visibility: visible;
+  }
+
+  #printable-airbill {
+    position: absolute;
+    left: 2mm;
+    top: 2mm;
+    width: 100mm !important;
+    max-width: 100mm !important;
+    margin: 0 !important;
+    padding: 8px !important;
+    background: #ffffff !important;
+    border: 2px solid #000000 !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}

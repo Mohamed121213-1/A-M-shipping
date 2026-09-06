@@ -250,6 +250,10 @@ class SyncEngine {
     return this.instanceId;
   }
 
+  public getClientId(): string {
+    return this.instanceId;
+  }
+
   public getLatestState(): SyncedAppState | null {
     if (typeof window === 'undefined') return this.latestStateCache;
     try {

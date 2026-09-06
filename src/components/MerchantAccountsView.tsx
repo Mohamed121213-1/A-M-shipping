@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Shipment, MerchantWallet, UserSession, CompanyTransaction } from '../types';
+import { Shipment, MerchantWallet, UserSession, CompanyTransaction, GovernorateRate } from '../types';
+import { EGYPT_GOVERNORATES } from '../data/mockData';
 import droplineLogoImg from '../assets/images/dropline_official_logo_1787442134000.jpg';
 import {
   Users,
@@ -32,7 +33,9 @@ import {
   PackageCheck,
   Package,
   BadgeAlert,
-  ArrowUpDown
+  ArrowUpDown,
+  Sparkles,
+  Sliders,
 } from 'lucide-react';
 
 interface MerchantAccountsViewProps {
@@ -46,6 +49,8 @@ interface MerchantAccountsViewProps {
   onToggleMerchantSettlement: (shipmentId: string, isSettled: boolean) => void;
   onUpdateWallet: (updatedWallet: MerchantWallet) => void;
   onRequestPayout: (amount: number, method: string, selectedShipmentIds?: string[]) => void;
+  onUpdateUser?: (updatedUser: UserSession) => void;
+  governorates?: GovernorateRate[];
 }
 
 interface MerchantSummary {
@@ -100,7 +105,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
   onToggleMerchantSettlement,
   onUpdateWallet,
   onRequestPayout,
+  onUpdateUser,
+  governorates = EGYPT_GOVERNORATES,
 }) => {
+  const isAdmin = currentUser?.role === 'admin' || !currentUser;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMerchantId, setSelectedMerchantId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'has_balance' | 'settled' | 'has_debt'>('all');
@@ -116,6 +124,102 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
     date: new Date().toISOString().split('T')[0],
     autoSettleShipments: true,
   });
+
+  // Modal for Custom Merchant Shipping Rate
+  const [isRateModalOpen, setIsRateModalOpen] = useState(false);
+  const [rateModalMerchant, setRateModalMerchant] = useState<MerchantSummary | null>(null);
+  const [ratePricingType, setRatePricingType] = useState<'fixed' | 'governorates' | 'default'>('fixed');
+  const [rateFixedAmount, setRateFixedAmount] = useState<string>('');
+  const [rateGovAmounts, setRateGovAmounts] = useState<Record<string, string>>({});
+  const [rateNotes, setRateNotes] = useState<string>('');
+  const [rateSaveSuccess, setRateSaveSuccess] = useState<boolean>(false);
+
+  const handleOpenRateModal = (merch: MerchantSummary) => {
+    setRateModalMerchant(merch);
+    setRateSaveSuccess(false);
+
+    if (merch.hasCustomShippingRate && merch.shippingPricingType === 'governorates') {
+      setRatePricingType('governorates');
+      setRateFixedAmount(merch.customShippingRate !== undefined ? String(merch.customShippingRate) : '');
+      const govVals: Record<string, string> = {};
+      if (merch.customGovernorateRates) {
+        Object.entries(merch.customGovernorateRates).forEach(([k, v]) => {
+          govVals[k] = String(v);
+        });
+      }
+      setRateGovAmounts(govVals);
+    } else if (merch.hasCustomShippingRate && merch.customShippingRate !== undefined) {
+      setRatePricingType('fixed');
+      setRateFixedAmount(String(merch.customShippingRate));
+      setRateGovAmounts({});
+    } else {
+      setRatePricingType('default');
+      setRateFixedAmount('');
+      setRateGovAmounts({});
+    }
+
+    setRateNotes(merch.shippingNotes || '');
+    setIsRateModalOpen(true);
+  };
+
+  const handleSaveRate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rateModalMerchant || !onUpdateUser) return;
+
+    const targetUser = systemUsers.find(
+      (u) => u.id === rateModalMerchant.id || (u.phone && u.phone === rateModalMerchant.phone) || (u.storeName && u.storeName === rateModalMerchant.storeName)
+    );
+
+    const hasCustom = ratePricingType !== 'default';
+    const parsedFixed = rateFixedAmount.trim() !== '' ? parseFloat(rateFixedAmount) : undefined;
+    const customRate = (hasCustom && ratePricingType === 'fixed' && parsedFixed !== undefined && !isNaN(parsedFixed)) ? parsedFixed : undefined;
+    
+    const parsedGovRates: Record<string, number> = {};
+    Object.entries(rateGovAmounts).forEach(([code, val]) => {
+      const num = parseFloat(String(val));
+      if (!isNaN(num) && num >= 0) {
+        parsedGovRates[code] = num;
+      }
+    });
+
+    const pricingType = ratePricingType === 'governorates' ? 'governorates' : 'fixed';
+    const customGovs = ratePricingType === 'governorates' && Object.keys(parsedGovRates).length > 0 ? parsedGovRates : undefined;
+
+    let updatedUser: UserSession;
+    if (targetUser) {
+      updatedUser = {
+        ...targetUser,
+        hasCustomShippingRate: hasCustom,
+        customShippingRate: customRate,
+        shippingPricingType: pricingType,
+        customGovernorateRates: customGovs,
+        shippingNotes: rateNotes.trim() || undefined,
+      };
+    } else {
+      updatedUser = {
+        id: rateModalMerchant.id || `merch_${Date.now()}`,
+        name: rateModalMerchant.name || rateModalMerchant.storeName,
+        email: rateModalMerchant.email || `${rateModalMerchant.id || 'merchant'}@dropline.express`,
+        storeName: rateModalMerchant.storeName,
+        phone: rateModalMerchant.phone || '01000000000',
+        role: 'merchant',
+        hasCustomShippingRate: hasCustom,
+        customShippingRate: customRate,
+        shippingPricingType: pricingType,
+        customGovernorateRates: customGovs,
+        shippingNotes: rateNotes.trim() || undefined,
+        isConfirmed: true,
+        registeredAt: new Date().toISOString(),
+      };
+    }
+
+    onUpdateUser(updatedUser);
+    setRateSaveSuccess(true);
+    setTimeout(() => {
+      setIsRateModalOpen(false);
+      setRateSaveSuccess(false);
+    }, 800);
+  };
 
   // Extract and calculate all merchants data dynamically
   const merchantsList: MerchantSummary[] = useMemo(() => {
@@ -715,6 +819,7 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
               <thead className="bg-slate-100/80 text-slate-700 font-extrabold border-b border-slate-200">
                 <tr>
                   <th className="py-3 px-4">بيانات التاجر والمتجر</th>
+                  <th className="py-3 px-3 text-center">سعر الشحن المتفق عليه</th>
                   <th className="py-3 px-3 text-center">عدد الشحنات</th>
                   <th className="py-3 px-3">حساب البضائع (بدون الشحن)</th>
                   <th className="py-3 px-3">شحن المرتجعات المخصوم</th>
@@ -726,7 +831,7 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {filteredMerchants.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-10 text-slate-400">
+                    <td colSpan={8} className="text-center py-10 text-slate-400">
                       لا يوجد تجار يطابقون خيارات البحث أو التصفية
                     </td>
                   </tr>
@@ -758,6 +863,33 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                               )}
                             </div>
                           </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-3 text-center">
+                        <div className="inline-flex flex-col items-center gap-1">
+                          {merch.hasCustomShippingRate && merch.customShippingRate !== undefined ? (
+                            <span className="font-mono font-black text-emerald-800 bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 rounded-md text-xs shadow-2xs">
+                              {merch.customShippingRate} ج.م (موحد)
+                            </span>
+                          ) : merch.hasCustomShippingRate && merch.shippingPricingType === 'governorates' ? (
+                            <span className="font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md text-[11px]">
+                              تسعيرة محافظات خاصة
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold">
+                              تسعيرة عامة للنظام
+                            </span>
+                          )}
+                          {isAdmin && onUpdateUser && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRateModal(merch)}
+                              className="text-[10px] text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
+                            >
+                              تعديل السعر
+                            </button>
+                          )}
                         </div>
                       </td>
 
@@ -825,7 +957,7 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                       </td>
 
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
                           <button
                             onClick={() => setSelectedMerchantId(merch.id)}
                             className="bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs px-3 py-1.5 rounded-lg transition-colors border border-blue-200 flex items-center gap-1 cursor-pointer"
@@ -834,6 +966,17 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                             <FileText className="w-3.5 h-3.5" />
                             <span>كشف الحساب</span>
                           </button>
+
+                          {isAdmin && onUpdateUser && (
+                            <button
+                              onClick={() => handleOpenRateModal(merch)}
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-2.5 py-1.5 rounded-lg transition-colors border border-slate-300 flex items-center gap-1 cursor-pointer"
+                              title="تحديد سعر الشحن للتاجر"
+                            >
+                              <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>سعر الشحن</span>
+                            </button>
+                          )}
 
                           {merch.dueBalance > 0 && (
                             <button
@@ -909,19 +1052,34 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                     )}
 
                     {selectedMerchant.hasCustomShippingRate && selectedMerchant.customShippingRate !== undefined ? (
-                      <span className="flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-lg text-xs font-black">
+                      <button
+                        type="button"
+                        onClick={() => isAdmin && handleOpenRateModal(selectedMerchant)}
+                        className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-lg text-xs font-black cursor-pointer transition-colors"
+                        title="انقر لتعديل سعر الشحن"
+                      >
                         <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                        سعر الشحن المتفق عليه: {selectedMerchant.customShippingRate} ج.م (موحد لجميع المحافظات)
-                      </span>
+                        سعر الشحن المتفق عليه: {selectedMerchant.customShippingRate} ج.م (موحد لجميع المحافظات) ✏️
+                      </button>
                     ) : selectedMerchant.hasCustomShippingRate && selectedMerchant.shippingPricingType === 'governorates' ? (
-                      <span className="flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-300 px-2.5 py-0.5 rounded-lg text-xs font-black">
+                      <button
+                        type="button"
+                        onClick={() => isAdmin && handleOpenRateModal(selectedMerchant)}
+                        className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 px-2.5 py-0.5 rounded-lg text-xs font-black cursor-pointer transition-colors"
+                        title="انقر لتعديل تسعيرة المحافظات"
+                      >
                         <DollarSign className="w-3.5 h-3.5 text-blue-600" />
-                        سعر الشحن المتفق عليه: تسعيرة مخصصة لكل محافظة
-                      </span>
+                        سعر الشحن المتفق عليه: تسعيرة مخصصة لكل محافظة ✏️
+                      </button>
                     ) : (
-                      <span className="flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 rounded-lg text-xs font-bold">
-                        سعر الشحن: تسعيرة النظام العامة
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => isAdmin && handleOpenRateModal(selectedMerchant)}
+                        className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-2.5 py-0.5 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                        title="انقر لتحديد سعر شحن خاص لهذا التاجر"
+                      >
+                        سعر الشحن: تسعيرة النظام العامة (تحديد سعر خاص +)
+                      </button>
                     )}
 
                     {selectedMerchant.shippingNotes && (
@@ -934,7 +1092,16 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
               </div>
 
               {/* Action Buttons for this Merchant */}
-              <div className="flex items-center gap-3 w-full lg:w-auto">
+              <div className="flex items-center gap-3 w-full lg:w-auto flex-wrap">
+                {isAdmin && onUpdateUser && (
+                  <button
+                    onClick={() => handleOpenRateModal(selectedMerchant)}
+                    className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-sm px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 flex-1 lg:flex-none cursor-pointer"
+                  >
+                    <DollarSign className="w-4 h-4 text-emerald-400" />
+                    <span>تحديد / تعديل سعر الشحن للتاجر</span>
+                  </button>
+                )}
                 <button
                   onClick={() => handleOpenPayoutModal(selectedMerchant)}
                   className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-sm px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 flex-1 lg:flex-none cursor-pointer"
@@ -1448,6 +1615,264 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                 >
                   <Check className="w-4 h-4" />
                   <span>تأكيد تسجيل وصرف الدفعة للتاجر</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: CUSTOM MERCHANT SHIPPING RATE CONFIGURATION (تحديد سعر شحن التاجر) */}
+      {/* ========================================================================= */}
+      {isRateModalOpen && rateModalMerchant && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-white flex items-center gap-2">
+                    <span>تحديد سعر الشحن للتاجر</span>
+                    <span className="text-xs text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded-md">
+                      {rateModalMerchant.storeName}
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    المسؤول: {rateModalMerchant.name} {rateModalMerchant.phone ? `• ${rateModalMerchant.phone}` : ''}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsRateModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveRate} className="p-6 space-y-5 text-right">
+              {/* Informative explanation banner */}
+              <div className="bg-blue-50 border border-blue-200 p-3.5 rounded-xl text-xs text-blue-950 space-y-1">
+                <div className="font-black text-blue-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>التحكم في سعر شحن هذا التاجر:</span>
+                </div>
+                <p className="text-[11px] text-blue-800 leading-relaxed font-medium">
+                  يمكنك تحديد سعر شحن خاص ومستقل لهذا التاجر؛ لتحاسبه بسعر مختلف عن باقي التجار (مثلاً سعر شحن موحد لكافة شحناته أو تسعيرة مخصصة لكل محافظة). أي شحنة جديدة يتم إنشاؤها لهذا التاجر ستُحسب تلقائياً بهذا السعر المتفق عليه.
+                </p>
+              </div>
+
+              {/* Pricing Type Selector */}
+              <div className="space-y-2.5">
+                <label className="block text-xs font-black text-slate-800">
+                  اختر نظام تسعير الشحن لهذا التاجر:
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {/* Option 1: Fixed Unified Rate */}
+                  <label
+                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between text-right ${
+                      ratePricingType === 'fixed'
+                        ? 'border-emerald-600 bg-emerald-50/70 shadow-xs'
+                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-black text-xs text-slate-900">سعر موحد</span>
+                      <input
+                        type="radio"
+                        name="pricingType"
+                        value="fixed"
+                        checked={ratePricingType === 'fixed'}
+                        onChange={() => setRatePricingType('fixed')}
+                        className="text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                      />
+                    </div>
+                    <span className="text-[11px] text-slate-600 font-medium leading-tight">
+                      سعر شحن ثابت وموحد لكافة المحافظات
+                    </span>
+                  </label>
+
+                  {/* Option 2: Governorate-based Custom Rates */}
+                  <label
+                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between text-right ${
+                      ratePricingType === 'governorates'
+                        ? 'border-blue-600 bg-blue-50/70 shadow-xs'
+                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-black text-xs text-slate-900">تسعيرة لكل محافظة</span>
+                      <input
+                        type="radio"
+                        name="pricingType"
+                        value="governorates"
+                        checked={ratePricingType === 'governorates'}
+                        onChange={() => setRatePricingType('governorates')}
+                        className="text-blue-600 focus:ring-blue-500 w-4 h-4"
+                      />
+                    </div>
+                    <span className="text-[11px] text-slate-600 font-medium leading-tight">
+                      تحديد سعر خاص لكل محافظة على حدة
+                    </span>
+                  </label>
+
+                  {/* Option 3: Default System Rates */}
+                  <label
+                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between text-right ${
+                      ratePricingType === 'default'
+                        ? 'border-slate-800 bg-slate-100 shadow-xs'
+                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-black text-xs text-slate-900">تسعيرة النظام العامة</span>
+                      <input
+                        type="radio"
+                        name="pricingType"
+                        value="default"
+                        checked={ratePricingType === 'default'}
+                        onChange={() => setRatePricingType('default')}
+                        className="text-slate-800 focus:ring-slate-700 w-4 h-4"
+                      />
+                    </div>
+                    <span className="text-[11px] text-slate-600 font-medium leading-tight">
+                      بدون سعر خاص (تطبيق أسعار النظام الافتراضية)
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Conditional Sub-forms based on Selected Pricing Type */}
+              {ratePricingType === 'fixed' && (
+                <div className="bg-emerald-50/80 border border-emerald-300 p-4 rounded-xl space-y-3 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-black text-emerald-950">
+                      سعر الشحن المتفق عليه للتاجر (ج.م) *
+                    </label>
+                    <span className="text-[11px] text-emerald-800 font-bold bg-emerald-200/70 px-2 py-0.5 rounded-md">
+                      شامل كافة المحافظات
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      required
+                      value={rateFixedAmount}
+                      onChange={(e) => setRateFixedAmount(e.target.value)}
+                      placeholder="اكتب السعر المتفق عليه مثلاً 50 أو 60 أو أي مبلغ..."
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-emerald-400 text-sm font-black font-mono focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                      ج.م
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-900 font-medium">
+                    💡 سيتم احتساب هذا السعر تلقائياً عند إضافة أي شحنة جديدة لهذا التاجر.
+                  </p>
+                </div>
+              )}
+
+              {ratePricingType === 'governorates' && (
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-900">
+                      حدد سعر الشحن المتفق عليه لكل محافظة (ج.م):
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-bold">
+                      المحافظات الفارغة ستعتمد على السعر الافتراضي
+                    </span>
+                  </div>
+
+                  <div className="max-h-56 overflow-y-auto divide-y divide-slate-200 border border-slate-200 rounded-xl bg-white">
+                    {governorates.map((gov) => {
+                      const currentVal = rateGovAmounts[gov.code] ?? '';
+                      return (
+                        <div key={gov.code} className="p-2.5 flex items-center justify-between gap-3 text-xs hover:bg-slate-50">
+                          <div>
+                            <span className="font-bold text-slate-900 block">{gov.nameAr || gov.nameEn}</span>
+                            <span className="text-[10px] text-slate-400">
+                              السعر العام للنظام: {gov.baseRate} ج.م
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="0"
+                              value={currentVal}
+                              onChange={(e) => {
+                                setRateGovAmounts({
+                                  ...rateGovAmounts,
+                                  [gov.code]: e.target.value,
+                                });
+                              }}
+                              placeholder={String(gov.baseRate)}
+                              className="w-24 px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-black font-mono text-center focus:ring-2 focus:ring-blue-500 outline-none"
+                            />
+                            <span className="text-[11px] font-bold text-slate-400">ج.م</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {ratePricingType === 'default' && (
+                <div className="bg-slate-100 border border-slate-200 p-3.5 rounded-xl text-xs text-slate-700">
+                  <p className="font-bold text-slate-900 mb-1">
+                    العودة للتسعيرة العامة:
+                  </p>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    عند اختيار هذا الخيار، سيتم إلغاء أي تسعيرة مخصصة لهذا التاجر، وستُحسب شحناته القادمة وفقاً للأسعار الافتراضية لكل محافظة والمحددة في إعدادات النظام.
+                  </p>
+                </div>
+              )}
+
+              {/* Agreement Notes (Optional) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  ملاحظات الاتفاق التجاري مع التاجر (اختياري)
+                </label>
+                <input
+                  type="text"
+                  value={rateNotes}
+                  onChange={(e) => setRateNotes(e.target.value)}
+                  placeholder="مثال: اتفاق أسعار شحن خاصة لحجم طرود كبير يتجاوز 150 شحنة شهرياً..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-slate-500 outline-none bg-white"
+                />
+              </div>
+
+              {/* Save Success Alert */}
+              {rateSaveSuccess && (
+                <div className="bg-emerald-600 text-white p-3 rounded-xl text-xs font-black flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                  <span>تم حفظ واعتماد سعر الشحن الجديد للتاجر بنجاح!</span>
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsRateModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white text-xs font-extrabold px-6 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4 text-emerald-400" />
+                  <span>حفظ وتفعيل سعر الشحن للتاجر</span>
                 </button>
               </div>
             </form>

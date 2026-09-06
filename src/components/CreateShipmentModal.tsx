@@ -5,7 +5,7 @@ import { EGYPT_GOVERNORATES, BOSTA_HUBS } from '../data/mockData';
 import { 
   X, Sparkles, MapPin, Package, DollarSign, User, Phone, AlertCircle, CheckCircle, 
   Calculator, Building, ShieldCheck, FileSpreadsheet, Upload, Download, Trash2, Plus, 
-  Check, RefreshCw, FileText, Store, Image as ImageIcon, Camera
+  Check, RefreshCw, FileText, Store, ChevronDown, Search
 } from 'lucide-react';
 
 interface CreateShipmentModalProps {
@@ -18,6 +18,7 @@ interface CreateShipmentModalProps {
   currentRole?: AppUserRole;
   systemUsers?: UserSession[];
   currentUser?: UserSession | null;
+  onUpdateUser?: (updatedUser: UserSession) => void;
 }
 
 export interface StagedShipmentRow {
@@ -52,11 +53,14 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   currentRole = 'merchant',
   systemUsers = [],
   currentUser = null,
+  onUpdateUser,
 }) => {
   if (!isOpen) return null;
 
   // Active Tab: 'single' | 'excel'
   const [activeTab, setActiveTab] = useState<'single' | 'excel'>('single');
+  const [isQuickRateOpen, setIsQuickRateOpen] = useState(false);
+  const [quickRateInput, setQuickRateInput] = useState('');
 
   // Registered Merchants from Admin Panel
   const registeredMerchants = systemUsers.filter((u) => u.role === 'merchant');
@@ -98,49 +102,25 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
     }
   };
 
-  // AI Paste Text & Image OCR state
+  // AI Paste Text state
   const [aiRawText, setAiRawText] = useState('');
-  const [aiImagePreview, setAiImagePreview] = useState<string | null>(null);
-  const [aiImageBase64, setAiImageBase64] = useState<string | null>(null);
-  const [aiImageMimeType, setAiImageMimeType] = useState<string>('image/jpeg');
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [aiSuccessMessage, setAiSuccessMessage] = useState('');
-  const [isImageDragOver, setIsImageDragOver] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      alert('يرجى اختيار صورة صحيحة (JPG, PNG, WEBP, إلخ)');
-      return;
-    }
+  // Region / City Search & Dropdown State
+  const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
+  const [citySearchQuery, setCitySearchQuery] = useState('');
+  const cityDropdownRef = useRef<HTMLDivElement>(null);
 
-    const mime = file.type || 'image/jpeg';
-    setAiImageMimeType(mime);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      setAiImagePreview(result);
-      setAiImageBase64(result);
-      // Automatically trigger smart extraction immediately
-      handleAiParse(result, mime, aiRawText);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (cityDropdownRef.current && !cityDropdownRef.current.contains(event.target as Node)) {
+        setIsCityDropdownOpen(false);
+      }
     };
-    reader.readAsDataURL(file);
-  };
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    handleImageFile(file);
-  };
-
-  const handleRemoveImage = () => {
-    setAiImagePreview(null);
-    setAiImageBase64(null);
-    setAiSuccessMessage('');
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
-    }
-  };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Single Form Fields
   const [recipientName, setRecipientName] = useState('');
@@ -224,13 +204,19 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
   const calculatedCodFee = 0;
   const calculatedNetPayout = Math.max(0, codAmount - calculatedShippingFee);
 
-  // AI Address & Image OCR Parsing Handler
-  const handleAiParse = async (overrideImageBase64?: string, overrideMimeType?: string, overrideRawText?: string) => {
-    const targetImage = overrideImageBase64 !== undefined ? overrideImageBase64 : aiImageBase64;
-    const targetMime = overrideMimeType !== undefined ? overrideMimeType : aiImageMimeType;
+  // Filtered Cities for currently selected governorate
+  const filteredCities = useMemo(() => {
+    const list = selectedGov.cities || [];
+    if (!citySearchQuery.trim()) return list;
+    const q = citySearchQuery.trim().toLowerCase();
+    return list.filter((item) => item.toLowerCase().includes(q));
+  }, [selectedGov.cities, citySearchQuery]);
+
+  // AI Address Text Parsing Handler
+  const handleAiParse = async (overrideRawText?: string) => {
     const targetText = overrideRawText !== undefined ? overrideRawText : aiRawText;
 
-    if (!targetText?.trim() && !targetImage) return;
+    if (!targetText?.trim()) return;
     setIsAiParsing(true);
     setAiSuccessMessage('');
 
@@ -240,8 +226,6 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rawText: targetText,
-          imageBase64: targetImage,
-          mimeType: targetMime,
         }),
       });
 
@@ -283,12 +267,12 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 
       setAiSuccessMessage(
         extractedCount > 0
-          ? '✨ تم استخراج وتعبئة بيانات الشحنة من الصورة بنجاح!'
+          ? '✨ تم استخراج وتعبئة بيانات الشحنة من النص بنجاح!'
           : '✨ تم استخراج البيانات، يرجى مراجعة الحقول وتأكيدها.'
       );
     } catch (err: any) {
       console.warn('AI Parsing notice:', err.message || err);
-      setAiSuccessMessage('تم فحص الصورة، يمكنك إكمال أو تعديل أي حقول يدوياً');
+      setAiSuccessMessage('تم فحص النص، يمكنك إكمال أو تعديل أي حقول يدوياً');
     } finally {
       setIsAiParsing(false);
     }
@@ -738,127 +722,44 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         {/* TAB 1: SINGLE SHIPMENT FORM */}
         {activeTab === 'single' && (
           <form onSubmit={handleSingleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1">
-            {/* AI Smart Address & Image OCR Parser Section */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 space-y-4 shadow-2xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-3">
+            {/* AI Smart Address Text Parser Section */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-2.5">
                 <div className="flex items-center gap-2">
                   <span className="w-7 h-7 rounded-lg bg-red-100 text-red-600 flex items-center justify-center shrink-0">
                     <Sparkles className="w-4 h-4" />
                   </span>
                   <div>
-                    <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">تفريغ بيانات الشحنة تلقائياً (اختياري)</h4>
-                    <p className="text-[11px] text-slate-500">ارفع صورة بوليصة/سكرين شوت أو الصق نص رسالة العميل لملء البيانات بضغطة زر</p>
+                    <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">تفريغ بيانات الشحنة من النص المنسوخ (اختياري)</h4>
+                    <p className="text-[11px] text-slate-500">الصق نص رسالة العميل لملء بيانات المستلم والمبلغ تلقائياً بضغطة زر</p>
                   </div>
                 </div>
                 <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-full self-start sm:self-auto">
-                  توفير الوقت والجهد
+                  توفير الوقت
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Option 1: Image Upload (File / Drag & Drop) */}
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                    <ImageIcon className="w-3.5 h-3.5 text-red-600" />
-                    خيار 1: صورة البوليصة أو المحادثة
-                  </span>
-
-                  <input
-                    type="file"
-                    ref={imageInputRef}
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-
-                  {aiImagePreview ? (
-                    <div className="bg-white border border-slate-300 rounded-xl p-3 flex items-center justify-between gap-3 shadow-2xs">
-                      <div className="flex items-center gap-2.5 overflow-hidden">
-                        <img
-                          src={aiImagePreview}
-                          alt="صورة البوليصة"
-                          className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-900 truncate">تم اختيار الصورة بنجاح</p>
-                          <p className="text-[10px] text-slate-500">جاهزة للقراءة والاستخراج</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleAiParse(aiImageBase64 || undefined, aiImageMimeType, aiRawText)}
-                          disabled={isAiParsing}
-                          className="text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                        >
-                          إعادة الاستخراج
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleRemoveImage}
-                          className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                          title="إزالة الصورة"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setIsImageDragOver(true);
-                      }}
-                      onDragLeave={() => setIsImageDragOver(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsImageDragOver(false);
-                        const file = e.dataTransfer.files?.[0];
-                        if (file) handleImageFile(file);
-                      }}
-                      onClick={() => imageInputRef.current?.click()}
-                      className={`border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1 ${
-                        isImageDragOver
-                          ? 'border-red-500 bg-red-50/60'
-                          : 'border-slate-300 bg-white hover:border-red-400 hover:bg-slate-50/50'
-                      }`}
+              <div className="space-y-2">
+                <textarea
+                  value={aiRawText}
+                  onChange={(e) => setAiRawText(e.target.value)}
+                  rows={2}
+                  placeholder="الصق نص الرسالة هنا، مثال: أحمد سامي 01012345678 شارع التحرير الدقي الجيزة (مبلغ التحصيل 1200 ج)"
+                  className="w-full text-xs p-3 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none resize-none font-medium text-slate-900"
+                />
+                {aiRawText.trim() && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => handleAiParse(aiRawText)}
+                      disabled={isAiParsing}
+                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                     >
-                      <ImageIcon className="w-5 h-5 text-red-600" />
-                      <span className="text-xs font-bold text-slate-800">
-                        اضغط لرفع صورة أو اسحبها هنا
-                      </span>
-                      <span className="text-[10px] text-slate-400">يدعم JPG و PNG وسكرين شوت الواتساب</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Option 2: Raw Text Paste */}
-                <div className="space-y-1.5 flex flex-col">
-                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5 text-red-600" />
-                    خيار 2: لصق نص الرسالة أو العنوان
-                  </span>
-                  <div className="relative flex-1 flex flex-col">
-                    <textarea
-                      value={aiRawText}
-                      onChange={(e) => setAiRawText(e.target.value)}
-                      rows={2}
-                      placeholder="مثال: أحمد سامي 01012345678 شارع التحرير الدقي الجيزة (مبلغ التحصيل 1200 ج)"
-                      className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none flex-1 resize-none"
-                    />
-                    {aiRawText.trim() && (
-                      <button
-                        type="button"
-                        onClick={() => handleAiParse(aiImageBase64 || undefined, aiImageMimeType, aiRawText)}
-                        disabled={isAiParsing}
-                        className="mt-1.5 self-end bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                      >
-                        <Sparkles className="w-3 h-3 text-yellow-400" />
-                        استخراج من النص
-                      </button>
-                    )}
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                      <span>استخراج وتعبئة البيانات تلقائياً</span>
+                    </button>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Status or Progress Feedback */}
@@ -878,7 +779,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setAiSuccessMessage('')}
-                    className="text-emerald-500 hover:text-emerald-700 text-xs px-2"
+                    className="text-emerald-500 hover:text-emerald-700 text-xs px-2 cursor-pointer"
                   >
                     إغلاق
                   </button>
@@ -921,26 +822,129 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                 </div>
               ) : null}
 
-              {/* Custom Shipping Rate Indicator for Selected Merchant */}
+              {/* Custom Shipping Rate Indicator & Quick Control for Selected Merchant */}
               {merchantCustomRate !== null ? (
-                <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 text-emerald-950 font-bold">
-                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      سعر الشحن المخصص للتاجر ({currentSelectedMerchant?.storeName || currentSelectedMerchant?.name}):{' '}
-                      <strong className="text-emerald-700 font-black text-sm">{merchantCustomRate} ج.م</strong>{' '}
-                      {currentSelectedMerchant?.shippingPricingType === 'governorates' ? '(تسعيرة المحافظة)' : '(سعر موحد متفق عليه)'}
-                    </span>
+                <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-emerald-950 font-bold">
+                      <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>
+                        سعر الشحن المخصص للتاجر ({currentSelectedMerchant?.storeName || currentSelectedMerchant?.name}):{' '}
+                        <strong className="text-emerald-700 font-black text-sm">{merchantCustomRate} ج.م</strong>{' '}
+                        {currentSelectedMerchant?.shippingPricingType === 'governorates' ? '(تسعيرة المحافظة)' : '(سعر موحد متفق عليه)'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {currentRole === 'admin' && onUpdateUser && currentSelectedMerchant && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsQuickRateOpen(!isQuickRateOpen);
+                            setQuickRateInput(currentSelectedMerchant.customShippingRate !== undefined ? String(currentSelectedMerchant.customShippingRate) : '');
+                          }}
+                          className="text-[11px] font-bold text-emerald-800 underline hover:text-emerald-900 cursor-pointer"
+                        >
+                          {isQuickRateOpen ? 'إغلاق' : 'تعديل السعر'}
+                        </button>
+                      )}
+                      <span className="text-[10px] bg-emerald-200/70 text-emerald-900 font-black px-2 py-0.5 rounded-md">
+                        مطبق تلقائياً
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-[10px] bg-emerald-200/70 text-emerald-900 font-black px-2 py-0.5 rounded-md">
-                    مطبق تلقائياً
-                  </span>
+
+                  {isQuickRateOpen && currentRole === 'admin' && currentSelectedMerchant && onUpdateUser && (
+                    <div className="pt-2 border-t border-emerald-200 flex items-center gap-2 flex-wrap bg-white/70 p-2 rounded-lg">
+                      <span className="text-xs font-bold text-slate-800">السعر الموحد الجديد (ج.م):</span>
+                      <input
+                        type="number"
+                        placeholder="اكتب السعر المطلوب مثلاً"
+                        value={quickRateInput}
+                        onChange={(e) => setQuickRateInput(e.target.value)}
+                        className="w-24 p-1.5 text-xs font-black text-slate-900 bg-white border border-slate-300 rounded"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = parseFloat(quickRateInput);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateUser({
+                              ...currentSelectedMerchant,
+                              hasCustomShippingRate: true,
+                              customShippingRate: val,
+                              shippingPricingType: 'fixed',
+                            });
+                            setIsQuickRateOpen(false);
+                          }
+                        }}
+                        className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-1.5 rounded cursor-pointer"
+                      >
+                        حفظ السعر
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateUser({
+                            ...currentSelectedMerchant,
+                            hasCustomShippingRate: false,
+                            customShippingRate: undefined,
+                          });
+                          setIsQuickRateOpen(false);
+                        }}
+                        className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-2.5 py-1.5 rounded cursor-pointer"
+                      >
+                        إلغاء السعر الخاص (تسعيرة عامة)
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : currentSelectedMerchant?.role === 'merchant' ? (
-                <div className="bg-slate-100 border border-slate-200 p-2 rounded-lg flex items-center justify-between text-[11px] text-slate-600">
-                  <span>سعر الشحن لهذا التاجر: <strong>حسب تسعيرة المحافظات العامة للنظام ({selectedGov.baseRate} ج.م)</strong></span>
-                  {currentRole === 'admin' && (
-                    <span className="text-[10px] text-red-600 font-bold">يمكنك تخصيص سعر ثابت للتاجر من لوحة الأدمن</span>
+                <div className="bg-slate-100 border border-slate-200 p-2.5 rounded-xl text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-700 font-medium">سعر الشحن لهذا التاجر: <strong>حسب تسعيرة المحافظات العامة للنظام ({selectedGov.baseRate} ج.م)</strong></span>
+                    {currentRole === 'admin' && onUpdateUser && currentSelectedMerchant && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsQuickRateOpen(!isQuickRateOpen);
+                          setQuickRateInput('');
+                        }}
+                        className="text-[11px] font-bold text-red-600 underline hover:text-red-700 cursor-pointer"
+                      >
+                        {isQuickRateOpen ? 'إلغاء' : 'تحديد سعر شحن خاص لهذا التاجر'}
+                      </button>
+                    )}
+                  </div>
+
+                  {isQuickRateOpen && currentRole === 'admin' && currentSelectedMerchant && onUpdateUser && (
+                    <div className="pt-2 border-t border-slate-200 flex items-center gap-2 flex-wrap bg-white p-2 rounded-lg">
+                      <span className="text-xs font-bold text-slate-800">سعر الشحن المتفق عليه للتاجر (ج.م):</span>
+                      <input
+                        type="number"
+                        placeholder="مثال: 50، 60، أو أي مبلغ"
+                        value={quickRateInput}
+                        onChange={(e) => setQuickRateInput(e.target.value)}
+                        className="w-28 p-1.5 text-xs font-black text-slate-900 bg-white border border-slate-300 rounded"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = parseFloat(quickRateInput);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateUser({
+                              ...currentSelectedMerchant,
+                              hasCustomShippingRate: true,
+                              customShippingRate: val,
+                              shippingPricingType: 'fixed',
+                            });
+                            setIsQuickRateOpen(false);
+                          }
+                        }}
+                        className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded cursor-pointer"
+                      >
+                        حفظ واعتماد السعر للتاجر
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : null}
@@ -1036,11 +1040,16 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                   <select
                     value={governorateCode}
                     onChange={(e) => {
-                      setGovernorateCode(e.target.value);
-                      const newGov = governoratesList.find((g) => g.code === e.target.value);
+                      const newCode = e.target.value;
+                      setGovernorateCode(newCode);
+                      const newGov = governoratesList.find((g) => g.code === newCode);
                       if (newGov && newGov.cities && newGov.cities.length > 0) {
                         setCity(newGov.cities[0]);
+                      } else {
+                        setCity('');
                       }
+                      setCitySearchQuery('');
+                      setIsCityDropdownOpen(false);
                     }}
                     className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-extrabold text-slate-900 focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all cursor-pointer"
                   >
@@ -1052,34 +1061,133 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                   </select>
                 </div>
 
-                <div className="sm:col-span-2 space-y-2">
+                {/* Region / City Field with Arrow Dropdown */}
+                <div className="sm:col-span-2 space-y-1.5 relative" ref={cityDropdownRef}>
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700">المدينة / المركز / المنطقة *</label>
-                    <span className="text-[11px] text-slate-400">اختر من المقترحات السريعة أو اكتب مباشرة</span>
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-red-600" />
+                      <span>المنطقة / المدينة *</span>
+                      <span className="text-[10px] text-slate-400 font-normal">
+                        (اضغط على السهم لعرض كافة المناطق أو اكتب للبحث)
+                      </span>
+                    </label>
+                    {selectedGov.cities && selectedGov.cities.length > 0 && (
+                      <span className="text-[11px] font-bold text-red-600 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-100">
+                        {selectedGov.cities.length} منطقة متاحة
+                      </span>
+                    )}
                   </div>
-                  <input
-                    type="text"
-                    list="city-suggestions"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder={selectedGov.cities && selectedGov.cities.length > 0 ? `مثال: ${selectedGov.cities.slice(0, 3).join('، ')}` : "اكتب اسم المدينة أو المركز"}
-                    className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
-                  />
-                  <datalist id="city-suggestions">
-                    {selectedGov.cities?.map((c) => (
-                      <option key={c} value={c} />
-                    ))}
-                  </datalist>
 
-                  {/* Auto-suggested Centers Chips */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={city}
+                      onChange={(e) => {
+                        setCity(e.target.value);
+                        setCitySearchQuery(e.target.value);
+                        if (!isCityDropdownOpen) setIsCityDropdownOpen(true);
+                      }}
+                      onFocus={() => setIsCityDropdownOpen(true)}
+                      placeholder="اضغط على السهم ⮟ لعرض قائمة المناطق أو اكتب اسم المنطقة..."
+                      className="w-full text-xs p-3 pl-11 pr-3.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-900 focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all cursor-text"
+                    />
+
+                    {/* Clickable Arrow Button - "وعند المنطقه خلي في زي سهم كده تدوس عليه يظهر المناطق" */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCityDropdownOpen(!isCityDropdownOpen);
+                        setCitySearchQuery('');
+                      }}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-slate-200 hover:bg-red-50 hover:text-red-600 text-slate-700 transition-all cursor-pointer flex items-center justify-center shadow-2xs"
+                      title="اضغط لإظهار قائمة المناطق"
+                    >
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          isCityDropdownOpen ? 'rotate-180 text-red-600' : 'text-slate-700'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Dropdown Menu showing all areas (المناطق) */}
+                  {isCityDropdownOpen && (
+                    <div className="absolute z-40 left-0 right-0 top-full mt-1.5 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                      {/* Dropdown Header with search and counter */}
+                      <div className="p-2.5 bg-slate-100/90 border-b border-slate-200 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-red-600" />
+                          <span className="text-xs font-black text-slate-900">
+                            مناطق محافظة {selectedGov.nameAr} ({filteredCities.length}):
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsCityDropdownOpen(false)}
+                          className="text-slate-400 hover:text-slate-700 p-1 rounded-md cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Areas List */}
+                      <div className="max-h-60 overflow-y-auto p-1.5 divide-y divide-slate-100">
+                        {filteredCities.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-slate-500">
+                            <p>لا توجد منطقة مطابقة لكلمة البحث "{citySearchQuery}"</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCity(citySearchQuery);
+                                setIsCityDropdownOpen(false);
+                              }}
+                              className="mt-2 text-xs font-extrabold text-red-600 hover:underline cursor-pointer bg-red-50 px-3 py-1.5 rounded-lg inline-block"
+                            >
+                              اعتماد "{citySearchQuery}" كاسم منطقة جديد ✓
+                            </button>
+                          </div>
+                        ) : (
+                          filteredCities.map((cityName) => (
+                            <button
+                              key={cityName}
+                              type="button"
+                              onClick={() => {
+                                setCity(cityName);
+                                setIsCityDropdownOpen(false);
+                              }}
+                              className={`w-full text-right px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                                city === cityName
+                                  ? 'bg-red-50 text-red-700 font-black'
+                                  : 'text-slate-800 hover:bg-slate-100 hover:text-red-600'
+                              }`}
+                            >
+                              <span>{cityName}</span>
+                              {city === cityName && <Check className="w-4 h-4 text-red-600 shrink-0" />}
+                            </button>
+                          ))
+                        )}
+                      </div>
+
+                      {/* Quick custom area typing footer */}
+                      <div className="p-2 bg-slate-50 border-t border-slate-200 text-center text-[11px] text-slate-500 font-medium">
+                        💡 يمكنك أيضاً كتابة أي اسم منطقة أخرى يدوياً في الخانة مباشرة
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Popular area chips */}
                   {selectedGov.cities && selectedGov.cities.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                      <span className="text-[10px] font-bold text-slate-400">شائع في {selectedGov.nameAr}:</span>
-                      {selectedGov.cities.slice(0, 8).map((cityName) => (
+                      <span className="text-[10px] font-bold text-slate-400">مناطق سريعة:</span>
+                      {selectedGov.cities.slice(0, 10).map((cityName) => (
                         <button
                           key={cityName}
                           type="button"
-                          onClick={() => setCity(cityName)}
+                          onClick={() => {
+                            setCity(cityName);
+                            setIsCityDropdownOpen(false);
+                          }}
                           className={`text-[11px] px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                             city === cityName
                               ? 'bg-red-600 text-white shadow-xs'

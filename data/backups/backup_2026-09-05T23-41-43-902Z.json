@@ -4440,8 +4440,8 @@
         "nameAr": "القاهرة",
         "nameEn": "Cairo",
         "estDays": "24 ساعة",
-        "baseRate": 0,
-        "additionalKgRate": 0
+        "baseRate": 65,
+        "additionalKgRate": 10
       },
       {
         "code": "NCW",
@@ -5211,6 +5211,6 @@
     ],
     "companyTransactions": []
   },
-  "timestamp": 1788651708563,
-  "savedAt": "2026-09-05T23:41:48.564Z"
+  "timestamp": 1788651703898,
+  "savedAt": "2026-09-05T23:41:43.900Z"
 }

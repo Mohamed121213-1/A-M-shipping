@@ -7,6 +7,7 @@ import helmet from "helmet";
 import cors from "cors";
 import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
+import { EGYPT_GOVERNORATES } from "./src/data/mockData";
 
 const app = express();
 const PORT = 3000;
@@ -459,6 +460,17 @@ function sanitizeServerState(rawState: any) {
         isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : (u.is_confirmed !== undefined ? Boolean(u.is_confirmed) : true),
         avatarUrl: u.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=dc2626&color=ffffff`,
         registeredAt: u.registeredAt || u.created_at || new Date().toISOString(),
+        hasCustomShippingRate: u.hasCustomShippingRate !== undefined 
+          ? Boolean(u.hasCustomShippingRate) 
+          : (u.customShippingRate !== undefined && u.customShippingRate !== null ? true : false),
+        customShippingRate: (u.customShippingRate !== undefined && u.customShippingRate !== null && !isNaN(Number(u.customShippingRate)))
+          ? Number(u.customShippingRate)
+          : (u.custom_shipping_rate !== undefined && u.custom_shipping_rate !== null && !isNaN(Number(u.custom_shipping_rate))
+            ? Number(u.custom_shipping_rate)
+            : undefined),
+        customGovernorateRates: u.customGovernorateRates || u.custom_governorate_rates || undefined,
+        shippingPricingType: u.shippingPricingType || u.shipping_pricing_type || (u.customGovernorateRates ? 'governorates' : 'fixed'),
+        shippingNotes: u.shippingNotes || u.shipping_notes || undefined,
       };
 
       usersById.set(cleanUser.id, cleanUser);
@@ -536,6 +548,26 @@ function sanitizeServerState(rawState: any) {
 
   if (Array.isArray(rawState.shipments)) {
     rawState.shipments = rawState.shipments.filter((s: any) => s && typeof s === 'object' && (s.id || s.trackingNumber));
+  }
+
+  if (Array.isArray(rawState.governorates) && rawState.governorates.length > 0) {
+    rawState.governorates = rawState.governorates
+      .filter((g: any) => g && typeof g === 'object' && g.code)
+      .map((g: any) => ({
+        ...g,
+        baseRate: Number(g.baseRate !== undefined && !isNaN(Number(g.baseRate)) ? g.baseRate : 0),
+        additionalKgRate: Number(g.additionalKgRate !== undefined && !isNaN(Number(g.additionalKgRate)) ? g.additionalKgRate : 0),
+      }));
+  } else {
+    rawState.governorates = EGYPT_GOVERNORATES.map((g) => ({
+      ...g,
+      baseRate: 0,
+      additionalKgRate: 0,
+    }));
+  }
+
+  if (Array.isArray(rawState.hubs)) {
+    rawState.hubs = rawState.hubs.filter((h: any) => h && typeof h === 'object' && h.name);
   }
 
   return rawState;
@@ -1663,12 +1695,154 @@ app.post("/api/sync/state", (req, res) => {
       } else if (Array.isArray(serverAppState.companyTransactions) && serverAppState.companyTransactions.length > 0) {
         mergedState.companyTransactions = serverAppState.companyTransactions;
       }
+
+      if (Array.isArray(state.governorates)) {
+        mergedState.governorates = state.governorates;
+      } else if (Array.isArray(serverAppState.governorates) && serverAppState.governorates.length > 0) {
+        mergedState.governorates = serverAppState.governorates;
+      }
+
+      if (Array.isArray(state.hubs)) {
+        mergedState.hubs = state.hubs;
+      } else if (Array.isArray(serverAppState.hubs) && serverAppState.hubs.length > 0) {
+        mergedState.hubs = serverAppState.hubs;
+      }
     }
 
     serverAppState = sanitizeServerState({ ...mergedState, timestamp: incomingTime, senderId });
     persistAndBroadcast(senderId || 'server_state_sync');
 
     return res.json({ success: true, timestamp: serverLastUpdated, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GOVERNORATES & SHIPPING RATES MANAGEMENT ENDPOINTS
+
+// 1. Get all governorates
+app.get("/api/governorates", (req, res) => {
+  try {
+    const govs = Array.isArray(serverAppState?.governorates) ? serverAppState.governorates : [];
+    return res.json({ success: true, governorates: govs });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Save all governorates / update rates batch
+app.post("/api/governorates", (req, res) => {
+  try {
+    const { governorates, senderId } = req.body || {};
+    if (!Array.isArray(governorates)) {
+      return res.status(400).json({ error: "قائمة المحافظات غير صالحة" });
+    }
+
+    if (!serverAppState) serverAppState = {};
+    serverAppState.governorates = governorates.map((g: any) => ({
+      ...g,
+      baseRate: Number(g.baseRate !== undefined && !isNaN(Number(g.baseRate)) ? g.baseRate : 0),
+      additionalKgRate: Number(g.additionalKgRate !== undefined && !isNaN(Number(g.additionalKgRate)) ? g.additionalKgRate : 0),
+    }));
+
+    persistAndBroadcast(senderId || 'api_update_governorates');
+    return res.json({ success: true, governorates: serverAppState.governorates });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Update single governorate rate atomically
+app.patch("/api/governorates/:code", (req, res) => {
+  try {
+    const { code } = req.params;
+    const { baseRate, additionalKgRate, estDays, cities, nameAr, nameEn, senderId } = req.body || {};
+
+    if (!serverAppState) serverAppState = {};
+    if (!Array.isArray(serverAppState.governorates)) {
+      serverAppState.governorates = [];
+    }
+
+    const idx = serverAppState.governorates.findIndex((g: any) => g.code === code);
+    let updatedGov: any;
+    if (idx >= 0) {
+      const existing = serverAppState.governorates[idx];
+      updatedGov = {
+        ...existing,
+        baseRate: baseRate !== undefined ? Number(baseRate) : existing.baseRate,
+        additionalKgRate: additionalKgRate !== undefined ? Number(additionalKgRate) : existing.additionalKgRate,
+        estDays: estDays !== undefined ? String(estDays) : existing.estDays,
+        cities: Array.isArray(cities) ? cities : existing.cities,
+        nameAr: nameAr || existing.nameAr,
+        nameEn: nameEn || existing.nameEn,
+      };
+      serverAppState.governorates[idx] = updatedGov;
+    } else {
+      updatedGov = {
+        code,
+        nameAr: nameAr || code,
+        nameEn: nameEn || code,
+        baseRate: Number(baseRate || 0),
+        additionalKgRate: Number(additionalKgRate || 0),
+        estDays: estDays || '24-48 ساعة',
+        cities: Array.isArray(cities) ? cities : [],
+      };
+      serverAppState.governorates.push(updatedGov);
+    }
+
+    persistAndBroadcast(senderId || 'api_patch_governorate');
+    return res.json({ success: true, governorate: updatedGov, governorates: serverAppState.governorates });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Wipe / Zero all shipping rates
+app.post("/api/governorates/reset-zero", (req, res) => {
+  try {
+    const { senderId } = req.body || {};
+    if (!serverAppState) serverAppState = {};
+    if (Array.isArray(serverAppState.governorates)) {
+      serverAppState.governorates = serverAppState.governorates.map((g: any) => ({
+        ...g,
+        baseRate: 0,
+        additionalKgRate: 0,
+      }));
+    }
+    persistAndBroadcast(senderId || 'api_reset_zero_governorates');
+    return res.json({ success: true, governorates: serverAppState.governorates });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Merchant specific shipping rate endpoint
+app.post("/api/users/shipping-rate", (req, res) => {
+  try {
+    const { userId, hasCustomShippingRate, customShippingRate, shippingPricingType, customGovernorateRates, shippingNotes, senderId } = req.body || {};
+    if (!userId) {
+      return res.status(400).json({ error: "معرف التاجر مطلوب" });
+    }
+    if (!serverAppState) serverAppState = { users: [] };
+    if (!Array.isArray(serverAppState.users)) serverAppState.users = [];
+
+    const userIdx = serverAppState.users.findIndex((u: any) => u.id === userId);
+    if (userIdx === -1) {
+      return res.status(404).json({ error: "التاجر غير موجود بالخادم" });
+    }
+
+    const prev = serverAppState.users[userIdx];
+    const updated = {
+      ...prev,
+      hasCustomShippingRate: Boolean(hasCustomShippingRate),
+      customShippingRate: customShippingRate !== undefined && customShippingRate !== null && !isNaN(Number(customShippingRate)) ? Number(customShippingRate) : undefined,
+      shippingPricingType: shippingPricingType || (customGovernorateRates ? 'governorates' : 'fixed'),
+      customGovernorateRates: customGovernorateRates || undefined,
+      shippingNotes: shippingNotes ? String(shippingNotes).trim() : undefined,
+    };
+    serverAppState.users[userIdx] = updated;
+    persistAndBroadcast(senderId || 'api_update_merchant_shipping_rate');
+    return res.json({ success: true, user: updated, state: serverAppState });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -1720,6 +1894,15 @@ app.post("/api/users/register", async (req, res) => {
       avatarUrl: rawUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(rawUser.name)}&background=dc2626&color=ffffff`,
       isConfirmed: rawUser.isConfirmed !== undefined ? Boolean(rawUser.isConfirmed) : false,
       registeredAt: rawUser.registeredAt || new Date().toISOString(),
+      hasCustomShippingRate: rawUser.hasCustomShippingRate !== undefined 
+        ? Boolean(rawUser.hasCustomShippingRate) 
+        : (rawUser.customShippingRate !== undefined && rawUser.customShippingRate !== null ? true : false),
+      customShippingRate: (rawUser.customShippingRate !== undefined && rawUser.customShippingRate !== null && !isNaN(Number(rawUser.customShippingRate)))
+        ? Number(rawUser.customShippingRate)
+        : undefined,
+      customGovernorateRates: rawUser.customGovernorateRates || undefined,
+      shippingPricingType: rawUser.shippingPricingType || (rawUser.customGovernorateRates ? 'governorates' : 'fixed'),
+      shippingNotes: rawUser.shippingNotes ? String(rawUser.shippingNotes).trim() : undefined,
     };
 
     if (!serverAppState) {
