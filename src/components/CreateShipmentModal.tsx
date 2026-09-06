@@ -5,7 +5,7 @@ import { EGYPT_GOVERNORATES, BOSTA_HUBS } from '../data/mockData';
 import { 
   X, Sparkles, MapPin, Package, DollarSign, User, Phone, AlertCircle, CheckCircle, 
   Calculator, Building, ShieldCheck, FileSpreadsheet, Upload, Download, Trash2, Plus, 
-  Check, RefreshCw, FileText, Store, ChevronDown, Search
+  Check, RefreshCw, FileText, ChevronDown, Search
 } from 'lucide-react';
 
 interface CreateShipmentModalProps {
@@ -59,13 +59,11 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 
   // Active Tab: 'single' | 'excel'
   const [activeTab, setActiveTab] = useState<'single' | 'excel'>('single');
-  const [isQuickRateOpen, setIsQuickRateOpen] = useState(false);
-  const [quickRateInput, setQuickRateInput] = useState('');
 
   // Registered Merchants from Admin Panel
   const registeredMerchants = systemUsers.filter((u) => u.role === 'merchant');
 
-  // Merchant / Sender Selection State
+  // Merchant / Sender State (Auto populated from current user/session)
   const [selectedMerchantId, setSelectedMerchantId] = useState<string>('');
   const [merchantStoreName, setMerchantStoreName] = useState<string>('');
   const [merchantContactName, setMerchantContactName] = useState<string>('');
@@ -85,27 +83,11 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       setMerchantPhone(first.phone);
     } else {
       setSelectedMerchantId(`merch-${Date.now()}`);
-      setMerchantStoreName('متجر أحدث');
-      setMerchantContactName('التاجر العام');
+      setMerchantStoreName('متجر دروب لاين');
+      setMerchantContactName('مسؤول الشحن');
       setMerchantPhone('01000000000');
     }
   }, [currentUser, systemUsers.length]);
-
-  const handleSelectMerchant = (merchantId: string) => {
-    setSelectedMerchantId(merchantId);
-    setCustomShippingFee(null); // Reset manual override to adapt to newly selected merchant's custom rate
-    const found = registeredMerchants.find((m) => m.id === merchantId);
-    if (found) {
-      setMerchantStoreName(found.storeName || `متجر ${found.name}`);
-      setMerchantContactName(found.name);
-      setMerchantPhone(found.phone);
-    }
-  };
-
-  // AI Paste Text state
-  const [aiRawText, setAiRawText] = useState('');
-  const [isAiParsing, setIsAiParsing] = useState(false);
-  const [aiSuccessMessage, setAiSuccessMessage] = useState('');
 
   // Region / City Search & Dropdown State
   const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
@@ -211,72 +193,6 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
     const q = citySearchQuery.trim().toLowerCase();
     return list.filter((item) => item.toLowerCase().includes(q));
   }, [selectedGov.cities, citySearchQuery]);
-
-  // AI Address Text Parsing Handler
-  const handleAiParse = async (overrideRawText?: string) => {
-    const targetText = overrideRawText !== undefined ? overrideRawText : aiRawText;
-
-    if (!targetText?.trim()) return;
-    setIsAiParsing(true);
-    setAiSuccessMessage('');
-
-    try {
-      const res = await fetch('/api/parse-address', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rawText: targetText,
-        }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'فشل في الاتصال بخدمة التحليل الذكي وتفريغ البيانات');
-      }
-
-      const data = await res.json();
-      let extractedCount = 0;
-
-      if (data.recipientName) { setRecipientName(data.recipientName); extractedCount++; }
-      if (data.phone) { setPhone(data.phone); extractedCount++; }
-      if (data.secondaryPhone) { setSecondaryPhone(data.secondaryPhone); extractedCount++; }
-      if (data.city) { setCity(data.city); extractedCount++; }
-      if (data.district) { setDistrict(data.district); extractedCount++; }
-      if (data.streetAddress) { setStreetAddress(data.streetAddress); extractedCount++; }
-      if (data.buildingNo) { setBuildingNo(data.buildingNo); }
-      if (data.apartmentNo) { setApartmentNo(data.apartmentNo); }
-      if (data.deliveryNotes) { setNotes(data.deliveryNotes); }
-
-      if (data.description) { setDescription(data.description); }
-      if (typeof data.codAmount === 'number' && data.codAmount > 0) { setCodAmount(data.codAmount); extractedCount++; }
-      if (typeof data.itemsCount === 'number' && data.itemsCount > 0) { setItemsCount(data.itemsCount); }
-
-      // Match governorate
-      if (data.governorate || data.city) {
-        const govTerm = (data.governorate || '').trim();
-        const cityTerm = (data.city || '').trim();
-        const matchedGov = governoratesList.find((g) =>
-          (govTerm && (g.nameAr.includes(govTerm) || govTerm.includes(g.nameAr))) ||
-          (cityTerm && g.cities?.some((c) => c.toLowerCase().includes(cityTerm.toLowerCase()) || cityTerm.toLowerCase().includes(c.toLowerCase())))
-        );
-        if (matchedGov) {
-          setGovernorateCode(matchedGov.code);
-          extractedCount++;
-        }
-      }
-
-      setAiSuccessMessage(
-        extractedCount > 0
-          ? '✨ تم استخراج وتعبئة بيانات الشحنة من النص بنجاح!'
-          : '✨ تم استخراج البيانات، يرجى مراجعة الحقول وتأكيدها.'
-      );
-    } catch (err: any) {
-      console.warn('AI Parsing notice:', err.message || err);
-      setAiSuccessMessage('تم فحص النص، يمكنك إكمال أو تعديل أي حقول يدوياً');
-    } finally {
-      setIsAiParsing(false);
-    }
-  };
 
   const handleSingleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -722,269 +638,6 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
         {/* TAB 1: SINGLE SHIPMENT FORM */}
         {activeTab === 'single' && (
           <form onSubmit={handleSingleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1">
-            {/* AI Smart Address Text Parser Section */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-lg bg-red-100 text-red-600 flex items-center justify-center shrink-0">
-                    <Sparkles className="w-4 h-4" />
-                  </span>
-                  <div>
-                    <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">تفريغ بيانات الشحنة من النص المنسوخ (اختياري)</h4>
-                    <p className="text-[11px] text-slate-500">الصق نص رسالة العميل لملء بيانات المستلم والمبلغ تلقائياً بضغطة زر</p>
-                  </div>
-                </div>
-                <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-full self-start sm:self-auto">
-                  توفير الوقت
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                <textarea
-                  value={aiRawText}
-                  onChange={(e) => setAiRawText(e.target.value)}
-                  rows={2}
-                  placeholder="الصق نص الرسالة هنا، مثال: أحمد سامي 01012345678 شارع التحرير الدقي الجيزة (مبلغ التحصيل 1200 ج)"
-                  className="w-full text-xs p-3 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none resize-none font-medium text-slate-900"
-                />
-                {aiRawText.trim() && (
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => handleAiParse(aiRawText)}
-                      disabled={isAiParsing}
-                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
-                      <span>استخراج وتعبئة البيانات تلقائياً</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Status or Progress Feedback */}
-              {isAiParsing && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2.5 text-xs font-bold text-red-800">
-                  <span className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin shrink-0"></span>
-                  <span>جاري تحليل وقراءة بيانات الشحنة واستخراج الاسم والهاتف والعنوان تلقائياً...</span>
-                </div>
-              )}
-
-              {aiSuccessMessage && !isAiParsing && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs font-bold text-emerald-800">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>{aiSuccessMessage}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAiSuccessMessage('')}
-                    className="text-emerald-500 hover:text-emerald-700 text-xs px-2 cursor-pointer"
-                  >
-                    إغلاق
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Merchant / Sender Selection Section */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                <span className="flex items-center gap-1.5 font-extrabold text-slate-900 text-xs sm:text-sm">
-                  <Store className="w-4 h-4 text-red-600" />
-                  بيانات التاجر / المتجر (مربوط بإعدادات لوحة التحكم)
-                </span>
-                <span className="text-[11px] text-slate-500 font-bold">
-                  {registeredMerchants.length > 0 ? `مسجل ${registeredMerchants.length} تاجر` : 'لا يوجد تجار مسجلين'}
-                </span>
-              </div>
-
-              {currentRole === 'admin' && registeredMerchants.length > 0 ? (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">اختر التاجر المسجل من لوحة التحكم</label>
-                  <select
-                    value={selectedMerchantId}
-                    onChange={(e) => handleSelectMerchant(e.target.value)}
-                    className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-900 focus:ring-2 focus:ring-red-500/20 outline-none"
-                  >
-                    {registeredMerchants.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.storeName || `متجر ${m.name}`} - ({m.name} | {m.phone}) {m.hasCustomShippingRate && m.customShippingRate ? `[سعر شحن خاص: ${m.customShippingRate} ج.م]` : ''}
-                      </option>
-                    ))}
-                    <option value="custom">-- إدخال اسم متجر يدوي جديد --</option>
-                  </select>
-                </div>
-              ) : currentUser?.role === 'merchant' ? (
-                <div className="text-xs font-bold text-slate-800 bg-red-50 border border-red-200 p-2.5 rounded-lg flex items-center gap-2">
-                  <Store className="w-4 h-4 text-red-600 shrink-0" />
-                  <span>الشحنة سيتم تسجيلها باسم متجرك: <strong className="text-red-700">{merchantStoreName}</strong> ({merchantPhone})</span>
-                </div>
-              ) : null}
-
-              {/* Custom Shipping Rate Indicator & Quick Control for Selected Merchant */}
-              {merchantCustomRate !== null ? (
-                <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl text-xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-emerald-950 font-bold">
-                      <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>
-                        سعر الشحن المخصص للتاجر ({currentSelectedMerchant?.storeName || currentSelectedMerchant?.name}):{' '}
-                        <strong className="text-emerald-700 font-black text-sm">{merchantCustomRate} ج.م</strong>{' '}
-                        {currentSelectedMerchant?.shippingPricingType === 'governorates' ? '(تسعيرة المحافظة)' : '(سعر موحد متفق عليه)'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {currentRole === 'admin' && onUpdateUser && currentSelectedMerchant && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsQuickRateOpen(!isQuickRateOpen);
-                            setQuickRateInput(currentSelectedMerchant.customShippingRate !== undefined ? String(currentSelectedMerchant.customShippingRate) : '');
-                          }}
-                          className="text-[11px] font-bold text-emerald-800 underline hover:text-emerald-900 cursor-pointer"
-                        >
-                          {isQuickRateOpen ? 'إغلاق' : 'تعديل السعر'}
-                        </button>
-                      )}
-                      <span className="text-[10px] bg-emerald-200/70 text-emerald-900 font-black px-2 py-0.5 rounded-md">
-                        مطبق تلقائياً
-                      </span>
-                    </div>
-                  </div>
-
-                  {isQuickRateOpen && currentRole === 'admin' && currentSelectedMerchant && onUpdateUser && (
-                    <div className="pt-2 border-t border-emerald-200 flex items-center gap-2 flex-wrap bg-white/70 p-2 rounded-lg">
-                      <span className="text-xs font-bold text-slate-800">السعر الموحد الجديد (ج.م):</span>
-                      <input
-                        type="number"
-                        placeholder="اكتب السعر المطلوب مثلاً"
-                        value={quickRateInput}
-                        onChange={(e) => setQuickRateInput(e.target.value)}
-                        className="w-24 p-1.5 text-xs font-black text-slate-900 bg-white border border-slate-300 rounded"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = parseFloat(quickRateInput);
-                          if (!isNaN(val) && val > 0) {
-                            onUpdateUser({
-                              ...currentSelectedMerchant,
-                              hasCustomShippingRate: true,
-                              customShippingRate: val,
-                              shippingPricingType: 'fixed',
-                            });
-                            setIsQuickRateOpen(false);
-                          }
-                        }}
-                        className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-1.5 rounded cursor-pointer"
-                      >
-                        حفظ السعر
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onUpdateUser({
-                            ...currentSelectedMerchant,
-                            hasCustomShippingRate: false,
-                            customShippingRate: undefined,
-                          });
-                          setIsQuickRateOpen(false);
-                        }}
-                        className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-2.5 py-1.5 rounded cursor-pointer"
-                      >
-                        إلغاء السعر الخاص (تسعيرة عامة)
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : currentSelectedMerchant?.role === 'merchant' ? (
-                <div className="bg-slate-100 border border-slate-200 p-2.5 rounded-xl text-xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-700 font-medium">سعر الشحن لهذا التاجر: <strong>حسب تسعيرة المحافظات العامة للنظام ({selectedGov.baseRate} ج.م)</strong></span>
-                    {currentRole === 'admin' && onUpdateUser && currentSelectedMerchant && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsQuickRateOpen(!isQuickRateOpen);
-                          setQuickRateInput('');
-                        }}
-                        className="text-[11px] font-bold text-red-600 underline hover:text-red-700 cursor-pointer"
-                      >
-                        {isQuickRateOpen ? 'إلغاء' : 'تحديد سعر شحن خاص لهذا التاجر'}
-                      </button>
-                    )}
-                  </div>
-
-                  {isQuickRateOpen && currentRole === 'admin' && currentSelectedMerchant && onUpdateUser && (
-                    <div className="pt-2 border-t border-slate-200 flex items-center gap-2 flex-wrap bg-white p-2 rounded-lg">
-                      <span className="text-xs font-bold text-slate-800">سعر الشحن المتفق عليه للتاجر (ج.م):</span>
-                      <input
-                        type="number"
-                        placeholder="مثال: 50، 60، أو أي مبلغ"
-                        value={quickRateInput}
-                        onChange={(e) => setQuickRateInput(e.target.value)}
-                        className="w-28 p-1.5 text-xs font-black text-slate-900 bg-white border border-slate-300 rounded"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = parseFloat(quickRateInput);
-                          if (!isNaN(val) && val > 0) {
-                            onUpdateUser({
-                              ...currentSelectedMerchant,
-                              hasCustomShippingRate: true,
-                              customShippingRate: val,
-                              shippingPricingType: 'fixed',
-                            });
-                            setIsQuickRateOpen(false);
-                          }
-                        }}
-                        className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded cursor-pointer"
-                      >
-                        حفظ واعتماد السعر للتاجر
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">اسم العلامة التجارية / المتجر</label>
-                  <input
-                    type="text"
-                    required
-                    value={merchantStoreName}
-                    readOnly={currentRole === 'merchant' || currentUser?.role === 'merchant'}
-                    onChange={(e) => setMerchantStoreName(e.target.value)}
-                    placeholder="مثال: متجر الأناقة"
-                    className={`w-full text-xs p-2.5 border rounded-lg font-bold ${
-                      currentRole === 'merchant' || currentUser?.role === 'merchant'
-                        ? 'bg-slate-100 border-slate-200 text-slate-700'
-                        : 'bg-white border border-slate-200 focus:ring-2 focus:ring-red-500/20'
-                    }`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم هاتف التاجر</label>
-                  <input
-                    type="tel"
-                    required
-                    value={merchantPhone}
-                    readOnly={currentRole === 'merchant' || currentUser?.role === 'merchant'}
-                    onChange={(e) => setMerchantPhone(e.target.value)}
-                    placeholder="01012345678"
-                    className={`w-full text-xs p-2.5 border rounded-lg font-mono ${
-                      currentRole === 'merchant' || currentUser?.role === 'merchant'
-                        ? 'bg-slate-100 border-slate-200 text-slate-700'
-                        : 'bg-white border border-slate-200 focus:ring-2 focus:ring-red-500/20'
-                    }`}
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* STEP 1: Recipient Information */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
               <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
