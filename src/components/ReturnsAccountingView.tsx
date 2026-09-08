@@ -543,11 +543,11 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                     {/* Recipient & Financials */}
                     <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
                       <div>
-                        <span className="text-[10px] text-slate-500 font-bold block">المستلم والمحافظة:</span>
+                        <span className="text-[10px] text-slate-500 font-bold block">المستلم والمحافظة والمنطقة:</span>
                         <p className="font-black text-slate-900">{s.recipient.name}</p>
                         <p className="text-[11px] text-slate-600 font-medium flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-red-500 shrink-0" />
-                          {s.recipient.governorate}
+                          <span>{s.recipient.governorate} {(s.recipient.city || s.recipient.district) ? `- ${s.recipient.city || s.recipient.district}` : ''}</span>
                         </p>
                       </div>
 
@@ -682,7 +682,7 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                           <p className="font-extrabold text-slate-900">{s.recipient.name}</p>
                           <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
                             <MapPin className="w-3 h-3 text-red-500" />
-                            {s.recipient.governorate} {s.recipient.city ? `- ${s.recipient.city}` : ''}
+                            {s.recipient.governorate} {(s.recipient.city || s.recipient.district) ? `- ${s.recipient.city || s.recipient.district}` : ''}
                           </p>
                         </td>
                         <td className="p-3.5 font-black text-slate-900">

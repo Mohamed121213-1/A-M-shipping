@@ -301,9 +301,23 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                   <span>تراسل عبر الواتساب</span>
                 </button>
               </div>
-              <p className="text-xs text-slate-700 mt-2 font-medium">
-                📍 {shipment.recipient.governorate} - {shipment.recipient.city} - {shipment.recipient.streetAddress}
-              </p>
+              <div className="mt-2.5 bg-slate-50 border border-slate-200/90 p-2.5 rounded-xl space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs flex-wrap">
+                  <span className="text-slate-500 font-bold">المحافظة:</span>
+                  <span className="font-extrabold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded-md">{shipment.recipient.governorate}</span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-red-700 font-extrabold flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                    المنطقة:
+                  </span>
+                  <span className="font-black text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">
+                    {shipment.recipient.city || shipment.recipient.district || 'غير محددة'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-700 font-medium pt-1 border-t border-slate-200/60">
+                  العنوان بالتفصيل: {shipment.recipient.streetAddress}
+                </p>
+              </div>
               {shipment.recipient.notes && (
                 <div className="mt-2 text-xs text-amber-800 bg-amber-50 p-2 rounded border border-amber-200">
                   ملاحظات: {shipment.recipient.notes}

@@ -187,13 +187,21 @@ export default function App() {
     });
   });
 
-  const [currentRole, setCurrentRole] = useState<AppUserRole>(() =>
-    loadLocalState<AppUserRole>('bosta_current_role', 'merchant')
-  );
-
   const [currentUser, setCurrentUser] = useState<UserSession | null>(() =>
     loadLocalState<UserSession | null>('bosta_current_user', null)
   );
+
+  const [currentRole, setCurrentRole] = useState<AppUserRole>(() => {
+    const savedUser = loadLocalState<UserSession | null>('bosta_current_user', null);
+    if (savedUser?.role) return savedUser.role;
+    return loadLocalState<AppUserRole>('bosta_current_role', 'merchant');
+  });
+
+  useEffect(() => {
+    if (currentUser?.role && currentRole !== currentUser.role) {
+      setCurrentRole(currentUser.role);
+    }
+  }, [currentUser]);
 
   const [activeTab, setActiveTab] = useState<string>(() => {
     const savedUser = loadLocalState<UserSession | null>('bosta_current_user', null);
@@ -866,6 +874,7 @@ export default function App() {
   ) => {
     if (!shipmentsDataList || shipmentsDataList.length === 0) return;
 
+    const isAdmin = currentUser?.role === 'admin' || currentRole === 'admin';
     let totalAddedCod = 0;
     const nowIso = new Date().toISOString();
     const nowTimeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
@@ -873,12 +882,15 @@ export default function App() {
     const newCreatedShipments: Shipment[] = shipmentsDataList.map((item, idx) => {
       const randomNum = Math.floor(100000 + Math.random() * 900000);
       const trackingNo = `BST-${randomNum}`;
-      const isPending = item.status === 'pending_approval';
+      // When added by an admin, the order is ALWAYS immediately active ('created'), never pending approval
+      const targetStatus: ShipmentStatus = isAdmin ? 'created' : (item.status || 'pending_approval');
+      const isPending = targetStatus === 'pending_approval';
 
       totalAddedCod += item.financials.codAmount || 0;
 
       return {
         ...item,
+        status: targetStatus,
         id: trackingNo,
         trackingNumber: trackingNo,
         createdAt: nowIso,
@@ -886,13 +898,13 @@ export default function App() {
         timeline: [
           {
             id: `tl-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
-            status: item.status || (currentRole === 'admin' ? 'created' : 'pending_approval'),
-            title: isPending ? '⏳ طلب جديد - بانتظار موافقة الأدمن' : '✨ تم إنشاء بوليصة الشحن بنجاح',
+            status: targetStatus,
+            title: isPending ? '⏳ طلب جديد - بانتظار موافقة الأدمن' : '✨ تم إنشاء وتأكيد بوليصة الشحن بنجاح',
             description: isPending
               ? 'تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن'
-              : 'تم اعتماد الشحنة وجاري تجهيز الاستلام من المتجر',
+              : (isAdmin ? 'تم إنشاء الشحنة وتأكيدها فوراً بواسطة أدمن النظام' : 'تم اعتماد الشحنة وجاري تجهيز الاستلام من المتجر'),
             timestamp: nowTimeStr,
-            actorRole: currentRole === 'admin' ? 'system' : 'merchant',
+            actorRole: isAdmin ? 'system' : 'merchant',
           },
         ],
       };
@@ -924,10 +936,14 @@ export default function App() {
       if (single.status === 'pending_approval') {
         showToast(`⏳ تم تسجيل الطلب ${single.trackingNumber} وبانتظار موافقة وتأكيد الأدمن!`);
       } else {
-        showToast(`✨ تم إنشاء بوليصة الشحن رقم ${single.trackingNumber} وتأكيدها بنجاح!`);
+        showToast(`✨ تم إنشاء بوليصة الشحن رقم ${single.trackingNumber} وتأكيدها فوراً بنجاح!`);
       }
     } else {
-      showToast(`🎉 تم استيراد وتأكيد (${count} أوردر) بنجاح من ملف الإكسيل!`);
+      if (isAdmin) {
+        showToast(`🎉 تم إنشاء وتأكيد (${count} أوردر) فوراً كأدمن بنجاح!`);
+      } else {
+        showToast(`🎉 تم استيراد (${count} أوردر) بنجاح وبانتظار موافقة الأدمن!`);
+      }
     }
   };
 
@@ -2592,7 +2608,7 @@ export default function App() {
       {/* Navigation Header - Rendered only when user is logged in */}
       {currentUser && (
         <Header
-          currentRole={currentRole}
+          currentRole={currentUser.role || currentRole}
           onRoleChange={(role) => {
             setCurrentRole(role);
             if (role === 'courier') {
@@ -2761,7 +2777,7 @@ export default function App() {
                     onApproveAllPending={handleApproveAllPending}
                     onToggleMerchantSettlement={handleToggleMerchantSettlement}
                     onMarkReturnedToMerchant={handleMarkReturnedToMerchant}
-                    currentRole={currentRole}
+                    currentRole={currentUser?.role || currentRole}
                     couriers={couriers}
                     systemUsers={users}
                     highlightedShipmentId={highlightedShipmentId}
@@ -2877,7 +2893,7 @@ export default function App() {
         onCreateBatchShipments={handleCreateBatchShipments}
         governorates={governorates}
         hubs={hubs}
-        currentRole={currentRole}
+        currentRole={currentUser?.role || currentRole}
         systemUsers={users}
         currentUser={currentUser}
         onUpdateUser={handleUpdateUser}

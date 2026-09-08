@@ -129,9 +129,16 @@ export const WaybillPrintModal: React.FC<WaybillPrintModalProps> = ({ shipment, 
 
               <div className="flex items-baseline justify-between gap-2">
                 <h4 className="font-black text-sm text-black">{shipment.recipient.name}</h4>
-                <span className="text-[11px] font-black bg-black text-white px-2 py-0.5 rounded shrink-0">
-                  {shipment.recipient.governorate}
-                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[11px] font-black bg-black text-white px-2 py-0.5 rounded">
+                    {shipment.recipient.governorate}
+                  </span>
+                  {(shipment.recipient.city || shipment.recipient.district) && (
+                    <span className="text-[11px] font-black bg-slate-100 text-black border border-black/60 px-2 py-0.5 rounded">
+                      {shipment.recipient.city || shipment.recipient.district}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="text-xs font-bold text-black leading-snug bg-slate-50 p-1.5 rounded border border-black/20">

@@ -696,7 +696,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                       <h5 className="font-extrabold text-sm text-white">{shipment.recipient.name}</h5>
                       <p className="text-xs text-slate-300 mt-1 flex items-start gap-1">
                         <MapPin className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
-                        {shipment.recipient.governorate} - {shipment.recipient.city} - {shipment.recipient.streetAddress}
+                        <span>{shipment.recipient.governorate} - <strong className="text-red-300 font-bold">{shipment.recipient.city || shipment.recipient.district || shipment.recipient.governorate}</strong> - {shipment.recipient.streetAddress}</span>
                       </p>
                       {shipment.recipient.notes && (
                         <p className="text-[10px] text-amber-300 bg-amber-950/60 p-1.5 rounded mt-1 border border-amber-800/50">

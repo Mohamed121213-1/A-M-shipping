@@ -26,7 +26,8 @@ import {
   PhoneCall,
   PhoneOff,
   Calendar,
-  X
+  X,
+  MapPin
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
@@ -784,21 +785,42 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                     {/* Merchant & Recipient */}
                     <div className="space-y-1.5 text-xs">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="inline-flex items-center gap-1 font-extrabold text-slate-800 bg-red-50/60 border border-red-200/80 px-2 py-0.5 rounded-md text-[11px] truncate max-w-[170px]">
+                        <div className="inline-flex items-center gap-1 font-extrabold text-slate-800 bg-red-50/60 border border-red-200/80 px-2 py-0.5 rounded-md text-[11px] truncate max-w-[150px]">
                           <Store className="w-3 h-3 text-red-600 shrink-0" />
                           <span className="truncate">{s.sender?.storeName || 'تاجر عام'}</span>
                         </div>
-                        <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 shrink-0">
-                          {s.recipient.governorate}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                          <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                            {s.recipient.governorate}
+                          </span>
+                          {(s.recipient.city || s.recipient.district) && (
+                            <span className="text-[11px] font-black text-red-700 bg-red-50 px-2 py-0.5 rounded-md border border-red-200 flex items-center gap-1 shadow-2xs">
+                              <MapPin className="w-3 h-3 text-red-600 shrink-0" />
+                              <span>{s.recipient.city || s.recipient.district}</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 space-y-1">
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-extrabold text-slate-900 text-xs">{s.recipient.name}</span>
                           <span className="font-mono text-slate-600 text-[11px] dir-ltr font-bold">{s.recipient.phone}</span>
                         </div>
-                        <p className="text-[11px] text-slate-600 truncate">{s.recipient.streetAddress}</p>
+                        {/* Region prominent display */}
+                        <div className="flex items-center gap-1.5 text-[11px] bg-white p-1.5 rounded-lg border border-slate-200/80">
+                          <span className="text-red-700 font-extrabold flex items-center gap-1 shrink-0">
+                            <MapPin className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            المنطقة:
+                          </span>
+                          <span className="font-black text-slate-900 truncate">
+                            {s.recipient.city || s.recipient.district || 'غير محددة'}
+                          </span>
+                          {s.recipient.district && s.recipient.district !== s.recipient.city && (
+                            <span className="text-slate-500 text-[10px] truncate">({s.recipient.district})</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-600 truncate pr-1">العنوان: {s.recipient.streetAddress}</p>
                       </div>
                     </div>
 
@@ -979,7 +1001,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                       </span>
                     </th>
                     <th className="p-3">المستلم والعنوان</th>
-                    <th className="p-3">المحافظة والمستودع</th>
+                    <th className="p-3">المحافظة والمنطقة</th>
                     <th className="p-3">المندوب المخصص</th>
                     <th className="p-3">المبلغ (COD)</th>
                     <th className="p-3">المعاينة والنوع</th>
@@ -1031,12 +1053,22 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                         </td>
                         <td className="p-3">
                           <p className="font-extrabold text-slate-900">{s.recipient.name}</p>
-                          <p className="text-[11px] text-slate-500 font-mono" dir="ltr">{s.recipient.phone}</p>
-                          <p className="text-[11px] text-slate-600 truncate max-w-[200px]">{s.recipient.streetAddress}</p>
+                          <p className="text-[11px] text-slate-500 font-mono font-bold" dir="ltr">{s.recipient.phone}</p>
+                          <div className="mt-1 flex items-center gap-1 flex-wrap">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-black text-red-700 bg-red-50 border border-red-200/80 px-2 py-0.5 rounded-md">
+                              <MapPin className="w-3 h-3 text-red-600 shrink-0" />
+                              <span>المنطقة: {s.recipient.city || s.recipient.district || 'غير محددة'}</span>
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 truncate max-w-[200px] mt-0.5">{s.recipient.streetAddress}</p>
                         </td>
                         <td className="p-3">
-                          <span className="font-bold text-slate-800 block">{s.recipient.governorate}</span>
-                          <span className="text-[11px] text-slate-500 block truncate max-w-[150px]">{s.assignedHub}</span>
+                          <span className="font-extrabold text-slate-900 block text-xs">{s.recipient.governorate}</span>
+                          <span className="inline-flex items-center gap-1 font-black text-red-700 text-xs mt-1 truncate max-w-[160px] bg-red-50/70 border border-red-200/70 px-1.5 py-0.5 rounded">
+                            <MapPin className="w-3 h-3 text-red-600 shrink-0" />
+                            {s.recipient.city || s.recipient.district || s.recipient.governorate}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block truncate max-w-[150px] mt-1">{s.assignedHub}</span>
                         </td>
                         <td className="p-3">
                           {s.assignedCourier ? (

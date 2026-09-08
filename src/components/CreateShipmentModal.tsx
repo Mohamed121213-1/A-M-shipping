@@ -3,9 +3,9 @@ import * as XLSX from 'xlsx';
 import { Shipment, GovernorateRate, AddressInfo, PackageDetails, DeliveryType, HubInfo, AppUserRole, UserSession } from '../types';
 import { EGYPT_GOVERNORATES, BOSTA_HUBS } from '../data/mockData';
 import { 
-  X, Sparkles, MapPin, Package, DollarSign, User, Phone, AlertCircle, CheckCircle, 
+  X, Sparkles, MapPin, Package, DollarSign, User, Phone, AlertCircle, CheckCircle, CheckCircle2,
   Calculator, Building, ShieldCheck, FileSpreadsheet, Upload, Download, Trash2, Plus, 
-  Check, RefreshCw, FileText, ChevronDown, Search
+  Check, RefreshCw, FileText, ChevronDown, Search, Clock
 } from 'lucide-react';
 
 interface CreateShipmentModalProps {
@@ -59,6 +59,9 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
 
   // Active Tab: 'single' | 'excel'
   const [activeTab, setActiveTab] = useState<'single' | 'excel'>('single');
+
+  // Determine if the user has admin privileges
+  const isAdmin = currentUser?.role === 'admin' || currentRole === 'admin';
 
   // Registered Merchants from Admin Panel
   const registeredMerchants = systemUsers.filter((u) => u.role === 'merchant');
@@ -204,7 +207,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
     const matchedHub = BOSTA_HUBS.find((h) => h.governorate.includes(selectedGov.nameAr)) || BOSTA_HUBS[0];
 
     onCreateShipment({
-      status: currentRole === 'admin' ? 'created' : 'pending_approval',
+      status: isAdmin ? 'created' : 'pending_approval',
       deliveryType,
       sender: {
         id: selectedMerchantId || `merch-${Date.now()}`,
@@ -285,7 +288,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
           const phoneNum = getColValue(row, ['رقم الهاتف', 'الموبايل', 'الهاتف', 'الهاتف الرئيسي', 'phone', 'mobile', 'tel']);
           const secPhone = getColValue(row, ['هاتف آخر', 'رقم آخر', 'هاتف إضافي', 'secondary phone', 'mobile 2']);
           const govVal = getColValue(row, ['المحافظة', 'محافظة', 'governorate', 'gov']);
-          const cityVal = getColValue(row, ['المدينة', 'المركز', 'city']);
+          const cityVal = getColValue(row, ['المنطقة', 'المدينة', 'المركز', 'city', 'area', 'region', 'حي', 'الحي']);
           const distVal = getColValue(row, ['الحي', 'المنطقة', 'district']);
           const addressVal = getColValue(row, ['العنوان التفصيلي', 'العنوان', 'اسم الشارع', 'address', 'street']);
           const bldgVal = getColValue(row, ['العمارة', 'المبنى', 'building']);
@@ -498,7 +501,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       const matchedHub = BOSTA_HUBS.find((h) => h.governorate.includes(govObj.nameAr)) || BOSTA_HUBS[0];
 
       return {
-        status: currentRole === 'admin' ? 'created' : 'pending_approval',
+        status: isAdmin ? 'created' : 'pending_approval',
         deliveryType: row.deliveryType,
         sender: {
           id: selectedMerchantId || `merch-${Date.now()}`,
@@ -514,8 +517,8 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
           phone: row.phone,
           secondaryPhone: row.secondaryPhone,
           governorate: govObj.nameAr,
-          city: row.city || govObj.nameAr,
-          district: row.district,
+          city: row.city || row.district || govObj.nameAr,
+          district: row.district || row.city || '',
           streetAddress: row.streetAddress,
           buildingNo: row.buildingNo,
           apartmentNo: row.apartmentNo,
@@ -578,14 +581,33 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
       <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full border border-slate-200 overflow-hidden my-4 sm:my-8 flex flex-col max-h-[92vh]">
         {/* Top Modal Header */}
         <div className="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-4 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <Package className="w-6 h-6" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <Package className="w-6 h-6 text-white" />
+            </div>
             <div>
-              <h3 className="font-extrabold text-lg">إنشاء وإضافة شحنات A&Mshipping</h3>
-              <p className="text-xs text-red-100">إدخال فردي مباشر أو رفع كشف إكسيل جماعي مع المعاينة والتعديل</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-extrabold text-lg">إنشاء وإضافة شحنات A&Mshipping</h3>
+                {isAdmin ? (
+                  <span className="bg-emerald-500 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1 shadow-xs">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    اعتماد وإضافة فورية (أدمن)
+                  </span>
+                ) : (
+                  <span className="bg-amber-400 text-amber-950 text-[11px] font-black px-2.5 py-0.5 rounded-full border border-amber-300 flex items-center gap-1 shadow-xs">
+                    <Clock className="w-3.5 h-3.5" />
+                    بانتظار موافقة الإدارة
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-red-100">
+                {isAdmin
+                  ? 'يتم إضافة وتأكيد الأوردرات فوراً في النظام دون الحاجة لأي موافقة لاحقة'
+                  : 'إدخال فردي مباشر أو رفع كشف إكسيل جماعي مع المعاينة والتعديل'}
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-red-100 hover:text-white p-1 rounded-lg transition-colors">
+          <button onClick={onClose} className="text-red-100 hover:text-white p-1 rounded-lg transition-colors cursor-pointer">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -807,6 +829,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                               type="button"
                               onClick={() => {
                                 setCity(cityName);
+                                setCitySearchQuery(cityName);
                                 setIsCityDropdownOpen(false);
                               }}
                               className={`w-full text-right px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
@@ -839,6 +862,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                           type="button"
                           onClick={() => {
                             setCity(cityName);
+                            setCitySearchQuery(cityName);
                             setIsCityDropdownOpen(false);
                           }}
                           className={`text-[11px] px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
@@ -850,6 +874,14 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                           {cityName}
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Active Selected Region Indicator */}
+                  {city && (
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-900 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold w-fit mt-1 shadow-2xs">
+                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>المنطقة المحددة للأوردر: <strong className="font-black text-emerald-950 underline">{city}</strong></span>
                     </div>
                   )}
                 </div>
@@ -1023,11 +1055,11 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                       <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40 flex items-center gap-1">
                         ✨ سعر خاص للتاجر
                       </span>
-                    ) : currentRole === 'admin' ? (
+                    ) : isAdmin ? (
                       <span className="text-[10px] text-red-400 font-bold">(قابل للتعديل للمدير)</span>
                     ) : null}
                   </div>
-                  {currentRole === 'admin' ? (
+                  {isAdmin ? (
                     <input
                       type="number"
                       value={calculatedShippingFee}
@@ -1060,7 +1092,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                 className="px-8 py-3 rounded-xl text-xs sm:text-sm font-extrabold text-white bg-red-600 hover:bg-red-700 active:bg-red-800 shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Package className="w-4.5 h-4.5" />
-                تأكيد وإنشاء الشحنة الآن
+                {isAdmin ? 'تأكيد وإضافة الشحنة فوراً كأدمن ✓' : 'تأكيد وإنشاء الشحنة الآن'}
               </button>
             </div>
           </form>
@@ -1419,10 +1451,10 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({
                     type="button"
                     onClick={handleBatchConfirm}
                     disabled={validStagedCount === 0}
-                    className="px-6 py-2.5 rounded-xl text-xs font-extrabold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 shadow-md transition-all flex items-center gap-2"
+                    className="px-6 py-2.5 rounded-xl text-xs font-extrabold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 shadow-md transition-all flex items-center gap-2 cursor-pointer"
                   >
                     <Check className="w-4 h-4" />
-                    تأكيد واستيراد ({validStagedCount}) شحنة
+                    {isAdmin ? `اعتماد وإضافة (${validStagedCount}) شحنة فوراً كأدمن ✓` : `تأكيد واستيراد (${validStagedCount}) شحنة`}
                   </button>
                 </div>
               </div>
