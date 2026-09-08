@@ -20,7 +20,7 @@ import { syncEngine } from './lib/syncEngine';
 
 import { Shipment, AppUserRole, MerchantWallet, ShipmentStatus, CourierInfo, CourierNotification, UserSession, HubInfo, GovernorateRate, CompanyTransaction } from './types';
 import { INITIAL_SHIPMENTS, INITIAL_MERCHANT_WALLET, BOSTA_COURIERS, BOSTA_HUBS, EGYPT_GOVERNORATES, INITIAL_USERS, INITIAL_COMPANY_TRANSACTIONS } from './data/mockData';
-import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet, isDeprecatedDummyUser, mergeShipmentsLists } from './utils/sanitizeData';
+import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet, isDeprecatedDummyUser, mergeShipmentsLists, PRIMARY_ADMIN_USER } from './utils/sanitizeData';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { CourierNotificationToast } from './components/CourierNotificationToast';
 import { DeviceNotificationBanner } from './components/DeviceNotificationBanner';
@@ -283,17 +283,30 @@ export default function App() {
       id: `TXN-${Date.now()}`,
       createdAt: new Date().toISOString(),
     };
-    setCompanyTransactions((prev) => [newTxn, ...prev]);
+    setCompanyTransactions((prev) => {
+      const next = [newTxn, ...prev];
+      try { localStorage.setItem('bosta_company_txns', JSON.stringify(next)); } catch (e) {}
+      broadcastDataChange({ companyTransactions: next });
+      return next;
+    });
   };
 
   const handleUpdateCompanyTransaction = (id: string, updatedFields: Partial<CompanyTransaction>) => {
-    setCompanyTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...updatedFields, updatedAt: new Date().toISOString() } : t))
-    );
+    setCompanyTransactions((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, ...updatedFields, updatedAt: new Date().toISOString() } : t));
+      try { localStorage.setItem('bosta_company_txns', JSON.stringify(next)); } catch (e) {}
+      broadcastDataChange({ companyTransactions: next });
+      return next;
+    });
   };
 
   const handleDeleteCompanyTransaction = (id: string) => {
-    setCompanyTransactions((prev) => prev.filter((t) => t.id !== id));
+    setCompanyTransactions((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      try { localStorage.setItem('bosta_company_txns', JSON.stringify(next)); } catch (e) {}
+      broadcastDataChange({ companyTransactions: next });
+      return next;
+    });
   };
 
   // Register Service Worker & Server Web Push for Device Push Notifications
@@ -423,7 +436,7 @@ export default function App() {
     const unsubscribe = syncEngine.subscribe((incoming) => {
       isIncomingSyncRef.current = true;
       if (incoming.shipments !== undefined && Array.isArray(incoming.shipments)) {
-        setShipments((prev) => mergeShipmentsLists(prev, incoming.shipments));
+        setShipments(incoming.shipments);
       }
       if (incoming.wallet) {
         setWallet(incoming.wallet);
@@ -479,26 +492,29 @@ export default function App() {
   }, []);
 
   // Broadcast state changes whenever core data is modified
-  const broadcastDataChange = (overrideState?: Partial<{
-    shipments: Shipment[];
-    wallet: MerchantWallet;
-    users: UserSession[];
-    couriers: CourierInfo[];
-    hubs: HubInfo[];
-    governorates: GovernorateRate[];
-    notifications: CourierNotification[];
-    companyTransactions: CompanyTransaction[];
-  }>) => {
+  const broadcastDataChange = (
+    overrideState?: Partial<{
+      shipments: Shipment[];
+      wallet: MerchantWallet;
+      users: UserSession[];
+      couriers: CourierInfo[];
+      hubs: HubInfo[];
+      governorates: GovernorateRate[];
+      notifications: CourierNotification[];
+      companyTransactions: CompanyTransaction[];
+    }>,
+    isExplicitClear = false
+  ) => {
     syncEngine.broadcastState({
-      shipments: overrideState?.shipments || shipments,
-      wallet: overrideState?.wallet || wallet,
-      users: overrideState?.users || users,
-      couriers: overrideState?.couriers || couriers,
-      hubs: overrideState?.hubs || hubs,
-      governorates: overrideState?.governorates || governorates,
-      notifications: overrideState?.notifications || courierNotifications,
-      companyTransactions: overrideState?.companyTransactions || companyTransactions,
-    });
+      shipments: overrideState?.shipments !== undefined ? overrideState.shipments : shipments,
+      wallet: overrideState?.wallet !== undefined ? overrideState.wallet : wallet,
+      users: overrideState?.users !== undefined ? overrideState.users : users,
+      couriers: overrideState?.couriers !== undefined ? overrideState.couriers : couriers,
+      hubs: overrideState?.hubs !== undefined ? overrideState.hubs : hubs,
+      governorates: overrideState?.governorates !== undefined ? overrideState.governorates : governorates,
+      notifications: overrideState?.notifications !== undefined ? overrideState.notifications : courierNotifications,
+      companyTransactions: overrideState?.companyTransactions !== undefined ? overrideState.companyTransactions : companyTransactions,
+    }, isExplicitClear);
   };
 
   // Handlers perform explicit broadcasts on local mutations; no automatic re-broadcast loop on incoming state
@@ -1365,13 +1381,14 @@ export default function App() {
   const handleDeleteMultipleShipments = (shipmentIds: string[]) => {
     let nextShipments: Shipment[] = [];
     setShipments((prev) => {
-      nextShipments = prev.filter((s) => !shipmentIds.includes(s.id));
+      nextShipments = prev.filter((s) => !shipmentIds.includes(s.id) && !shipmentIds.includes(s.trackingNumber));
+      try {
+        localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
+      } catch (e) {}
       return nextShipments;
     });
 
-    setTimeout(() => {
-      broadcastDataChange({ shipments: nextShipments });
-    }, 20);
+    broadcastDataChange({ shipments: nextShipments });
 
     fetch('/api/shipments/batch-delete', {
       method: 'POST',
@@ -1379,7 +1396,12 @@ export default function App() {
       body: JSON.stringify({ ids: shipmentIds, senderId: syncEngine.getInstanceId() }),
     }).catch((err) => console.warn('Batch delete API error:', err));
 
-    if (selectedDetailShipment && shipmentIds.includes(selectedDetailShipment.id)) {
+    if (isSupabaseConfigured) {
+      Promise.resolve(supabase.from('shipments').delete().in('id', shipmentIds)).catch(() => {});
+      Promise.resolve(supabase.from('shipments').delete().in('tracking_number', shipmentIds)).catch(() => {});
+    }
+
+    if (selectedDetailShipment && (shipmentIds.includes(selectedDetailShipment.id) || shipmentIds.includes(selectedDetailShipment.trackingNumber))) {
       setSelectedDetailShipment(null);
     }
 
@@ -2208,12 +2230,16 @@ export default function App() {
     const courierId = courier.id || `cour-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const fullCourier: CourierInfo = { ...courier, id: courierId };
 
+    let nextCouriers: CourierInfo[] = [];
     setCouriers((prev) => {
       const exists = prev.some((c) => c.id === courierId || c.phone === fullCourier.phone);
       if (exists) {
-        return prev.map((c) => (c.id === courierId || c.phone === fullCourier.phone ? { ...c, ...fullCourier } : c));
+        nextCouriers = prev.map((c) => (c.id === courierId || c.phone === fullCourier.phone ? { ...c, ...fullCourier } : c));
+      } else {
+        nextCouriers = [...prev, fullCourier];
       }
-      return [...prev, fullCourier];
+      try { localStorage.setItem('bosta_couriers', JSON.stringify(nextCouriers)); } catch (e) {}
+      return nextCouriers;
     });
 
     const courierUser: UserSession = {
@@ -2227,22 +2253,35 @@ export default function App() {
       hubName: fullCourier.assignedHub,
     };
 
+    let nextUsers: UserSession[] = [];
     setUsers((prev) => {
       if (prev.some((u) => u.id === courierId || u.phone === fullCourier.phone)) {
-        return prev.map((u) => (u.id === courierId || u.phone === fullCourier.phone ? { ...u, ...courierUser } : u));
+        nextUsers = prev.map((u) => (u.id === courierId || u.phone === fullCourier.phone ? { ...u, ...courierUser } : u));
+      } else {
+        nextUsers = [...prev, courierUser];
       }
-      return [...prev, courierUser];
+      try { localStorage.setItem('bosta_users', JSON.stringify(nextUsers)); } catch (e) {}
+      return nextUsers;
     });
 
+    broadcastDataChange({ couriers: nextCouriers, users: nextUsers });
     showToast(`🚚 تم إضافة الكابتن ${fullCourier.name} بنجاح وربطه بحسابات لوحة التحكم`);
   };
 
   const handleUpdateCourier = (updatedCourier: CourierInfo) => {
     const courierId = updatedCourier.id || `cour-${Date.now()}`;
     const fullCourier = { ...updatedCourier, id: courierId };
-    setCouriers((prev) => prev.map((c) => (c.id === courierId || c.phone === fullCourier.phone ? fullCourier : c)));
-    setUsers((prev) =>
-      prev.map((u) =>
+    
+    let nextCouriers: CourierInfo[] = [];
+    setCouriers((prev) => {
+      nextCouriers = prev.map((c) => (c.id === courierId || c.phone === fullCourier.phone ? fullCourier : c));
+      try { localStorage.setItem('bosta_couriers', JSON.stringify(nextCouriers)); } catch (e) {}
+      return nextCouriers;
+    });
+
+    let nextUsers: UserSession[] = [];
+    setUsers((prev) => {
+      nextUsers = prev.map((u) =>
         u.id === courierId || u.phone === fullCourier.phone
           ? {
               ...u,
@@ -2252,29 +2291,73 @@ export default function App() {
               hubName: fullCourier.assignedHub,
             }
           : u
-      )
-    );
+      );
+      try { localStorage.setItem('bosta_users', JSON.stringify(nextUsers)); } catch (e) {}
+      return nextUsers;
+    });
+
+    broadcastDataChange({ couriers: nextCouriers, users: nextUsers });
     showToast(`✏️ تم تحديث بيانات الكابتن ${fullCourier.name}`);
   };
 
   const handleDeleteCourier = (courierId: string) => {
-    setCouriers((prev) => prev.filter((c) => c.id !== courierId));
-    setUsers((prev) => prev.filter((u) => u.id !== courierId));
+    let nextCouriers: CourierInfo[] = [];
+    setCouriers((prev) => {
+      nextCouriers = prev.filter((c) => c.id !== courierId);
+      try { localStorage.setItem('bosta_couriers', JSON.stringify(nextCouriers)); } catch (e) {}
+      return nextCouriers;
+    });
+
+    let nextUsers: UserSession[] = [];
+    setUsers((prev) => {
+      nextUsers = prev.filter((u) => u.id !== courierId);
+      try { localStorage.setItem('bosta_users', JSON.stringify(nextUsers)); } catch (e) {}
+      return nextUsers;
+    });
+
+    broadcastDataChange({ couriers: nextCouriers, users: nextUsers });
+
+    fetch('/api/users/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: courierId }),
+    }).catch((e) => console.warn('Direct server delete notice:', e));
+
+    if (isSupabaseConfigured) {
+      Promise.resolve(supabase.from('profiles').delete().eq('id', courierId)).catch(() => {});
+      Promise.resolve(supabase.from('couriers').delete().eq('id', courierId)).catch(() => {});
+    }
+
     showToast('🗑️ تم حذف المندوب من النظام لوحة التحكم');
   };
 
   const handleAddHub = (hub: HubInfo) => {
-    setHubs((prev) => [...prev, hub]);
+    setHubs((prev) => {
+      const nextHubs = [...prev, hub];
+      try { localStorage.setItem('bosta_hubs', JSON.stringify(nextHubs)); } catch (e) {}
+      broadcastDataChange({ hubs: nextHubs });
+      return nextHubs;
+    });
     showToast(`🏢 تم إضافة مستودع / فرع ${hub.name}`);
   };
 
   const handleUpdateHub = (updatedHub: HubInfo) => {
-    setHubs((prev) => prev.map((h) => (h.id === updatedHub.id ? updatedHub : h)));
+    setHubs((prev) => {
+      const nextHubs = prev.map((h) => (h.id === updatedHub.id ? updatedHub : h));
+      try { localStorage.setItem('bosta_hubs', JSON.stringify(nextHubs)); } catch (e) {}
+      broadcastDataChange({ hubs: nextHubs });
+      return nextHubs;
+    });
     showToast(`✏️ تم تحديث بيانات الفرع ${updatedHub.name}`);
   };
 
   const handleDeleteHub = (hubId: string) => {
-    setHubs((prev) => prev.filter((h) => h.id !== hubId));
+    setHubs((prev) => {
+      const nextHubs = prev.filter((h) => h.id !== hubId);
+      try { localStorage.setItem('bosta_hubs', JSON.stringify(nextHubs)); } catch (e) {}
+      broadcastDataChange({ hubs: nextHubs });
+      return nextHubs;
+    });
     showToast('🗑️ تم حذف المستودع من النظام');
   };
 
@@ -2364,12 +2447,29 @@ export default function App() {
 
   const handleClearAllShipments = () => {
     setShipments([]);
-    broadcastDataChange({ shipments: [] });
+    try {
+      localStorage.setItem('bosta_shipments', '[]');
+    } catch (e) {}
+
+    syncEngine.clearAllShipments();
+    broadcastDataChange({ shipments: [] }, true);
+
     fetch('/api/shipments/clear-all', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
     }).catch((e) => console.warn('Clear shipments API error:', e));
+
+    fetch('/api/sync/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        state: { shipments: [] },
+        isExplicitClear: true,
+        senderId: syncEngine.getInstanceId(),
+      }),
+    }).catch((e) => console.warn('Clear shipments sync error:', e));
+
     showToast('🗑️ تم مسح جميع الشحنات والبوليصات بالكامل من النظام');
   };
 
@@ -2384,22 +2484,53 @@ export default function App() {
     setShipments([]);
     setWallet(emptyWallet);
     setCourierNotifications([]);
-    setUsers([]);
+    setUsers([PRIMARY_ADMIN_USER]);
+    setCouriers([]);
+    setCompanyTransactions([]);
+
+    try {
+      localStorage.setItem('bosta_shipments', '[]');
+      localStorage.setItem('bosta_wallet', JSON.stringify(emptyWallet));
+      localStorage.setItem('bosta_courier_notifications', '[]');
+      localStorage.setItem('bosta_users', JSON.stringify([PRIMARY_ADMIN_USER]));
+      localStorage.setItem('bosta_couriers', '[]');
+      localStorage.setItem('bosta_company_txns', '[]');
+    } catch (e) {}
+
+    syncEngine.clearAllData();
+
     broadcastDataChange({
       shipments: [],
       wallet: emptyWallet,
       notifications: [],
-      users: [],
-    });
+      users: [PRIMARY_ADMIN_USER],
+      couriers: [],
+      companyTransactions: [],
+    }, true);
+
+    fetch('/api/shipments/clear-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
+    }).catch((e) => console.warn('Clear shipments API error:', e));
+
     fetch('/api/sync/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        state: { shipments: [], wallet: emptyWallet, notifications: [], users: [] },
+        state: {
+          shipments: [],
+          wallet: emptyWallet,
+          notifications: [],
+          users: [PRIMARY_ADMIN_USER],
+          couriers: [],
+          companyTransactions: []
+        },
         isExplicitClear: true,
         senderId: syncEngine.getInstanceId(),
       }),
     }).catch((e) => console.warn('Clear all API error:', e));
+
     showToast('🗑️ تم مسح كافة الشحنات والحسابات والمحفظة بنجاح');
   };
 

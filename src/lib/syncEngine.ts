@@ -377,24 +377,23 @@ class SyncEngine {
     if (this.isProcessingIncoming) return;
 
     // Sanitize state entities to purge dummy accounts and mock data
-    if (data.shipments) {
-      const sanitizedIncoming = sanitizeShipments(data.shipments);
-      const currentList = this.latestStateCache?.shipments || [];
-      // Merge intelligently with rollback prevention
-      let mergedShipments = mergeShipmentsLists(currentList, sanitizedIncoming);
-
-      // Enforce persistent local locks
-      mergedShipments = mergedShipments.map((s: Shipment) => {
-        const id = s.id || s.trackingNumber;
-        const lock = this.localStatusLocks.get(id);
-        if (lock && Date.now() - lock.timestamp < 900000) {
-          if (s.status !== lock.status) {
-            return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
+    if (data.shipments !== undefined && Array.isArray(data.shipments)) {
+      if (data.shipments.length === 0) {
+        data.shipments = [];
+      } else {
+        const sanitizedIncoming = sanitizeShipments(data.shipments);
+        // Enforce persistent local locks for recent status transitions
+        data.shipments = sanitizedIncoming.map((s: Shipment) => {
+          const id = s.id || s.trackingNumber;
+          const lock = this.localStatusLocks.get(id);
+          if (lock && Date.now() - lock.timestamp < 900000) {
+            if (s.status !== lock.status) {
+              return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
+            }
           }
-        }
-        return s;
-      });
-      data.shipments = mergedShipments;
+          return s;
+        });
+      }
     }
     if (data.users) data.users = sanitizeUsers(data.users);
     if (data.couriers) data.couriers = sanitizeCouriers(data.couriers);
@@ -496,7 +495,33 @@ class SyncEngine {
     }
   }
 
-  public broadcastState(state: SyncedAppState) {
+  public clearAllData() {
+    this.localStatusLocks.clear();
+    this.saveLocks();
+    this.latestStateCache = null;
+    this.latestTimestamp = Date.now();
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('bosta_last_updated');
+      } catch (e) {}
+    }
+  }
+
+  public clearAllShipments() {
+    this.localStatusLocks.clear();
+    this.saveLocks();
+    if (this.latestStateCache) {
+      this.latestStateCache.shipments = [];
+    }
+    this.latestTimestamp = Date.now();
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('bosta_last_updated', String(this.latestTimestamp));
+      } catch (e) {}
+    }
+  }
+
+  public broadcastState(state: SyncedAppState, isExplicitClear = false) {
     const now = Date.now();
     this.latestTimestamp = now;
     if (typeof window !== 'undefined') {
@@ -505,16 +530,26 @@ class SyncEngine {
       } catch (e) {}
     }
 
+    const isClear = isExplicitClear || (Array.isArray(state.shipments) && state.shipments.length === 0);
+    if (isClear) {
+      this.localStatusLocks.clear();
+      this.saveLocks();
+    }
+
     let payloadShipments = state.shipments;
     if (payloadShipments && Array.isArray(payloadShipments)) {
-      payloadShipments = sanitizeShipments(payloadShipments).map((s: Shipment) => {
-        const id = s.id || s.trackingNumber;
-        const lock = this.localStatusLocks.get(id);
-        if (lock && Date.now() - lock.timestamp < 900000) {
-          return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
-        }
-        return s;
-      });
+      if (payloadShipments.length === 0) {
+        payloadShipments = [];
+      } else {
+        payloadShipments = sanitizeShipments(payloadShipments).map((s: Shipment) => {
+          const id = s.id || s.trackingNumber;
+          const lock = this.localStatusLocks.get(id);
+          if (lock && Date.now() - lock.timestamp < 900000) {
+            return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
+          }
+          return s;
+        });
+      }
     }
 
     const payload: SyncedAppState = {
@@ -527,7 +562,7 @@ class SyncEngine {
     this.latestStateCache = payload;
 
     // 1. Post state to Server-Side API for multi-device sync
-    this.postStateToServer(payload, now);
+    this.postStateToServer(payload, now, isClear);
 
     // 2. Broadcast to local tabs/windows
     if (this.localChannel) {
@@ -589,6 +624,14 @@ class SyncEngine {
               }));
               try {
                 await supabase.from('shipments').upsert(mappedShipments, { onConflict: 'id' });
+              } catch (err) {}
+
+              // Delete any shipments removed from state
+              try {
+                const currentIds = payload.shipments.map((s: any) => String(s.id || s.trackingNumber)).filter(Boolean);
+                if (currentIds.length > 0) {
+                  await supabase.from('shipments').delete().not('id', 'in', `(${currentIds.join(',')})`);
+                }
               } catch (err) {}
             }
           }

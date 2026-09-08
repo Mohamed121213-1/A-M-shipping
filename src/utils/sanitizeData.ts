@@ -297,6 +297,10 @@ export function mergeShipmentsLists(existingList?: Shipment[], incomingList?: Sh
   const existingArr = Array.isArray(existingList) ? sanitizeShipments(existingList) : [];
   const incomingArr = Array.isArray(incomingList) ? sanitizeShipments(incomingList) : [];
 
+  if (Array.isArray(incomingList) && incomingList.length === 0) {
+    return [];
+  }
+
   const map = new Map<string, Shipment>();
 
   for (const s of existingArr) {

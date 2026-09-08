@@ -780,51 +780,71 @@ async function pushStateToSupabase(state: any, timestamp: number) {
       }, { onConflict: 'id' });
 
     // 2. Sync individual shipments to 'shipments' table
-    if (Array.isArray(state?.shipments) && state.shipments.length > 0) {
-      const formattedShipments = state.shipments.map((s: any) => ({
-        id: String(s.id || s.trackingNumber || `BST-${Date.now()}`),
-        tracking_number: String(s.trackingNumber || s.id || ''),
-        code: String(s.code || s.trackingNumber || s.id || ''),
-        status: String(s.status || 'created'),
-        customer_name: String(s.recipient?.name || s.customerName || ''),
-        customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
-        governorate: String(s.recipient?.governorate || s.governorate || ''),
-        city: String(s.recipient?.city || s.city || ''),
-        address: String(s.recipient?.streetAddress || s.address || ''),
-        cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
-        shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
-        net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
-        sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
-        courier_name: String(s.courier?.name || s.courierName || ''),
-        notes: String(s.recipient?.notes || s.notes || ''),
-        data: s,
-        created_at: s.createdAt || new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
-
-      // Upsert in batches of 50
-      for (let i = 0; i < formattedShipments.length; i += 50) {
-        const batch = formattedShipments.slice(i, i + 50);
+    if (Array.isArray(state?.shipments)) {
+      if (state.shipments.length === 0) {
         try {
-          await supabaseServer.from('shipments').upsert(batch, { onConflict: 'id' });
+          await supabaseServer.from('shipments').delete().neq('id', '___none___');
+        } catch (err) {}
+      } else {
+        const formattedShipments = state.shipments.map((s: any) => ({
+          id: String(s.id || s.trackingNumber || `BST-${Date.now()}`),
+          tracking_number: String(s.trackingNumber || s.id || ''),
+          code: String(s.code || s.trackingNumber || s.id || ''),
+          status: String(s.status || 'created'),
+          customer_name: String(s.recipient?.name || s.customerName || ''),
+          customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
+          governorate: String(s.recipient?.governorate || s.governorate || ''),
+          city: String(s.recipient?.city || s.city || ''),
+          address: String(s.recipient?.streetAddress || s.address || ''),
+          cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
+          shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
+          net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
+          sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
+          courier_name: String(s.courier?.name || s.courierName || ''),
+          notes: String(s.recipient?.notes || s.notes || ''),
+          data: s,
+          created_at: s.createdAt || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }));
+
+        // Upsert in batches of 50
+        for (let i = 0; i < formattedShipments.length; i += 50) {
+          const batch = formattedShipments.slice(i, i + 50);
+          try {
+            await supabaseServer.from('shipments').upsert(batch, { onConflict: 'id' });
+          } catch (err) {}
+        }
+
+        // Remove deleted shipments from supabase
+        try {
+          const validIds = state.shipments.map((s: any) => String(s.id || s.trackingNumber)).filter(Boolean);
+          if (validIds.length > 0) {
+            await supabaseServer.from('shipments').delete().not('id', 'in', `(${validIds.join(',')})`);
+          }
         } catch (err) {}
       }
     }
 
     // 3. Sync couriers to 'couriers' table
-    if (Array.isArray(state?.couriers) && state.couriers.length > 0) {
-      const formattedCouriers = state.couriers.map((c: any) => ({
-        id: String(c.id || `courier_${Date.now()}`),
-        name: String(c.name || 'مندوب'),
-        phone: String(c.phone || ''),
-        vehicle: String(c.vehicle || 'motorcycle'),
-        assigned_hub: String(c.assignedHub || ''),
-        status: 'active',
-        created_at: new Date().toISOString()
-      }));
-      try {
-        await supabaseServer.from('couriers').upsert(formattedCouriers, { onConflict: 'id' });
-      } catch (err) {}
+    if (Array.isArray(state?.couriers)) {
+      if (state.couriers.length === 0) {
+        try {
+          await supabaseServer.from('couriers').delete().neq('id', '___none___');
+        } catch (err) {}
+      } else {
+        const formattedCouriers = state.couriers.map((c: any) => ({
+          id: String(c.id || `courier_${Date.now()}`),
+          name: String(c.name || 'مندوب'),
+          phone: String(c.phone || ''),
+          vehicle: String(c.vehicle || 'motorcycle'),
+          assigned_hub: String(c.assignedHub || ''),
+          status: 'active',
+          created_at: new Date().toISOString()
+        }));
+        try {
+          await supabaseServer.from('couriers').upsert(formattedCouriers, { onConflict: 'id' });
+        } catch (err) {}
+      }
     }
 
     // 4. Sync user profiles directly to 'profiles' table
@@ -1570,20 +1590,24 @@ app.patch("/api/shipments/:id/courier", (req, res) => {
 });
 
 // 8. Delete single shipment
-app.delete("/api/shipments/:id", (req, res) => {
+app.delete("/api/shipments/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { senderId } = req.body || {};
 
     if (serverAppState && Array.isArray(serverAppState.shipments)) {
       serverAppState.shipments = serverAppState.shipments.filter((s: any) => s.id !== id && s.trackingNumber !== id);
+      serverStatusLocks.delete(id);
+      saveServerStatusLocks();
       recalculateServerWallet();
       persistAndBroadcast(senderId || 'api_delete_shipment');
     }
 
     // Direct deletion from Supabase 'shipments' table
     if (supabaseServer) {
-      Promise.resolve(supabaseServer.from('shipments').delete().or(`id.eq.${id},tracking_number.eq.${id}`)).catch(() => {});
+      try {
+        await supabaseServer.from('shipments').delete().or(`id.eq.${id},tracking_number.eq.${id}`);
+      } catch (e) {}
     }
 
     return res.json({ success: true, id, state: serverAppState });
@@ -1593,18 +1617,25 @@ app.delete("/api/shipments/:id", (req, res) => {
 });
 
 // 9. Batch delete shipments
-app.post("/api/shipments/batch-delete", (req, res) => {
+app.post("/api/shipments/batch-delete", async (req, res) => {
   try {
     const { ids, senderId } = req.body || {};
     if (Array.isArray(ids) && serverAppState && Array.isArray(serverAppState.shipments)) {
       const idSet = new Set(ids);
       serverAppState.shipments = serverAppState.shipments.filter((s: any) => !idSet.has(s.id) && !idSet.has(s.trackingNumber));
+      for (const id of ids) {
+        serverStatusLocks.delete(id);
+      }
+      saveServerStatusLocks();
       recalculateServerWallet();
       persistAndBroadcast(senderId || 'api_batch_delete');
 
       // Direct batch delete from Supabase 'shipments' table
       if (supabaseServer && ids.length > 0) {
-        Promise.resolve(supabaseServer.from('shipments').delete().in('id', ids)).catch(() => {});
+        try {
+          await supabaseServer.from('shipments').delete().in('id', ids);
+          await supabaseServer.from('shipments').delete().in('tracking_number', ids);
+        } catch (e) {}
       }
     }
     return res.json({ success: true, state: serverAppState });
@@ -1614,17 +1645,21 @@ app.post("/api/shipments/batch-delete", (req, res) => {
 });
 
 // 10. Clear all shipments
-app.post("/api/shipments/clear-all", (req, res) => {
+app.post("/api/shipments/clear-all", async (req, res) => {
   try {
     const { senderId } = req.body || {};
     if (!serverAppState) serverAppState = {};
     serverAppState.shipments = [];
+    serverStatusLocks.clear();
+    saveServerStatusLocks();
     recalculateServerWallet();
     persistAndBroadcast(senderId || 'api_clear_all');
 
     // Direct wipe from Supabase 'shipments' table
     if (supabaseServer) {
-      Promise.resolve(supabaseServer.from('shipments').delete().neq('id', '___none___')).catch(() => {});
+      try {
+        await supabaseServer.from('shipments').delete().neq('id', '___none___');
+      } catch (e) {}
     }
 
     return res.json({ success: true, state: serverAppState });
@@ -1665,18 +1700,33 @@ app.post("/api/sync/state", (req, res) => {
 
     let mergedState = { ...state };
 
-    if (!isExplicitClear && serverAppState) {
-      // Intelligent Shipments union merge with status rollback prevention
-      if (Array.isArray(serverAppState.shipments) && serverAppState.shipments.length > 0) {
-        if (!Array.isArray(state.shipments) || state.shipments.length === 0) {
-          mergedState.shipments = serverAppState.shipments;
-        } else {
-          mergedState.shipments = mergeShipmentsLists(serverAppState.shipments, state.shipments);
-        }
-      } else if (Array.isArray(state.shipments)) {
-        mergedState.shipments = mergeShipmentsLists([], state.shipments);
-      }
+    const shouldClearShipments = isExplicitClear || (Array.isArray(state.shipments) && state.shipments.length === 0);
 
+    if (shouldClearShipments) {
+      mergedState.shipments = [];
+      serverStatusLocks.clear();
+      saveServerStatusLocks();
+    } else if (Array.isArray(state.shipments) && state.shipments.length > 0) {
+      const existingMap = new Map<string, any>();
+      if (serverAppState && Array.isArray(serverAppState.shipments)) {
+        for (const s of serverAppState.shipments) {
+          if (s && (s.id || s.trackingNumber)) {
+            existingMap.set(s.id || s.trackingNumber, s);
+          }
+        }
+      }
+      mergedState.shipments = state.shipments.map((incomingShipment: any) => {
+        if (!incomingShipment) return incomingShipment;
+        const key = incomingShipment.id || incomingShipment.trackingNumber;
+        const existing = existingMap.get(key);
+        if (!existing) return incomingShipment;
+        return mergeSingleShipment(existing, incomingShipment);
+      });
+    } else if (serverAppState && Array.isArray(serverAppState.shipments)) {
+      mergedState.shipments = serverAppState.shipments;
+    }
+
+    if (!isExplicitClear && serverAppState) {
       // Users state handling: if state.users is explicitly provided, take it as authoritative (sanitizer will ensure admin exists)
       if (Array.isArray(state.users) && state.users.length > 0) {
         mergedState.users = state.users;
