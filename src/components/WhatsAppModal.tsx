@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
-import { MessageSquare, Send, Copy, Check, X, ExternalLink, Sparkles } from 'lucide-react';
+import { MessageSquare, Send, Copy, Check, X, ExternalLink, Sparkles, MapPin, Package } from 'lucide-react';
 import { Shipment } from '../types';
-import { generateWhatsAppLink, WHATSAPP_TEMPLATES, formatPhoneNumberForWhatsApp } from '../utils/whatsapp';
+import { 
+  generateWhatsAppLink, 
+  WHATSAPP_TEMPLATES, 
+  formatPhoneNumberForWhatsApp,
+  formatFullAddress,
+  formatProductDetails,
+  WhatsAppTemplateData 
+} from '../utils/whatsapp';
 
 interface WhatsAppModalProps {
   shipment: Shipment;
@@ -10,8 +17,17 @@ interface WhatsAppModalProps {
 
 export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ shipment, onClose }) => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(WHATSAPP_TEMPLATES[0].id);
-  const templateData = {
+
+  const fullAddress = formatFullAddress(shipment.recipient);
+  const productDesc = formatProductDetails(shipment.packageDetails);
+
+  const templateData: WhatsAppTemplateData = {
     recipientName: shipment.recipient.name,
+    recipientPhone: shipment.recipient.phone,
+    recipientAddress: fullAddress,
+    productType: productDesc,
+    itemsCount: shipment.packageDetails?.itemsCount,
+    allowOpening: shipment.packageDetails?.allowOpening,
     trackingNumber: shipment.trackingNumber,
     storeName: shipment.sender.storeName,
     codAmount: shipment.financials.codAmount,
@@ -60,22 +76,52 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ shipment, onClose 
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-emerald-100 hover:text-white hover:bg-emerald-700 rounded-xl transition-colors"
+            className="p-1.5 text-emerald-100 hover:text-white hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-          {/* Target Customer summary badge */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-center justify-between text-xs text-emerald-950">
-            <div>
-              <span className="font-extrabold text-emerald-900 block">{shipment.recipient.name}</span>
-              <span className="text-[11px] text-emerald-700 font-mono">الرقم المفعل للواتساب: +{formattedPhone}</span>
+          {/* Target Customer & Shipment summary card with full address & product */}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 space-y-2 text-xs text-emerald-950">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-black text-emerald-900 text-sm block">{shipment.recipient.name}</span>
+                <span className="text-[11px] text-emerald-700 font-mono">الرقم المفعل: +{formattedPhone}</span>
+              </div>
+              <div className="text-left">
+                <span className="bg-emerald-200/90 text-emerald-950 font-mono font-black text-[11px] px-2.5 py-1 rounded-full border border-emerald-300 block">
+                  #{shipment.trackingNumber}
+                </span>
+                <span className="text-[10px] text-emerald-800 font-bold mt-0.5 block">
+                  {shipment.financials.codAmount} ج.م كاش
+                </span>
+              </div>
             </div>
-            <span className="bg-emerald-200/80 text-emerald-900 font-black text-[10px] px-2.5 py-1 rounded-full border border-emerald-300">
-              #{shipment.trackingNumber}
-            </span>
+
+            {/* Complete Address & Product Details preview */}
+            <div className="pt-2 border-t border-emerald-200/70 space-y-1.5 text-[11px]">
+              <div className="flex items-start gap-1.5 text-emerald-950 leading-relaxed">
+                <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
+                <span>
+                  <strong className="text-emerald-900 font-extrabold">العنوان الكامل:</strong>{' '}
+                  {fullAddress}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-emerald-950 flex-wrap">
+                <Package className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                <span>
+                  <strong className="text-emerald-900 font-extrabold">نوع المنتج:</strong>{' '}
+                  {productDesc}
+                </span>
+                {shipment.packageDetails?.allowOpening && (
+                  <span className="bg-emerald-200/80 text-emerald-900 font-black text-[10px] px-2 py-0.5 rounded-md border border-emerald-300">
+                    مسموح بالمعاينة قبل الدفع ✨
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Template Selector */}

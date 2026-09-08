@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { MessageSquare, Send, X, ExternalLink, Phone, AlertTriangle, CheckCircle2, RefreshCw, MapPin, Sparkles, UserX, PhoneCall } from 'lucide-react';
+import { MessageSquare, Send, X, ExternalLink, Phone, AlertTriangle, CheckCircle2, RefreshCw, MapPin, Sparkles, UserX, PhoneCall, Package } from 'lucide-react';
 import { Shipment, CourierInfo } from '../types';
-import { generateWhatsAppLink, formatPhoneNumberForWhatsApp } from '../utils/whatsapp';
+import { generateWhatsAppLink, formatPhoneNumberForWhatsApp, formatFullAddress, formatProductDetails } from '../utils/whatsapp';
 
 interface BatchWhatsAppModalProps {
   shipments: Shipment[];
@@ -33,18 +33,23 @@ export const BatchWhatsAppModal: React.FC<BatchWhatsAppModalProps> = ({
     return initial;
   });
 
-  // Custom base message template text
+  // Custom base message template text with complete details: address and product type
   const [templateMessage, setTemplateMessage] = useState<string>(
-    `أهلاً بك أ/ {اسم_العميل} 👋\nمعاك كابتن {اسم_المندوب} من شركة الشحن 🚚\nنود إفادتك بأن شحنتك رقم #{رقم_البوليصة} {اسم_المتجر} ستكون معك للتسليم غداً بإذن الله 📦.\n💵 المطلوب عند الاستلام: {المبلغ} ج.م.\n📍 يرجى إرسال موقعك (اللوكيشن) هنا عبر الواتساب لتأكيد العنوان وسرعة الوصول إليك.\nشكراً لك!`
+    `أهلاً بك أ/ {اسم_العميل} 👋\nمعاك كابتن {اسم_المندوب} من شركة الشحن 🚚\nنود إفادتك بأن شحنتك رقم #{رقم_البوليصة} {اسم_المتجر} ستكون معك للتسليم غداً بإذن الله 📦.\n\n📦 نوع ومحتوى المنتج: {نوع_المنتج}\n📍 عنوان التسليم المسجل: {العنوان}\n💵 المطلوب كاش عند الاستلام: {المبلغ} ج.م.\n\n📍 يرجى إرسال موقعك (اللوكيشن) هنا عبر الواتساب لتأكيد العنوان وسرعة الوصول إليك بدقة.\nشكراً لك!`
   );
 
-  // Build individualized message for a shipment
+  // Build individualized message for a shipment with full details
   const buildIndividualMessage = (shipment: Shipment): string => {
+    const fullAddress = formatFullAddress(shipment.recipient);
+    const productDesc = formatProductDetails(shipment.packageDetails);
+
     return templateMessage
       .replace(/{اسم_العميل}/g, shipment.recipient.name)
       .replace(/{اسم_المندوب}/g, activeCourier.name || 'التوصيل')
       .replace(/{رقم_البوليصة}/g, shipment.trackingNumber)
       .replace(/{اسم_المتجر}/g, shipment.sender.storeName ? `من (${shipment.sender.storeName})` : '')
+      .replace(/{نوع_المنتج}/g, productDesc)
+      .replace(/{العنوان}/g, fullAddress)
       .replace(/{المبلغ}/g, (shipment.financials.codAmount || 0).toString());
   };
 
@@ -163,7 +168,7 @@ export const BatchWhatsAppModal: React.FC<BatchWhatsAppModalProps> = ({
                 className="w-full text-xs p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-emerald-200 font-mono focus:border-emerald-500 focus:outline-none"
               />
               <p className="text-[10px] text-slate-400">
-                المتغيرات التلقائية: {'{اسم_العميل}'} ، {'{اسم_المندوب}'} ، {'{رقم_البوليصة}'} ، {'{اسم_المتجر}'} ، {'{المبلغ}'}
+                المتغيرات التلقائية: {'{اسم_العميل}'} ، {'{اسم_المندوب}'} ، {'{رقم_البوليصة}'} ، {'{اسم_المتجر}'} ، {'{نوع_المنتج}'} ، {'{العنوان}'} ، {'{المبلغ}'}
               </p>
             </div>
           </details>
@@ -184,6 +189,8 @@ export const BatchWhatsAppModal: React.FC<BatchWhatsAppModalProps> = ({
                 const currentStatus = statusMap[shipment.id] || 'pending';
                 const cleanPhone = shipment.recipient.phone ? shipment.recipient.phone.replace(/\D/g, '') : '';
                 const isPhoneInvalid = !cleanPhone || cleanPhone.length < 10;
+                const fullAddress = formatFullAddress(shipment.recipient);
+                const productDesc = formatProductDetails(shipment.packageDetails);
 
                 return (
                   <div
@@ -204,10 +211,6 @@ export const BatchWhatsAppModal: React.FC<BatchWhatsAppModalProps> = ({
                           <span className="text-[11px] font-mono text-emerald-400 font-bold dir-ltr">
                             {shipment.recipient.phone}
                           </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
-                          <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
-                          <span>{shipment.recipient.city} - {shipment.recipient.address}</span>
                         </div>
                       </div>
 
@@ -233,8 +236,29 @@ export const BatchWhatsAppModal: React.FC<BatchWhatsAppModalProps> = ({
                       </div>
                     </div>
 
+                    {/* Full Address & Product Details */}
+                    <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/90 space-y-1.5 text-xs text-slate-300">
+                      <div className="flex items-start gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                        <span className="text-slate-200 leading-relaxed">
+                          <strong className="text-slate-400 font-bold">العنوان:</strong> {fullAddress}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Package className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span className="text-slate-200">
+                          <strong className="text-slate-400 font-bold">نوع المنتج:</strong> {productDesc}
+                        </span>
+                        {shipment.packageDetails?.allowOpening && (
+                          <span className="bg-emerald-900/50 text-emerald-300 text-[10px] font-bold px-1.5 py-0.5 rounded border border-emerald-700">
+                            معاينة متاحة
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Order Details Line */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs bg-slate-900/80 p-2 rounded-xl border border-slate-800 text-slate-300 font-medium">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs bg-slate-900/50 p-2 rounded-xl border border-slate-800/60 text-slate-300 font-medium">
                       <span>بوليصة: <strong className="text-white font-mono">#{shipment.trackingNumber}</strong></span>
                       {shipment.sender.storeName && <span>التاجر: <strong className="text-amber-300">{shipment.sender.storeName}</strong></span>}
                       <span>الكاش: <strong className="text-emerald-400 font-extrabold">{shipment.financials.codAmount} ج.م</strong></span>
