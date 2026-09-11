@@ -27,7 +27,8 @@ import {
   PhoneOff,
   Calendar,
   X,
-  MapPin
+  MapPin,
+  Edit
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
@@ -39,6 +40,7 @@ interface ShipmentsListProps {
   onUpdateStatus: (shipmentId: string, newStatus: ShipmentStatus) => void;
   onDeleteShipment?: (shipmentId: string) => void;
   onDeleteMultipleShipments?: (shipmentIds: string[]) => void;
+  onOpenEditModal?: (shipment: Shipment) => void;
   onMerchantRespondNoResponse?: (shipmentId: string, merchantNote: string) => void;
   onAssignCourier?: (shipmentId: string, courier: CourierInfo) => void;
   onClearAllData?: () => void;
@@ -61,6 +63,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   onUpdateStatus,
   onDeleteShipment,
   onDeleteMultipleShipments,
+  onOpenEditModal,
   onMerchantRespondNoResponse,
   onAssignCourier,
   onClearAllData,
@@ -807,6 +810,12 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                           <span className="font-extrabold text-slate-900 text-xs">{s.recipient.name}</span>
                           <span className="font-mono text-slate-600 text-[11px] dir-ltr font-bold">{s.recipient.phone}</span>
                         </div>
+                        {s.recipient.secondaryPhone && (
+                          <div className="flex items-center justify-between text-[11px] bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
+                            <span className="font-bold">رقم بديل / ثانٍ:</span>
+                            <span className="font-mono font-bold" dir="ltr">📱 {s.recipient.secondaryPhone}</span>
+                          </div>
+                        )}
                         {/* Region prominent display */}
                         <div className="flex items-center gap-1.5 text-[11px] bg-white p-1.5 rounded-lg border border-slate-200/80">
                           <span className="text-red-700 font-extrabold flex items-center gap-1 shrink-0">
@@ -952,6 +961,17 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1">
+                        {onOpenEditModal && (
+                          <button
+                            onClick={() => onOpenEditModal(s)}
+                            className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                            title="تعديل بيانات الأوردر"
+                          >
+                            <Edit className="w-3.5 h-3.5 text-amber-600" />
+                            تعديل
+                          </button>
+                        )}
+
                         <button
                           onClick={() => onOpenDetailModal(s)}
                           className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
@@ -1054,6 +1074,11 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                         <td className="p-3">
                           <p className="font-extrabold text-slate-900">{s.recipient.name}</p>
                           <p className="text-[11px] text-slate-500 font-mono font-bold" dir="ltr">{s.recipient.phone}</p>
+                          {s.recipient.secondaryPhone && (
+                            <span className="inline-block text-[10px] text-emerald-700 font-mono font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded mt-0.5" dir="ltr" title="رقم إضافي / بديل">
+                              📱 {s.recipient.secondaryPhone}
+                            </span>
+                          )}
                           <div className="mt-1 flex items-center gap-1 flex-wrap">
                             <span className="inline-flex items-center gap-1 text-[11px] font-black text-red-700 bg-red-50 border border-red-200/80 px-2 py-0.5 rounded-md">
                               <MapPin className="w-3 h-3 text-red-600 shrink-0" />
@@ -1207,6 +1232,16 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                             >
                               <MessageSquare className="w-4 h-4" />
                             </button>
+
+                            {onOpenEditModal && (
+                              <button
+                                onClick={() => onOpenEditModal(s)}
+                                title="تعديل بيانات الأوردر (المستلم، العنوان، المحتوى، المبالغ)"
+                                className="p-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100 bg-amber-50 border border-amber-200 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                            )}
 
                             <button
                               onClick={() => onOpenPrintModal(s)}

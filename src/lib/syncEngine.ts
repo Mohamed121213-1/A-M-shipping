@@ -17,6 +17,8 @@ export interface SyncedAppState {
 
 type SyncCallback = (newState: SyncedAppState) => void;
 
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
 class SyncEngine {
   private localChannel: BroadcastChannel | null = null;
   private realtimeChannel: any = null;
@@ -35,7 +37,7 @@ class SyncEngine {
         const parsed = JSON.parse(raw);
         const now = Date.now();
         for (const [id, lock] of Object.entries(parsed) as any) {
-          if (lock && now - lock.timestamp < 900000) { // 15 minutes lock
+          if (lock && now - lock.timestamp < THIRTY_DAYS_MS) { // 30 days lock
             this.localStatusLocks.set(id, lock);
           }
         }
@@ -49,7 +51,7 @@ class SyncEngine {
       const obj: Record<string, any> = {};
       const now = Date.now();
       for (const [id, lock] of this.localStatusLocks.entries()) {
-        if (now - lock.timestamp < 900000) {
+        if (now - lock.timestamp < THIRTY_DAYS_MS) {
           obj[id] = lock;
         }
       }
@@ -60,13 +62,6 @@ class SyncEngine {
   public lockShipmentStatus(shipmentId: string, status: string, fullShipment?: any) {
     this.localStatusLocks.set(shipmentId, { status, timestamp: Date.now(), fullShipment });
     this.saveLocks();
-    setTimeout(() => {
-      const lock = this.localStatusLocks.get(shipmentId);
-      if (lock && Date.now() - lock.timestamp >= 890000) {
-        this.localStatusLocks.delete(shipmentId);
-        this.saveLocks();
-      }
-    }, 900000);
   }
 
   constructor() {
@@ -382,11 +377,11 @@ class SyncEngine {
         data.shipments = [];
       } else {
         const sanitizedIncoming = sanitizeShipments(data.shipments);
-        // Enforce persistent local locks for recent status transitions
+        // Enforce persistent local locks for status transitions
         data.shipments = sanitizedIncoming.map((s: Shipment) => {
           const id = s.id || s.trackingNumber;
           const lock = this.localStatusLocks.get(id);
-          if (lock && Date.now() - lock.timestamp < 900000) {
+          if (lock && Date.now() - lock.timestamp < THIRTY_DAYS_MS) {
             if (s.status !== lock.status) {
               return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
             }
@@ -530,7 +525,7 @@ class SyncEngine {
       } catch (e) {}
     }
 
-    const isClear = isExplicitClear || (Array.isArray(state.shipments) && state.shipments.length === 0);
+    const isClear = isExplicitClear === true;
     if (isClear) {
       this.localStatusLocks.clear();
       this.saveLocks();
@@ -544,7 +539,7 @@ class SyncEngine {
         payloadShipments = sanitizeShipments(payloadShipments).map((s: Shipment) => {
           const id = s.id || s.trackingNumber;
           const lock = this.localStatusLocks.get(id);
-          if (lock && Date.now() - lock.timestamp < 900000) {
+          if (lock && Date.now() - lock.timestamp < THIRTY_DAYS_MS) {
             return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
           }
           return s;

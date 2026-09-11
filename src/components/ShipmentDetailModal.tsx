@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Shipment, ShipmentStatus, CourierInfo, AppUserRole } from '../types';
-import { X, CheckCircle2, Clock, MapPin, Truck, AlertTriangle, ShieldCheck, Sparkles, Printer, User, Phone, Package, DollarSign, ArrowRight, KeyRound, MessageSquare, Trash2, RotateCcw } from 'lucide-react';
+import { X, CheckCircle2, Clock, MapPin, Truck, AlertTriangle, ShieldCheck, Sparkles, Printer, User, Phone, Package, DollarSign, ArrowRight, KeyRound, MessageSquare, Trash2, RotateCcw, Edit } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
 interface ShipmentDetailModalProps {
@@ -10,6 +10,7 @@ interface ShipmentDetailModalProps {
   onDeleteShipment?: (shipmentId: string) => void;
   onAssignCourier: (shipmentId: string, courier: CourierInfo) => void;
   onOpenPrintModal: (shipment: Shipment) => void;
+  onOpenEditModal?: (shipment: Shipment) => void;
   couriers?: CourierInfo[];
   isHighlighted?: boolean;
   currentRole?: AppUserRole;
@@ -24,6 +25,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   onDeleteShipment,
   onAssignCourier,
   onOpenPrintModal,
+  onOpenEditModal,
   couriers = [],
   isHighlighted,
   currentRole = 'merchant',
@@ -176,6 +178,18 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onOpenEditModal && (
+              <button
+                onClick={() => {
+                  onOpenEditModal(shipment);
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                title="تعديل بيانات الأوردر"
+              >
+                <Edit className="w-4 h-4 text-white" />
+                تعديل الأوردر
+              </button>
+            )}
             <button
               onClick={() => setIsWhatsAppOpen(true)}
               className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors"
@@ -301,6 +315,16 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                   <span>تراسل عبر الواتساب</span>
                 </button>
               </div>
+              {shipment.recipient.secondaryPhone && (
+                <div className="mt-1.5 p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-800 flex items-center gap-1">
+                    📱 رقم بديل / إضافي:
+                  </span>
+                  <span className="text-xs font-mono font-black text-emerald-900" dir="ltr">
+                    {shipment.recipient.secondaryPhone}
+                  </span>
+                </div>
+              )}
               <div className="mt-2.5 bg-slate-50 border border-slate-200/90 p-2.5 rounded-xl space-y-1.5">
                 <div className="flex items-center gap-1.5 text-xs flex-wrap">
                   <span className="text-slate-500 font-bold">المحافظة:</span>

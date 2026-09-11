@@ -29,7 +29,8 @@ import {
   ArrowDownRight,
   MessageSquare,
   PhoneOff,
-  BellRing
+  BellRing,
+  RotateCcw
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 import { BatchWhatsAppModal } from './BatchWhatsAppModal';
@@ -81,7 +82,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   const [isDeliverModalOpen, setIsDeliverModalOpen] = useState(false);
   const [isFailModalOpen, setIsFailModalOpen] = useState(false);
   const [isRefuseModalOpen, setIsRefuseModalOpen] = useState(false);
-  const [refuseFeeOption, setRefuseFeeOption] = useState<'full' | 'partial' | 'none'>('full');
+  const [refuseFeeOption, setRefuseFeeOption] = useState<'full' | 'partial' | 'none' | 'customer_cancellation'>('full');
   const [refusePartialAmount, setRefusePartialAmount] = useState<number>(0);
   const [refuseShippingFeePaid, setRefuseShippingFeePaid] = useState<boolean>(true);
   const [isPartialModalOpen, setIsPartialModalOpen] = useState(false);
@@ -256,9 +257,12 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     if (!selectedShipment) return;
 
     const totalShippingFee = selectedShipment.financials.shippingFee;
+    const isCustomerCancellation = refuseFeeOption === 'customer_cancellation';
     let amountCollected = 0;
 
-    if (refuseFeeOption === 'full') {
+    if (isCustomerCancellation) {
+      amountCollected = 0;
+    } else if (refuseFeeOption === 'full') {
       amountCollected = totalShippingFee;
     } else if (refuseFeeOption === 'partial') {
       amountCollected = Math.min(totalShippingFee, Math.max(0, refusePartialAmount));
@@ -266,19 +270,22 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
       amountCollected = 0;
     }
 
-    const merchantDeduction = Math.max(0, totalShippingFee - amountCollected);
-    const calculatedNetPayout = -merchantDeduction;
+    const merchantDeduction = isCustomerCancellation ? 0 : Math.max(0, totalShippingFee - amountCollected);
+    const calculatedNetPayout = isCustomerCancellation ? 0 : -merchantDeduction;
 
     const refusedDetails = {
-      shippingFeePaid: amountCollected >= totalShippingFee,
-      partialShippingFeePaid: amountCollected > 0 && amountCollected < totalShippingFee,
+      shippingFeePaid: !isCustomerCancellation && amountCollected >= totalShippingFee,
+      partialShippingFeePaid: !isCustomerCancellation && amountCollected > 0 && amountCollected < totalShippingFee,
       amountCollected,
       merchantDeductedAmount: merchantDeduction,
-      reason: refuseReason,
+      isCustomerCancellationWithoutFee: isCustomerCancellation,
+      reason: isCustomerCancellation ? (refuseReason || 'العميل طلب إلغاء الأوردر (إعفاء من مصاريف الشحن)') : refuseReason,
     };
 
     let statusNote = '';
-    if (amountCollected >= totalShippingFee) {
+    if (isCustomerCancellation) {
+      statusNote = `مرتجع - العميل طلب إلغاء الأوردر (إعفاء من مصاريف الشحن: لا خصم على التاجر ولا عهدة على المندوب) بواسطة ${activeCourier.name}: ${refuseReason}`;
+    } else if (amountCollected >= totalShippingFee) {
       statusNote = `مرتجع بواسطة ${activeCourier.name} (دفع كامل الشحن ${amountCollected} ج.م - الخصم من التاجر 0 ج.م): ${refuseReason}`;
     } else if (amountCollected > 0) {
       statusNote = `مرتجع بواسطة ${activeCourier.name} (دفع جزء من الشحن - تحصيل ${amountCollected} ج.م من العميل - خصم المتبقي ${merchantDeduction} ج.م من التاجر): ${refuseReason}`;
@@ -289,7 +296,8 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
     const extraUpdates: Partial<Shipment> = {
       financials: {
         ...selectedShipment.financials,
-        codAmount: amountCollected,
+        codAmount: isCustomerCancellation ? 0 : amountCollected,
+        shippingFee: isCustomerCancellation ? 0 : totalShippingFee,
         netPayout: calculatedNetPayout,
       },
       refusedDetails,
@@ -705,6 +713,25 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                       )}
                     </div>
 
+                    {/* Secondary Phone prominent display for courier */}
+                    {shipment.recipient.secondaryPhone && (
+                      <div className="bg-emerald-950/70 border border-emerald-500/60 p-2.5 rounded-xl flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-300 font-bold">
+                          <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>الرقم البديل / الثاني:</span>
+                          <span className="font-mono text-white font-black" dir="ltr">{shipment.recipient.secondaryPhone}</span>
+                        </div>
+                        <a
+                          href={`tel:${shipment.recipient.secondaryPhone}`}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-1 px-3 rounded-lg flex items-center gap-1 transition-colors"
+                          title="اتصال بالرقم الثاني"
+                        >
+                          <Phone className="w-3 h-3 text-white" />
+                          اتصال
+                        </a>
+                      </div>
+                    )}
+
                     {/* Call & WhatsApp & No-Response Customer Buttons */}
                     <div className="flex flex-wrap items-center gap-2">
                       <a
@@ -821,6 +848,22 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                         <button
                           onClick={() => {
                             setSelectedShipment(shipment);
+                            setRefuseFeeOption('customer_cancellation');
+                            setRefuseShippingFeePaid(false);
+                            setRefuseReason('العميل طلب إلغاء الأوردر (إعفاء من مصاريف الشحن)');
+                            setIsRefuseModalOpen(true);
+                            setEditingShipmentId(null);
+                          }}
+                          className="bg-sky-950/90 hover:bg-sky-900 text-sky-200 border border-sky-600/80 font-bold text-[11px] py-2 rounded-xl flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                          title="تسجيل أن العميل طلب إلغاء الأوردر مع إعفاء من مصاريف الشحن"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+                          إلغاء من العميل
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedShipment(shipment);
                             setIsRefuseModalOpen(true);
                             setEditingShipmentId(null);
                           }}
@@ -885,7 +928,11 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                         </div>
 
                         <div className="pt-1 border-t border-rose-900/60 leading-relaxed">
-                          {shipment.refusedDetails?.shippingFeePaid ? (
+                          {shipment.refusedDetails?.isCustomerCancellationWithoutFee ? (
+                            <span className="inline-block bg-sky-950 text-sky-300 border border-sky-600 text-xs px-2.5 py-1 rounded-lg font-black">
+                              🚫 إلغاء بطلب العميل (إعفاء من الشحن: 0 ج.م على التاجر والمندوب)
+                            </span>
+                          ) : shipment.refusedDetails?.shippingFeePaid ? (
                             <span className="inline-block bg-emerald-950 text-emerald-300 border border-emerald-700/80 text-xs px-2.5 py-1 rounded-lg font-black">
                               دفع كامل الشحن ({shipment.refusedDetails.amountCollected || shipment.financials.shippingFee} ج.م بالعهدة)
                             </span>
@@ -1173,7 +1220,24 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-300">اختر حالة تحصيل مصاريف الشحن عند الإرجاع:</label>
               
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRefuseFeeOption('customer_cancellation');
+                    setRefuseShippingFeePaid(false);
+                    setRefuseReason('العميل طلب إلغاء الأوردر (إعفاء من مصاريف الشحن)');
+                  }}
+                  className={`p-2.5 rounded-xl border text-xs font-black transition-all flex flex-col items-center justify-center gap-1 text-center cursor-pointer ${
+                    refuseFeeOption === 'customer_cancellation'
+                      ? 'bg-sky-950/90 border-sky-500 text-sky-300 shadow-sm ring-2 ring-sky-500/40'
+                      : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="text-[11px] flex items-center gap-1">🚫 إلغاء بطلب العميل</span>
+                  <span className="text-[10px] text-sky-400 font-bold">إعفاء من الشحن (0 ج.م)</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -1222,9 +1286,22 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                   }`}
                 >
                   <span className="text-[11px]">لم يدفع شحن</span>
-                  <span className="text-[10px] opacity-80">تحصيل 0 ج.م</span>
+                  <span className="text-[10px] opacity-80">خصم من التاجر</span>
                 </button>
               </div>
+
+              {/* If Customer Cancellation selected -> Show explanation */}
+              {refuseFeeOption === 'customer_cancellation' && (
+                <div className="bg-sky-950/50 border border-sky-600/60 p-3 rounded-xl space-y-1.5 mt-2">
+                  <div className="flex items-center gap-1.5 text-xs text-sky-300 font-extrabold">
+                    <CheckCircle2 className="w-4 h-4 text-sky-400 shrink-0" />
+                    <span>إعفاء تام من مصاريف الشحن للتاجر والمندوب</span>
+                  </div>
+                  <p className="text-[11px] text-sky-200 leading-relaxed">
+                    ✓ سيتم تحويل حالة الأوردر إلى <strong>مرتجع</strong>، مع عدم خصم أي شحن من محفظة التاجر (0 ج.م) وعدم احتساب أي مصاريف أو تحصيل عهدة على المندوب.
+                  </p>
+                </div>
+              )}
 
               {/* If Partial Shipping Fee selected -> Show amount input field */}
               {refuseFeeOption === 'partial' && (
@@ -1277,6 +1354,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                 onChange={(e) => setRefuseReason(e.target.value)}
                 className="w-full text-xs p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-bold"
               >
+                <option value="العميل طلب إلغاء الأوردر (إعفاء من مصاريف الشحن)">العميل طلب إلغاء الأوردر (إعفاء من مصاريف الشحن)</option>
                 <option value="رفض العميل المعاينة / غير مطابق للمواصفات">رفض العميل المعاينة / غير مطابق للمواصفات</option>
                 <option value="رفض العميل دفع المبلغ المطلوب / ارتفاع السعر">رفض العميل دفع المبلغ المطلوب / ارتفاع السعر</option>
                 <option value="إلغاء الطلب من العميل عند وصول المندوب">إلغاء الطلب من العميل عند وصول المندوب</option>
@@ -1454,10 +1532,20 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
 
             <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 text-xs space-y-1">
               <p className="font-extrabold text-white">
-                بوليصة رقم: <span className="font-mono text-red-400">{selectedShipmentForNoResponse.trackingNumber}</span>
+                بوليصة رقم: <span className="font-mono text-red-400">#{selectedShipmentForNoResponse.trackingNumber}</span>
               </p>
-              <p className="text-slate-300">العميل: {selectedShipmentForNoResponse.recipient.name} ({selectedShipmentForNoResponse.recipient.phone})</p>
-              <p className="text-amber-300 font-bold">المتجر/التاجر: {selectedShipmentForNoResponse.sender?.storeName || 'التاجر'}</p>
+              <p className="text-slate-300">
+                العميل: <strong className="text-white">{selectedShipmentForNoResponse.recipient.name}</strong>
+              </p>
+              <p className="text-slate-300">
+                الرقم الأساسي: <strong className="text-white font-mono" dir="ltr">{selectedShipmentForNoResponse.recipient.phone}</strong>
+              </p>
+              {selectedShipmentForNoResponse.recipient.secondaryPhone && (
+                <p className="text-emerald-300 font-bold bg-emerald-950/60 p-1.5 rounded-lg border border-emerald-800/50">
+                  📱 الرقم البديل / الثاني: <strong className="text-white font-mono" dir="ltr">{selectedShipmentForNoResponse.recipient.secondaryPhone}</strong> (يرجى تجربة الاتصال به أولاً)
+                </p>
+              )}
+              <p className="text-amber-300 font-bold pt-1 border-t border-slate-700">المتجر/التاجر: {selectedShipmentForNoResponse.sender?.storeName || 'التاجر'}</p>
             </div>
 
             <div className="space-y-2">

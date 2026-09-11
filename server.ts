@@ -586,9 +586,10 @@ const STATUS_RANK: Record<string, number> = {
   'cancelled': 6,
 };
 
-// Server-side lock to guarantee courier/admin status updates are protected from rollback for at least 15 minutes
+// Server-side lock to guarantee courier/admin status updates are protected from rollback (retained for 30 days)
 const serverStatusLocks = new Map<string, { status: string; timestamp: number; fullShipment?: any }>();
 const STATUS_LOCKS_FILE = path.join(DATA_DIR, "status_locks.json");
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Load persistent status locks from disk on server boot
 function loadServerStatusLocks() {
@@ -599,7 +600,7 @@ function loadServerStatusLocks() {
       if (data && typeof data === 'object') {
         for (const [key, val] of Object.entries(data)) {
           const lockVal = val as any;
-          if (lockVal && lockVal.timestamp && (now - lockVal.timestamp < 900000)) {
+          if (lockVal && lockVal.timestamp && (now - lockVal.timestamp < THIRTY_DAYS_MS)) {
             serverStatusLocks.set(key, lockVal);
           }
         }
@@ -615,7 +616,7 @@ function saveServerStatusLocks() {
     const obj: Record<string, any> = {};
     const now = Date.now();
     for (const [k, v] of serverStatusLocks.entries()) {
-      if (v && v.timestamp && (now - v.timestamp < 900000)) {
+      if (v && v.timestamp && (now - v.timestamp < THIRTY_DAYS_MS)) {
         obj[k] = v;
       }
     }
@@ -634,7 +635,7 @@ function mergeSingleShipment(current: any, incoming: any): any {
 
   const id = incoming.id || incoming.trackingNumber || current.id || current.trackingNumber;
   const lock = id ? serverStatusLocks.get(id) : null;
-  const isLocked = lock && (Date.now() - lock.timestamp < 900000);
+  const isLocked = Boolean(lock && (Date.now() - lock.timestamp < THIRTY_DAYS_MS));
 
   const currentTime = new Date(current.updatedAt || current.createdAt || 0).getTime();
   const incomingTime = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
@@ -655,7 +656,7 @@ function mergeSingleShipment(current: any, incoming: any): any {
   const mergedTimeline = Array.from(timelineMap.values());
 
   let winningObj: any;
-  if (isLocked) {
+  if (isLocked && lock) {
     winningObj = lock.fullShipment ? { ...current, ...incoming, ...lock.fullShipment, status: lock.status } : { ...incoming, ...current, status: lock.status };
   } else if (currentRank > incomingRank) {
     // Current is further along in shipment lifecycle - reject rollback
@@ -676,19 +677,21 @@ function mergeSingleShipment(current: any, incoming: any): any {
     }
   }
 
-  // SECONDARY SAFEGUARD: Check merged timeline for terminal statuses
-  // If the timeline contains delivered/returned/refused/partial_delivery, never downgrade
+  // SECONDARY SAFEGUARD: Check merged timeline for terminal & attempt statuses
+  // If the timeline contains delivered/returned/refused/partial_delivery/failed_attempt, never downgrade
   let effectiveStatus = winningObj.status;
   const hasDeliveredInTimeline = mergedTimeline.some((t: any) => t?.status === 'delivered');
   const hasRefusedInTimeline = mergedTimeline.some((t: any) => t?.status === 'refused');
   const hasReturnedInTimeline = mergedTimeline.some((t: any) => t?.status === 'returned');
   const hasPartialInTimeline = mergedTimeline.some((t: any) => t?.status === 'partial_delivery');
+  const hasFailedInTimeline = mergedTimeline.some((t: any) => t?.status === 'failed_attempt');
 
   if ((STATUS_RANK[effectiveStatus] || 0) < 6) {
     if (hasDeliveredInTimeline) effectiveStatus = 'delivered';
     else if (hasRefusedInTimeline) effectiveStatus = 'refused';
     else if (hasReturnedInTimeline) effectiveStatus = 'returned';
     else if (hasPartialInTimeline) effectiveStatus = 'partial_delivery';
+    else if (hasFailedInTimeline && (STATUS_RANK[effectiveStatus] || 0) < 5) effectiveStatus = 'failed_attempt';
   }
 
   const mergedFinancials = {
@@ -780,47 +783,33 @@ async function pushStateToSupabase(state: any, timestamp: number) {
       }, { onConflict: 'id' });
 
     // 2. Sync individual shipments to 'shipments' table
-    if (Array.isArray(state?.shipments)) {
-      if (state.shipments.length === 0) {
-        try {
-          await supabaseServer.from('shipments').delete().neq('id', '___none___');
-        } catch (err) {}
-      } else {
-        const formattedShipments = state.shipments.map((s: any) => ({
-          id: String(s.id || s.trackingNumber || `BST-${Date.now()}`),
-          tracking_number: String(s.trackingNumber || s.id || ''),
-          code: String(s.code || s.trackingNumber || s.id || ''),
-          status: String(s.status || 'created'),
-          customer_name: String(s.recipient?.name || s.customerName || ''),
-          customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
-          governorate: String(s.recipient?.governorate || s.governorate || ''),
-          city: String(s.recipient?.city || s.city || ''),
-          address: String(s.recipient?.streetAddress || s.address || ''),
-          cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
-          shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
-          net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
-          sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
-          courier_name: String(s.courier?.name || s.courierName || ''),
-          notes: String(s.recipient?.notes || s.notes || ''),
-          data: s,
-          created_at: s.createdAt || new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }));
+    if (Array.isArray(state?.shipments) && state.shipments.length > 0) {
+      const formattedShipments = state.shipments.map((s: any) => ({
+        id: String(s.id || s.trackingNumber || `BST-${Date.now()}`),
+        tracking_number: String(s.trackingNumber || s.id || ''),
+        code: String(s.code || s.trackingNumber || s.id || ''),
+        status: String(s.status || 'created'),
+        customer_name: String(s.recipient?.name || s.customerName || ''),
+        customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
+        governorate: String(s.recipient?.governorate || s.governorate || ''),
+        city: String(s.recipient?.city || s.city || ''),
+        address: String(s.recipient?.streetAddress || s.address || ''),
+        cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
+        shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
+        net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
+        sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
+        courier_name: String(s.courier?.name || s.courierName || ''),
+        notes: String(s.recipient?.notes || s.notes || ''),
+        data: s,
+        created_at: s.createdAt || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
 
-        // Upsert in batches of 50
-        for (let i = 0; i < formattedShipments.length; i += 50) {
-          const batch = formattedShipments.slice(i, i + 50);
-          try {
-            await supabaseServer.from('shipments').upsert(batch, { onConflict: 'id' });
-          } catch (err) {}
-        }
-
-        // Remove deleted shipments from supabase
+      // Upsert in batches of 50
+      for (let i = 0; i < formattedShipments.length; i += 50) {
+        const batch = formattedShipments.slice(i, i + 50);
         try {
-          const validIds = state.shipments.map((s: any) => String(s.id || s.trackingNumber)).filter(Boolean);
-          if (validIds.length > 0) {
-            await supabaseServer.from('shipments').delete().not('id', 'in', `(${validIds.join(',')})`);
-          }
+          await supabaseServer.from('shipments').upsert(batch, { onConflict: 'id' });
         } catch (err) {}
       }
     }
@@ -923,30 +912,38 @@ async function pullStateFromSupabaseOnBoot() {
     }
 
     // Always merge individual rows from Supabase shipments table
-    const { data: sRows, error: sErr } = await supabaseServer.from('shipments').select('*').limit(500);
+    const { data: sRows, error: sErr } = await supabaseServer.from('shipments').select('*').limit(1000);
     if (!sErr && Array.isArray(sRows) && sRows.length > 0) {
-      const mapped = sRows.map((r: any) => r.data || {
-        id: r.id,
-        trackingNumber: r.tracking_number,
-        status: r.status,
-        recipient: {
-          name: r.customer_name,
-          phone: r.customer_phone,
-          governorate: r.governorate,
-          city: r.city,
-          streetAddress: r.address,
-        },
-        sender: {
-          storeName: r.sender_name,
-          contactName: r.sender_name,
-        },
-        financials: {
-          codAmount: r.cod_amount,
-          shippingFee: r.shipping_fee,
-          netPayout: r.net_payout,
-        },
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
+      const mapped = sRows.map((r: any) => {
+        const base = (r.data && typeof r.data === 'object') ? r.data : {};
+        return {
+          ...base,
+          id: r.id || base.id,
+          trackingNumber: r.tracking_number || base.trackingNumber,
+          status: r.status || base.status || 'created',
+          recipient: {
+            ...(base.recipient || {}),
+            name: r.customer_name || base.recipient?.name || '',
+            phone: r.customer_phone || base.recipient?.phone || '',
+            secondaryPhone: base.recipient?.secondaryPhone || base.recipient?.phone2 || base.recipient?.secondPhone || '',
+            governorate: r.governorate || base.recipient?.governorate || '',
+            city: r.city || base.recipient?.city || '',
+            streetAddress: r.address || base.recipient?.streetAddress || '',
+          },
+          sender: {
+            ...(base.sender || {}),
+            storeName: r.sender_name || base.sender?.storeName || '',
+            contactName: r.sender_name || base.sender?.contactName || '',
+          },
+          financials: {
+            ...(base.financials || {}),
+            codAmount: r.cod_amount !== undefined && r.cod_amount !== null ? Number(r.cod_amount) : (base.financials?.codAmount || 0),
+            shippingFee: r.shipping_fee !== undefined && r.shipping_fee !== null ? Number(r.shipping_fee) : (base.financials?.shippingFee || 0),
+            netPayout: r.net_payout !== undefined && r.net_payout !== null ? Number(r.net_payout) : (base.financials?.netPayout || 0),
+          },
+          createdAt: r.created_at || base.createdAt || new Date().toISOString(),
+          updatedAt: r.updated_at || base.updatedAt || new Date().toISOString(),
+        };
       });
 
       if (!serverAppState) serverAppState = {};
@@ -1311,7 +1308,7 @@ app.post("/api/shipments/batch", (req, res) => {
 });
 
 // 4. Update shipment status
-app.patch("/api/shipments/:id/status", (req, res) => {
+app.patch("/api/shipments/:id/status", async (req, res) => {
   try {
     const { id } = req.params;
     const { status, note, extraUpdates, senderId } = req.body || {};
@@ -1405,10 +1402,18 @@ app.patch("/api/shipments/:id/status", (req, res) => {
 
     recalculateServerWallet();
 
+    // Immediately persist to local disk
+    serverLastUpdated = Date.now();
+    try {
+      fs.writeFileSync(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: serverLastUpdated }, null, 2));
+    } catch (e) {
+      console.warn("Failed to write state file:", e);
+    }
+
     // Direct update to Supabase 'shipments' table immediately
     if (supabaseServer) {
-      Promise.resolve(
-        supabaseServer
+      try {
+        await supabaseServer
           .from('shipments')
           .upsert({
             id: String(updatedShipment.id),
@@ -1425,8 +1430,13 @@ app.patch("/api/shipments/:id/status", (req, res) => {
             net_payout: Number(updatedShipment.financials?.netPayout || 0),
             data: updatedShipment,
             updated_at: new Date().toISOString()
-          }, { onConflict: 'id' })
-      ).catch(() => {});
+          }, { onConflict: 'id' });
+        
+        // Also update global state in Supabase
+        await pushStateToSupabase(serverAppState, serverLastUpdated);
+      } catch (err) {
+        console.warn("Supabase status upsert notice:", err);
+      }
     }
 
     persistAndBroadcast(senderId || 'api_update_status', {
@@ -1438,6 +1448,84 @@ app.patch("/api/shipments/:id/status", (req, res) => {
     });
 
     return res.json({ success: true, shipment: updatedShipment, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 4b. Edit shipment details (Admin and Merchant editing)
+app.patch("/api/shipments/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { updatedData, fullShipment, senderId } = req.body || {};
+
+    if (!serverAppState || !Array.isArray(serverAppState.shipments)) {
+      serverAppState = { shipments: [] };
+    }
+
+    let shipIndex = serverAppState.shipments.findIndex((s: any) => s.id === id || s.trackingNumber === id);
+    if (shipIndex === -1 && !fullShipment) {
+      return res.status(404).json({ error: "الشحنة غير موجودة" });
+    }
+
+    const currentS = shipIndex !== -1 ? serverAppState.shipments[shipIndex] : fullShipment;
+    const mergedObj = {
+      ...currentS,
+      ...(updatedData || {}),
+      ...(fullShipment || {}),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (shipIndex !== -1) {
+      serverAppState.shipments[shipIndex] = mergedObj;
+    } else {
+      serverAppState.shipments.unshift(mergedObj);
+    }
+
+    // Refresh server status lock if present
+    const lock = serverStatusLocks.get(id);
+    if (lock) {
+      serverStatusLocks.set(id, { ...lock, fullShipment: mergedObj });
+      saveServerStatusLocks();
+    }
+
+    recalculateServerWallet();
+
+    // Persist to disk
+    serverLastUpdated = Date.now();
+    try {
+      fs.writeFileSync(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: serverLastUpdated }, null, 2));
+    } catch (e) {
+      console.warn("Failed to write state file on edit:", e);
+    }
+
+    // Persist to Supabase
+    if (supabaseServer) {
+      try {
+        await supabaseServer.from('shipments').upsert({
+          id: String(mergedObj.id),
+          tracking_number: String(mergedObj.trackingNumber || mergedObj.id),
+          code: String(mergedObj.code || mergedObj.trackingNumber || mergedObj.id),
+          status: String(mergedObj.status || 'created'),
+          customer_name: String(mergedObj.recipient?.name || ''),
+          customer_phone: String(mergedObj.recipient?.phone || ''),
+          governorate: String(mergedObj.recipient?.governorate || ''),
+          city: String(mergedObj.recipient?.city || ''),
+          address: String(mergedObj.recipient?.streetAddress || ''),
+          cod_amount: Number(mergedObj.financials?.codAmount || 0),
+          shipping_fee: Number(mergedObj.financials?.shippingFee || 0),
+          net_payout: Number(mergedObj.financials?.netPayout || 0),
+          data: mergedObj,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+
+        await pushStateToSupabase(serverAppState, serverLastUpdated);
+      } catch (e) {}
+    }
+
+    persistAndBroadcast(senderId || 'api_edit_shipment');
+
+    return res.json({ success: true, shipment: mergedObj, state: serverAppState });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -1700,28 +1788,15 @@ app.post("/api/sync/state", (req, res) => {
 
     let mergedState = { ...state };
 
-    const shouldClearShipments = isExplicitClear || (Array.isArray(state.shipments) && state.shipments.length === 0);
+    const shouldClearShipments = isExplicitClear === true;
 
     if (shouldClearShipments) {
       mergedState.shipments = [];
       serverStatusLocks.clear();
       saveServerStatusLocks();
     } else if (Array.isArray(state.shipments) && state.shipments.length > 0) {
-      const existingMap = new Map<string, any>();
-      if (serverAppState && Array.isArray(serverAppState.shipments)) {
-        for (const s of serverAppState.shipments) {
-          if (s && (s.id || s.trackingNumber)) {
-            existingMap.set(s.id || s.trackingNumber, s);
-          }
-        }
-      }
-      mergedState.shipments = state.shipments.map((incomingShipment: any) => {
-        if (!incomingShipment) return incomingShipment;
-        const key = incomingShipment.id || incomingShipment.trackingNumber;
-        const existing = existingMap.get(key);
-        if (!existing) return incomingShipment;
-        return mergeSingleShipment(existing, incomingShipment);
-      });
+      const serverList = (serverAppState && Array.isArray(serverAppState.shipments)) ? serverAppState.shipments : [];
+      mergedState.shipments = mergeShipmentsLists(serverList, state.shipments);
     } else if (serverAppState && Array.isArray(serverAppState.shipments)) {
       mergedState.shipments = serverAppState.shipments;
     }

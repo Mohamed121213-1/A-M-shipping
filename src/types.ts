@@ -138,6 +138,7 @@ export interface Shipment {
     partialShippingFeePaid?: boolean;
     amountCollected: number;
     merchantDeductedAmount?: number;
+    isCustomerCancellationWithoutFee?: boolean;
     reason: string;
   };
   noResponseDetails?: {

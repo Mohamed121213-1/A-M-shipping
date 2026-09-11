@@ -17,13 +17,14 @@ interface WhatsAppModalProps {
 
 export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ shipment, onClose }) => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(WHATSAPP_TEMPLATES[0].id);
+  const [selectedPhone, setSelectedPhone] = useState<string>(shipment.recipient.phone);
 
   const fullAddress = formatFullAddress(shipment.recipient);
   const productDesc = formatProductDetails(shipment.packageDetails);
 
   const templateData: WhatsAppTemplateData = {
     recipientName: shipment.recipient.name,
-    recipientPhone: shipment.recipient.phone,
+    recipientPhone: selectedPhone,
     recipientAddress: fullAddress,
     productType: productDesc,
     itemsCount: shipment.packageDetails?.itemsCount,
@@ -47,8 +48,8 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ shipment, onClose 
     }
   };
 
-  const formattedPhone = formatPhoneNumberForWhatsApp(shipment.recipient.phone);
-  const whatsappUrl = generateWhatsAppLink(shipment.recipient.phone, customMessage);
+  const formattedPhone = formatPhoneNumberForWhatsApp(selectedPhone);
+  const whatsappUrl = generateWhatsAppLink(selectedPhone, customMessage);
 
   const handleCopyText = () => {
     navigator.clipboard.writeText(customMessage);
@@ -88,7 +89,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ shipment, onClose 
             <div className="flex items-center justify-between">
               <div>
                 <span className="font-black text-emerald-900 text-sm block">{shipment.recipient.name}</span>
-                <span className="text-[11px] text-emerald-700 font-mono">الرقم المفعل: +{formattedPhone}</span>
+                <span className="text-[11px] text-emerald-700 font-mono">الرقم المفعل للرسالة: +{formattedPhone}</span>
               </div>
               <div className="text-left">
                 <span className="bg-emerald-200/90 text-emerald-950 font-mono font-black text-[11px] px-2.5 py-1 rounded-full border border-emerald-300 block">
@@ -99,6 +100,42 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ shipment, onClose 
                 </span>
               </div>
             </div>
+
+            {/* If Secondary Phone Exists: Phone Switcher Tabs */}
+            {shipment.recipient.secondaryPhone && (
+              <div className="pt-2 border-t border-emerald-200/80">
+                <span className="text-[11px] font-bold text-emerald-900 block mb-1.5">
+                  📱 اختر الرقم المراد إرسال رسالة الواتساب إليه:
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhone(shipment.recipient.phone)}
+                    className={`p-2 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                      selectedPhone === shipment.recipient.phone
+                        ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs'
+                        : 'bg-white text-emerald-900 border-emerald-300 hover:bg-emerald-100'
+                    }`}
+                  >
+                    <span>الرقم الأساسي</span>
+                    <span className="font-mono text-[11px] dir-ltr">{shipment.recipient.phone}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhone(shipment.recipient.secondaryPhone || '')}
+                    className={`p-2 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                      selectedPhone === shipment.recipient.secondaryPhone
+                        ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs'
+                        : 'bg-white text-emerald-900 border-emerald-300 hover:bg-emerald-100'
+                    }`}
+                  >
+                    <span>الرقم الثاني / البديل ⭐</span>
+                    <span className="font-mono text-[11px] dir-ltr">{shipment.recipient.secondaryPhone}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Complete Address & Product Details preview */}
             <div className="pt-2 border-t border-emerald-200/70 space-y-1.5 text-[11px]">

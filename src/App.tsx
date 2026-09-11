@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { ShipmentsList } from './components/ShipmentsList';
 import { CreateShipmentModal } from './components/CreateShipmentModal';
 import { ShipmentDetailModal } from './components/ShipmentDetailModal';
+import { EditShipmentModal } from './components/EditShipmentModal';
 import { WaybillPrintModal } from './components/WaybillPrintModal';
 import { CourierAppView } from './components/CourierAppView';
 import { PublicTrackingView } from './components/PublicTrackingView';
@@ -836,9 +837,98 @@ export default function App() {
 
   // Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [selectedDetailShipment, setSelectedDetailShipment] = useState<Shipment | null>(null);
   const [selectedPrintShipment, setSelectedPrintShipment] = useState<Shipment | null>(null);
   const [publicSearchTrackNum, setPublicSearchTrackNum] = useState<string>('BST-804101');
+
+  const handleSaveEditedShipment = (shipmentId: string, updatedData: Partial<Shipment>) => {
+    let targetUpdatedShipment: Shipment | null = null;
+
+    setShipments((prev) => {
+      const nextShipments = prev.map((s) => {
+        if (s.id === shipmentId || s.trackingNumber === shipmentId) {
+          const updated: Shipment = {
+            ...s,
+            ...updatedData,
+            updatedAt: new Date().toISOString(),
+            timeline: [
+              {
+                id: `tl-${Date.now()}`,
+                status: s.status,
+                title: 'تعديل بيانات الشحنة',
+                date: new Date().toISOString().split('T')[0],
+                timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+                location: updatedData.recipient?.governorate || s.recipient.governorate || 'الفرع الرئيسي',
+                note: `تم تعديل بيانات الشحنة بنجاح بواسطة ${currentUser?.name || 'المستخدم'}`,
+              },
+              ...s.timeline,
+            ],
+          };
+          targetUpdatedShipment = updated;
+          return updated;
+        }
+        return s;
+      });
+
+      try {
+        localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
+      } catch (e) {}
+
+      broadcastDataChange({ shipments: nextShipments });
+      return nextShipments;
+    });
+
+    if (targetUpdatedShipment) {
+      const finalShip: Shipment = targetUpdatedShipment;
+      // Lock status in client syncEngine to prevent any sync rollback
+      syncEngine.lockShipmentStatus(finalShip.id, finalShip.status, finalShip);
+      if (finalShip.trackingNumber) {
+        syncEngine.lockShipmentStatus(finalShip.trackingNumber, finalShip.status, finalShip);
+      }
+
+      // Persist directly to backend API
+      fetch(`/api/shipments/${encodeURIComponent(finalShip.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updatedData,
+          fullShipment: finalShip,
+          senderId: syncEngine.getInstanceId(),
+        }),
+      }).catch((err) => console.warn('Server patch edit shipment error:', err));
+
+      // Direct persist to Supabase if configured
+      if (isSupabaseConfigured) {
+        Promise.resolve(
+          supabase
+            .from('shipments')
+            .upsert({
+              id: String(finalShip.id),
+              tracking_number: String(finalShip.trackingNumber || finalShip.id),
+              code: String((finalShip as any).code || finalShip.trackingNumber || finalShip.id),
+              status: String(finalShip.status || 'created'),
+              customer_name: String(finalShip.recipient?.name || ''),
+              customer_phone: String(finalShip.recipient?.phone || ''),
+              governorate: String(finalShip.recipient?.governorate || ''),
+              city: String(finalShip.recipient?.city || ''),
+              address: String(finalShip.recipient?.streetAddress || ''),
+              cod_amount: Number(finalShip.financials?.codAmount || 0),
+              shipping_fee: Number(finalShip.financials?.shippingFee || 0),
+              net_payout: Number(finalShip.financials?.netPayout || 0),
+              data: finalShip,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'id' })
+        ).catch((err: any) => console.warn('Supabase edit shipment upsert error:', err));
+      }
+    }
+
+    if (selectedDetailShipment && (selectedDetailShipment.id === shipmentId || selectedDetailShipment.trackingNumber === shipmentId)) {
+      setSelectedDetailShipment((prev) => (prev ? { ...prev, ...updatedData } : null));
+    }
+
+    showToast(`✓ تم حفظ وتحديث وتثبيت بيانات الشحنة رقم #${editingShipment?.trackingNumber || shipmentId} بنجاح`);
+  };
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -1060,34 +1150,54 @@ export default function App() {
         const currentFinancials = effectiveExtra.financials || s.financials;
         const refusedDetails = effectiveExtra.refusedDetails || s.refusedDetails;
 
-        let collectedShipping = 0;
-        if (refusedDetails?.amountCollected !== undefined) {
-          collectedShipping = Number(refusedDetails.amountCollected) || 0;
-        } else if (refusedDetails?.shippingFeePaid === true) {
-          collectedShipping = currentFinancials.shippingFee;
+        if (refusedDetails?.isCustomerCancellationWithoutFee) {
+          effectiveExtra = {
+            ...effectiveExtra,
+            financials: {
+              ...currentFinancials,
+              codAmount: 0,
+              shippingFee: 0,
+              netPayout: 0,
+            },
+            refusedDetails: {
+              shippingFeePaid: false,
+              partialShippingFeePaid: false,
+              amountCollected: 0,
+              merchantDeductedAmount: 0,
+              isCustomerCancellationWithoutFee: true,
+              reason: refusedDetails?.reason || 'العميل طلب إلغاء الأوردر (إعفاء من مصاريف الشحن)',
+            },
+          };
         } else {
-          collectedShipping = 0;
+          let collectedShipping = 0;
+          if (refusedDetails?.amountCollected !== undefined) {
+            collectedShipping = Number(refusedDetails.amountCollected) || 0;
+          } else if (refusedDetails?.shippingFeePaid === true) {
+            collectedShipping = currentFinancials.shippingFee;
+          } else {
+            collectedShipping = 0;
+          }
+
+          const totalShippingFee = currentFinancials.shippingFee;
+          const merchantDeduction = Math.max(0, totalShippingFee - collectedShipping);
+          const calculatedNetPayout = -merchantDeduction;
+
+          effectiveExtra = {
+            ...effectiveExtra,
+            financials: {
+              ...currentFinancials,
+              codAmount: collectedShipping,
+              netPayout: calculatedNetPayout,
+            },
+            refusedDetails: {
+              shippingFeePaid: collectedShipping >= totalShippingFee,
+              partialShippingFeePaid: collectedShipping > 0 && collectedShipping < totalShippingFee,
+              amountCollected: collectedShipping,
+              merchantDeductedAmount: merchantDeduction,
+              reason: refusedDetails?.reason || 'رفض الاستلام / مرتجع',
+            },
+          };
         }
-
-        const totalShippingFee = currentFinancials.shippingFee;
-        const merchantDeduction = Math.max(0, totalShippingFee - collectedShipping);
-        const calculatedNetPayout = -merchantDeduction;
-
-        effectiveExtra = {
-          ...effectiveExtra,
-          financials: {
-            ...currentFinancials,
-            codAmount: collectedShipping,
-            netPayout: calculatedNetPayout,
-          },
-          refusedDetails: {
-            shippingFeePaid: collectedShipping >= totalShippingFee,
-            partialShippingFeePaid: collectedShipping > 0 && collectedShipping < totalShippingFee,
-            amountCollected: collectedShipping,
-            merchantDeductedAmount: merchantDeduction,
-            reason: refusedDetails?.reason || 'رفض الاستلام / مرتجع',
-          },
-        };
       }
 
       effectiveExtraOut = effectiveExtra;
@@ -1158,6 +1268,9 @@ export default function App() {
         return sum + (ship.financials.netPayout ?? Math.max(0, collected - ship.financials.shippingFee));
       }
       if (ship.status === 'refused' || ship.status === 'returned') {
+        if (ship.refusedDetails?.isCustomerCancellationWithoutFee) {
+          return sum;
+        }
         if (ship.financials.netPayout !== undefined) {
           return sum + ship.financials.netPayout;
         }
@@ -1272,8 +1385,11 @@ export default function App() {
       console.warn('Error persisting shipments update:', e);
     }
 
-    // Lock status locally for 20s to ensure no race condition can revert it
+    // Lock status locally to ensure no race condition or sync can revert it
     syncEngine.lockShipmentStatus(shipmentId, newStatus, updatedShipment);
+    if (updatedShipment?.trackingNumber) {
+      syncEngine.lockShipmentStatus(updatedShipment.trackingNumber, newStatus, updatedShipment);
+    }
 
     // Broadcast IMMEDIATELY to Admin and all connected instances
     broadcastDataChange({ shipments: nextShipments, wallet: updatedWallet, notifications: nextNotifications });
@@ -2679,6 +2795,7 @@ export default function App() {
                     onOpenDetailModal={(s) => setSelectedDetailShipment(s)}
                     onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
                     onOpenCreateModal={() => setIsCreateModalOpen(true)}
+                    onOpenEditModal={(s) => setEditingShipment(s)}
                     onUpdateStatus={handleUpdateStatus}
                     onDeleteShipment={handleDeleteShipment}
                     onDeleteMultipleShipments={handleDeleteMultipleShipments}
@@ -2767,6 +2884,7 @@ export default function App() {
                     onOpenDetailModal={(s) => setSelectedDetailShipment(s)}
                     onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
                     onOpenCreateModal={() => setIsCreateModalOpen(true)}
+                    onOpenEditModal={(s) => setEditingShipment(s)}
                     onUpdateStatus={handleUpdateStatus}
                     onDeleteShipment={handleDeleteShipment}
                     onDeleteMultipleShipments={handleDeleteMultipleShipments}
@@ -2911,9 +3029,21 @@ export default function App() {
           setSelectedDetailShipment(null);
           setSelectedPrintShipment(s);
         }}
+        onOpenEditModal={(s) => {
+          setSelectedDetailShipment(null);
+          setEditingShipment(s);
+        }}
         isHighlighted={selectedDetailShipment?.id === highlightedShipmentId}
         couriers={couriers}
         currentRole={currentUser?.role || currentRole}
+      />
+
+      <EditShipmentModal
+        isOpen={!!editingShipment}
+        shipment={editingShipment}
+        onClose={() => setEditingShipment(null)}
+        onSave={handleSaveEditedShipment}
+        governorates={governorates}
       />
 
       <WaybillPrintModal
