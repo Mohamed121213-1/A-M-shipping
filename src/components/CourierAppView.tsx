@@ -30,10 +30,12 @@ import {
   MessageSquare,
   PhoneOff,
   BellRing,
-  RotateCcw
+  RotateCcw,
+  FileText
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 import { BatchWhatsAppModal } from './BatchWhatsAppModal';
+import { CourierWaybillModal } from './CourierWaybillModal';
 import { EnableNotifications } from './EnableNotifications';
 import { playNotificationSound, requestNotificationPermission, sendDeviceNotification } from '../utils/deviceNotifications';
 
@@ -48,6 +50,7 @@ interface CourierAppViewProps {
   currentUser?: UserSession | null;
   couriers?: CourierInfo[];
   onSettleCourierCustody?: (courierId: string, netAmount?: number, grossAmount?: number, commission?: number) => void;
+  onOpenPrintModal?: (shipment: Shipment) => void;
 }
 
 export const CourierAppView: React.FC<CourierAppViewProps> = ({
@@ -61,6 +64,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   currentUser,
   couriers = [],
   onSettleCourierCustody,
+  onOpenPrintModal,
 }) => {
   const fallbackCourier: CourierInfo = couriers[0] || {
     id: 'cour-placeholder',
@@ -86,6 +90,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   const [refusePartialAmount, setRefusePartialAmount] = useState<number>(0);
   const [refuseShippingFeePaid, setRefuseShippingFeePaid] = useState<boolean>(true);
   const [isPartialModalOpen, setIsPartialModalOpen] = useState(false);
+  const [waybillShipment, setWaybillShipment] = useState<Shipment | null>(null);
   const [whatsappShipment, setWhatsappShipment] = useState<Shipment | null>(null);
   const [isBatchWhatsAppOpen, setIsBatchWhatsAppOpen] = useState(false);
   const [editingShipmentId, setEditingShipmentId] = useState<string | null>(null);
@@ -732,15 +737,25 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                       </div>
                     )}
 
-                    {/* Call & WhatsApp & No-Response Customer Buttons */}
+                    {/* Call & Waybill & WhatsApp & No-Response Customer Buttons */}
                     <div className="flex flex-wrap items-center gap-2">
                       <a
                         href={`tel:${shipment.recipient.phone}`}
-                        className="flex-1 min-w-[120px] bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2 px-3 rounded-xl text-center flex items-center justify-center gap-1.5 transition-colors"
+                        className="flex-1 min-w-[110px] bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2 px-3 rounded-xl text-center flex items-center justify-center gap-1.5 transition-colors"
                       >
                         <Phone className="w-3.5 h-3.5 text-emerald-400" />
                         اتصال ({shipment.recipient.phone})
                       </a>
+
+                      {/* Prominent Waybill Share Button */}
+                      <button
+                        onClick={() => setWaybillShipment(shipment)}
+                        className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-extrabold py-2 px-3.5 rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-blue-900/30 transition-all shrink-0 cursor-pointer border border-blue-400/40"
+                        title="إرسال بوليصة الشحن الرسمية والشاملة للعميل"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-amber-300" />
+                        <span>بوليصة الشحن 🧾</span>
+                      </button>
 
                       <button
                         onClick={() => setWhatsappShipment(shipment)}
@@ -1503,6 +1518,15 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Waybill Modal for Courier */}
+      {waybillShipment && (
+        <CourierWaybillModal
+          shipment={waybillShipment}
+          onClose={() => setWaybillShipment(null)}
+          onOpenPrintModal={onOpenPrintModal}
+        />
       )}
 
       {/* WhatsApp Modal */}

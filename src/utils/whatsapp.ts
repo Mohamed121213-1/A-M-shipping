@@ -63,6 +63,7 @@ export function generateWhatsAppLink(phone: string, text: string): string {
 export interface WhatsAppTemplateData {
   recipientName: string;
   recipientPhone?: string;
+  secondaryPhone?: string;
   recipientAddress?: string; // العنوان كامل بالتفصيل
   productType?: string;      // نوع ومحتوى المنتج
   itemsCount?: number;
@@ -74,7 +75,40 @@ export interface WhatsAppTemplateData {
   courierPhone?: string;
 }
 
+export function generateWaybillMessage(data: WhatsAppTemplateData): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const lines: string[] = [
+    `🧾 *بوليصة شحن رسمية | DropLine Shipping*`,
+    `━━━━━━━━━━━━━━━━━━`,
+    `🔢 *رقم البوليصة:* #${data.trackingNumber}`,
+    `👤 *العميل:* ${data.recipientName}`,
+    `📱 *الهاتف:* ${data.recipientPhone || 'مسجل'}${data.secondaryPhone ? ` | هاتف 2: ${data.secondaryPhone}` : ''}`,
+    `📍 *العنوان:* ${data.recipientAddress || 'العنوان المسجل لدى المتجر'}`,
+    `🏬 *المتجر (الراسل):* ${data.storeName || 'متجر معتمد'}`,
+    `📦 *محتوى الطرد:* ${data.productType || 'طرد مغلف'}${data.itemsCount && data.itemsCount > 1 ? ` (${data.itemsCount} قطع)` : ''}`,
+    `🔍 *معاينة وفتح الشحنة:* ${data.allowOpening ? '✅ مسموح بالفحص والمعاينة قبل الاستلام' : '⛔ غير مسموح بالفتح قبل الاستلام'}`,
+    `━━━━━━━━━━━━━━━━━━`,
+    `💵 *المطلوب كاش عند الاستلام:* ${data.codAmount ?? 0} ج.م`,
+    `━━━━━━━━━━━━━━━━━━`,
+  ];
+
+  if (data.courierName) {
+    lines.push(`🚚 *المندوب للتواصل:* كابتن ${data.courierName}${data.courierPhone ? ` (${data.courierPhone})` : ''}`);
+  }
+
+  if (origin) {
+    lines.push(`🔗 *تتبع شحنتك لحظياً:* ${origin}/?tracking=${data.trackingNumber}`);
+  }
+
+  return lines.join('\n');
+}
+
 export const WHATSAPP_TEMPLATES = [
+  {
+    id: 'waybill_official',
+    title: '🧾 بوليصة الشحن الرسمية (مختصرة وشاملة لكافة البيانات) ⭐',
+    getMessage: (data: WhatsAppTemplateData) => generateWaybillMessage(data),
+  },
   {
     id: 'tomorrow_delivery_location',
     title: 'تنبيه وصول الغد + طلب اللوكيشن 📍',

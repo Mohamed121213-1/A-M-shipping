@@ -2786,6 +2786,7 @@ export default function App() {
                 onMarkNotificationRead={handleMarkNotificationRead}
                 currentUser={currentUser}
                 couriers={couriers}
+                onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
               />
             ) : currentUser.role === 'merchant' ? (
               <>
@@ -2942,6 +2943,7 @@ export default function App() {
                     currentUser={currentUser}
                     couriers={couriers}
                     onSettleCourierCustody={handleSettleCourierCustody}
+                    onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
                   />
                 )}
 

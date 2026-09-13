@@ -25,6 +25,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ shipment, onClose 
   const templateData: WhatsAppTemplateData = {
     recipientName: shipment.recipient.name,
     recipientPhone: selectedPhone,
+    secondaryPhone: shipment.recipient.secondaryPhone,
     recipientAddress: fullAddress,
     productType: productDesc,
     itemsCount: shipment.packageDetails?.itemsCount,
@@ -40,12 +41,18 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ shipment, onClose 
   const [customMessage, setCustomMessage] = useState<string>(initialMsg);
   const [copied, setCopied] = useState(false);
 
-  const handleSelectTemplate = (templateId: string) => {
+  const handleSelectTemplate = (templateId: string, phoneToUse = selectedPhone) => {
     setSelectedTemplateId(templateId);
     const tmpl = WHATSAPP_TEMPLATES.find((t) => t.id === templateId);
     if (tmpl) {
-      setCustomMessage(tmpl.getMessage(templateData));
+      setCustomMessage(tmpl.getMessage({ ...templateData, recipientPhone: phoneToUse }));
     }
+  };
+
+  const handlePhoneChange = (newPhone: string) => {
+    setSelectedPhone(newPhone);
+    const tmpl = WHATSAPP_TEMPLATES.find((t) => t.id === selectedTemplateId) || WHATSAPP_TEMPLATES[0];
+    setCustomMessage(tmpl.getMessage({ ...templateData, recipientPhone: newPhone }));
   };
 
   const formattedPhone = formatPhoneNumberForWhatsApp(selectedPhone);
@@ -110,7 +117,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ shipment, onClose 
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setSelectedPhone(shipment.recipient.phone)}
+                    onClick={() => handlePhoneChange(shipment.recipient.phone)}
                     className={`p-2 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                       selectedPhone === shipment.recipient.phone
                         ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs'
@@ -123,7 +130,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({ shipment, onClose 
 
                   <button
                     type="button"
-                    onClick={() => setSelectedPhone(shipment.recipient.secondaryPhone || '')}
+                    onClick={() => handlePhoneChange(shipment.recipient.secondaryPhone || '')}
                     className={`p-2 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                       selectedPhone === shipment.recipient.secondaryPhone
                         ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs'
