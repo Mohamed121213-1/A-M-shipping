@@ -1,1 +1,2612 @@
-{"state":{"shipments":[],"users":[{"id":"admin_root","name":"محمد صلاح (أدمن الرئيسية)","email":"mohamedsalah565657@icloud.com","phone":"01000000001","role":"admin","avatarUrl":"https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF%20%D8%B5%D9%84%D8%A7%D8%AD%20(%D8%A3%D8%AF%D9%85%D9%86%20%D8%A7%D9%84%D8%B1%D8%A6%D9%8A%D8%B3%D9%8A%D8%A9)&background=dc2626&color=ffffff","isConfirmed":true,"registeredAt":"2026-08-30T00:00:00+00:00","password":"123456","hasCustomShippingRate":false,"shippingPricingType":"fixed"},{"id":"51dd3367-fffa-4f2e-af58-5503ff2bc7c5","name":"Ibrahim","email":"51dd3367-fffa-4f2e-af58-5503ff2bc7c5@am-shipping.eg","phone":"","role":"client","isConfirmed":true,"registeredAt":"2026-09-02T15:57:12.313097+00:00","avatarUrl":"https://ui-avatars.com/api/?name=Ibrahim&background=dc2626&color=ffffff","password":"123456","hasCustomShippingRate":false,"shippingPricingType":"fixed"},{"id":"b251467a-76c7-4afa-93bd-762a1bffc340","name":"احمد رشاد","email":"b251467a-76c7-4afa-93bd-762a1bffc340@am-shipping.eg","phone":"","role":"client","isConfirmed":true,"registeredAt":"2026-09-02T15:55:21.582738+00:00","avatarUrl":"https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF%20%D8%B1%D8%B4%D8%A7%D8%AF&background=dc2626&color=ffffff","password":"123456","hasCustomShippingRate":false,"shippingPricingType":"fixed"},{"id":"USR-1788364629634-8301","name":"Ibrahim","email":"01118003293@am-shipping.eg","phone":"01118003293","role":"hub_manager","isConfirmed":true,"registeredAt":"2026-09-02T15:57:09.634+00:00","avatarUrl":"https://ui-avatars.com/api/?name=Ibrahim&background=dc2626&color=ffffff","password":"123456","hasCustomShippingRate":false,"shippingPricingType":"fixed"},{"id":"USR-1788364520004-8809","name":"احمد رشاد","email":"01033011862@am-shipping.eg","phone":"01033011862","role":"courier","isConfirmed":true,"registeredAt":"2026-09-02T15:55:20.004+00:00","avatarUrl":"https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF%20%D8%B1%D8%B4%D8%A7%D8%AF&background=dc2626&color=ffffff","password":"123456","hasCustomShippingRate":false,"shippingPricingType":"fixed"},{"id":"USR-1788361785496-4492","name":"ام فاتن","email":"01017266727@am-shipping.eg","phone":"01017266727","role":"merchant","storeName":"To you","isConfirmed":true,"registeredAt":"2026-09-02T15:09:45.496+00:00","avatarUrl":"https://ui-avatars.com/api/?name=%D8%A7%D9%85%20%D9%81%D8%A7%D8%AA%D9%86&background=dc2626&color=ffffff","password":"123456","hasCustomShippingRate":false,"shippingPricingType":"fixed"}],"couriers":[{"id":"USR-1788364242163-4812","name":"حسن علي","phone":"01093383328","rating":5,"vehicle":"motocycle","photoUrl":"https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff","assignedHub":"المستودع الرئيسي","codCollectedToday":0,"activeShipmentsCount":0},{"id":"USR-1788364520004-8809","name":"احمد رشاد","phone":"01033011862","rating":5,"vehicle":"motocycle","photoUrl":"https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF%20%D8%B1%D8%B4%D8%A7%D8%AF&background=dc2626&color=ffffff","assignedHub":"المستودع الرئيسي","codCollectedToday":0,"activeShipmentsCount":0}],"governorates":[{"code":"CAI","cities":["القاهرة الجديدة (التجمع)","التجمع الخامس","التجمع الأول","التجمع الثالث","وسط البلد","الشرابية","بولاق","إمبابة","الوراق","المهندسين","هرم","فيصل","حدائق الأهرام","أكتوبر","مصر القديمة","الأباجية","المنيب","البحر الأعظم","حدائق القبة","مدينة نصر","المعادي","مصر الجديدة","الزمالك","شبرا","المقطم","حلوان","عين شمس","المرج","مؤسسة الزكاة (مؤسسة)","العباسية","الزيتون","المطرية"],"nameAr":"القاهرة","nameEn":"Cairo","estDays":"24 ساعة","baseRate":0,"additionalKgRate":0},{"code":"NCW","cities":["العاصمة الإدارية الجديدة","مدينتي","الشروق","بدر","مدينة المستقبل","الرحاب","حدائق العاصمة"],"nameAr":"المدن الجديدة","nameEn":"New Cities","estDays":"24-48 ساعة","baseRate":0,"additionalKgRate":0},{"code":"GZA","cities":["6 أكتوبر","الشيخ زايد","الدقي","المهندسين","الهرم","فيصل","حدائق الأهرام","العمرانية","البدرشين","العياط"],"nameAr":"الجيزة","nameEn":"Giza","estDays":"24 ساعة","baseRate":0,"additionalKgRate":0},{"code":"QLB","cities":["العبور","القلج","بنها","شبرا الخيمة","قاليوب","الخانكة","طوخ","شبين القناطر"],"nameAr":"القليوبية","nameEn":"Qalyubia","estDays":"24-48 ساعة","baseRate":0,"additionalKgRate":0},{"code":"ALX","cities":["سموحة","ميامي","المنتزه","العجمي","محرم بك","سيدي بشر","برج العرب","جليم"],"nameAr":"الإسكندرية","nameEn":"Alexandria","estDays":"24-48 ساعة","baseRate":0,"additionalKgRate":0},{"code":"BHG","cities":["دمنهور","كفر الدوار","إيتاي البارود","كوم حمادة","رشيد","أبو حمص"],"nameAr":"البحيرة","nameEn":"Beheira","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"MNS","cities":["المنصورة","طلخا","ميت غمر","السنبلاوين","دكرنس","شربين","بلقاس"],"nameAr":"الدقهلية","nameEn":"Dakahlia","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"GHB","cities":["طنطا","المحلة الكبرى","زفتى","كفر الزيات","بسيون","سمنود"],"nameAr":"الغربية","nameEn":"Gharbia","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"MNF","cities":["شبين الكوم","مدينة السادات","أشمون","منوف","قويسنا","تلا"],"nameAr":"المنوفية","nameEn":"Monufia","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"SHR","cities":["العاشر من رمضان","الزقازيق","بلبيس","أبو كبير","فاقوس","منيا القمح"],"nameAr":"الشرقية","nameEn":"Sharqia","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"SUZ","cities":["السويس","الأربعين","عتاقة","فيصل (السويس)","العين السخنة"],"nameAr":"السويس","nameEn":"Suez","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"ISM","cities":["الإسماعيلية","القنطرة شرق","القنطرة غرب","التل الكبير","فايد"],"nameAr":"الإسماعيلية","nameEn":"Ismailia","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"PTS","cities":["بورسعيد","بورفؤاد","حي الزهور","حي المناخ","حي الشرق"],"nameAr":"بورسعيد","nameEn":"Port Said","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"DMT","cities":["دمياط","دمياط الجديدة","رأس البر","فارسكور","الزرقا"],"nameAr":"دمياط","nameEn":"Damietta","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"KFS","cities":["كفر الشيخ","دسوق","بيلا","بلطيم","سيدي سالم","قلين"],"nameAr":"كفر الشيخ","nameEn":"Kafr El Sheikh","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"FYM","cities":["الفيوم","طامية","سنورس","إطسا","الفيوم الجديدة"],"nameAr":"الفيوم","nameEn":"Fayoum","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"BNS","cities":["بني سويف","بني سويف الجديدة","الواسطى","ببا","الفشن"],"nameAr":"بني سويف","nameEn":"Beni Suef","estDays":"2-3 أيام","baseRate":0,"additionalKgRate":0},{"code":"MNY","cities":["المنيا","المنيا الجديدة","ملوي","سمالوط","بني مزار","مغاغة"],"nameAr":"المنيا","nameEn":"Minya","estDays":"3-4 أيام","baseRate":0,"additionalKgRate":0},{"code":"ASY","cities":["أسيوط","أسيوط الجديدة","ديروط","القوصية","أبنوب","منفلوط"],"nameAr":"أسيوط","nameEn":"Asyut","estDays":"3-4 أيام","baseRate":0,"additionalKgRate":0},{"code":"SHG","cities":["سوهاج","سوهاج الجديدة","طهطا","جرجا","أخميم","البلينا"],"nameAr":"سوهاج","nameEn":"Sohag","estDays":"3-4 أيام","baseRate":0,"additionalKgRate":0},{"code":"QNA","cities":["قنا","قنا الجديدة","نجع حمادي","دشنا","قوص"],"nameAr":"قنا","nameEn":"Qena","estDays":"3-4 أيام","baseRate":0,"additionalKgRate":0},{"code":"LXR","cities":["الأقصر","طيبة الجديدة","إسنا","أرمنت"],"nameAr":"الأقصر","nameEn":"Luxor","estDays":"3-5 أيام","baseRate":0,"additionalKgRate":0},{"code":"ASW","cities":["أسوان","أسوان الجديدة","كوم أمبو","إدفو","أبو سمبل"],"nameAr":"أسوان","nameEn":"Aswan","estDays":"3-5 أيام","baseRate":0,"additionalKgRate":0},{"code":"RSE","cities":["الغردقة","الجونة","سفاجا","القصير","مرسى علم"],"nameAr":"البحر الأحمر","nameEn":"Red Sea","estDays":"3-5 أيام","baseRate":0,"additionalKgRate":0},{"code":"MTR","cities":["مرسى مطروح","العلمين الجديدة","مارينا","سيدي عبد الرحمن","الضبعة"],"nameAr":"مطروح والساحل الشمالي","nameEn":"Matrouh","estDays":"3-5 أيام","baseRate":0,"additionalKgRate":0},{"code":"SSH","cities":["شرم الشيخ","دهب","نويبع","طور سيناء","رأس سدر","طابا"],"nameAr":"جنوب سيناء","nameEn":"South Sinai","estDays":"3-5 أيام","baseRate":0,"additionalKgRate":0}],"timestamp":1788817811320},"timestamp":1788817811320}
+{
+  "state": {
+    "hubs": [],
+    "users": [
+      {
+        "id": "admin_root",
+        "name": "محمد صلاح (أدمن الرئيسية)",
+        "email": "mohamedsalah565657@icloud.com",
+        "phone": "01000000001",
+        "role": "admin",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF%20%D8%B5%D9%84%D8%A7%D8%AD%20(%D8%A3%D8%AF%D9%85%D9%86%20%D8%A7%D9%84%D8%B1%D8%A6%D9%8A%D8%B3%D9%8A%D8%A9)&background=dc2626&color=ffffff",
+        "isConfirmed": true,
+        "registeredAt": "2026-08-30T00:00:00+00:00",
+        "password": "123456",
+        "hasCustomShippingRate": false,
+        "shippingPricingType": "fixed"
+      },
+      {
+        "id": "USR-1788364242163-4812",
+        "name": "حسن علي",
+        "email": "01093383328@am-shipping.eg",
+        "phone": "01093383328",
+        "role": "courier",
+        "storeName": "متجر حسن علي",
+        "isConfirmed": false,
+        "registeredAt": "2026-08-30T10:10:00.000Z",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86+%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+        "password": "••••••••",
+        "hasCustomShippingRate": false,
+        "shippingPricingType": "fixed"
+      },
+      {
+        "id": "USR-1788364629634-8301",
+        "name": "Ibrahim",
+        "email": "01118003293@am-shipping.eg",
+        "phone": "01118003293",
+        "role": "hub_manager",
+        "isConfirmed": true,
+        "registeredAt": "2026-09-02T15:57:09.634+00:00",
+        "avatarUrl": "https://ui-avatars.com/api/?name=Ibrahim&background=dc2626&color=ffffff",
+        "hubName": "المستودع الرئيسي",
+        "password": "Mm123456",
+        "hasCustomShippingRate": false,
+        "shippingPricingType": "fixed"
+      },
+      {
+        "id": "USR-1788364520004-8809",
+        "name": "احمد رشاد",
+        "email": "01033011862@am-shipping.eg",
+        "phone": "01033011862",
+        "role": "courier",
+        "isConfirmed": true,
+        "registeredAt": "2026-09-02T15:55:20.004+00:00",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF%20%D8%B1%D8%B4%D8%A7%D8%AF&background=dc2626&color=ffffff",
+        "courierVehicle": "سيارة نقل / تروسيكل",
+        "password": "Mm123455",
+        "hasCustomShippingRate": false,
+        "shippingPricingType": "fixed"
+      },
+      {
+        "id": "USR-1788361785496-4492",
+        "name": "ام فاتن",
+        "email": "01017266727@am-shipping.eg",
+        "phone": "01017266727",
+        "role": "merchant",
+        "storeName": "To you",
+        "isConfirmed": true,
+        "registeredAt": "2026-09-02T15:09:45.496+00:00",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A7%D9%85%20%D9%81%D8%A7%D8%AA%D9%86&background=dc2626&color=ffffff",
+        "password": "123456",
+        "hasCustomShippingRate": false,
+        "shippingPricingType": "fixed"
+      }
+    ],
+    "wallet": {
+      "merchantId": "merch-admin-default",
+      "pendingCod": 3085,
+      "merchantName": "المحفظة الرئيسية",
+      "totalPaidOut": 520,
+      "lastPayoutDate": "2026-09-05",
+      "availableBalance": 2455,
+      "totalCollected": 0
+    },
+    "couriers": [
+      {
+        "id": "USR-1788364520004-8809",
+        "name": "احمد رشاد",
+        "phone": "01033011862",
+        "vehicle": "motocycle",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF+%D8%B1%D8%B4%D8%A7%D8%AF&background=d97706&color=ffffff",
+        "activeDeliveriesCount": 0,
+        "rating": 5,
+        "governorate": "القاهرة",
+        "zone": "القاهرة والجيزة"
+      },
+      {
+        "id": "USR-1788364242163-4812",
+        "name": "حسن علي",
+        "phone": "01093383328",
+        "vehicle": "motocycle",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86+%D8%B9%D9%84%D9%8A&background=d97706&color=ffffff",
+        "activeDeliveriesCount": 12,
+        "rating": 5,
+        "governorate": "القاهرة",
+        "zone": "القاهرة والجيزة"
+      }
+    ],
+    "senderId": "CLIENT-1aax877",
+    "shipments": [
+      {
+        "id": "BST-235295",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "delivered",
+        "timeline": [
+          {
+            "id": "tl-1788855671443-0-tn2y",
+            "title": "⏳ طلب جديد - بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "merchant",
+            "timestamp": "٠١:٢١ ص",
+            "description": "تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن"
+          },
+          {
+            "id": "tl-1788855918597",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٢٥ ص",
+            "description": "تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856875971",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1789084783870",
+            "title": "تم التسليم بنجاح وتحصيل المبلغ",
+            "status": "delivered",
+            "actorRole": "courier",
+            "timestamp": "٠٢:٥٩ ص",
+            "description": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 400 ج.م"
+          }
+        ],
+        "createdAt": "2026-09-08T08:21:11.443+00:00",
+        "recipient": {
+          "city": "عين شمس",
+          "name": "عميل (عين شمس)",
+          "notes": "",
+          "phone": "0100323152",
+          "district": "",
+          "buildingNo": "24",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "امام مخليف",
+          "secondaryPhone": "01119662941"
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 400,
+          "netPayout": 330,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "اله حاسبه",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-235295",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "proofOfDelivery": {
+          "note": "تم التسليم بنجاح بترميز التأكيد (8492) وتحصيل المبلغ 400 ج.م",
+          "verifiedPin": "8492",
+          "recipientName": "،",
+          "signatureDate": "١١‏/٩‏/٢٠٢٦، ٢:٥٩:٤٣ ص"
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      },
+      {
+        "id": "BST-299804",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "out_for_delivery",
+        "timeline": [
+          {
+            "id": "tl-1788856122392-0-6a82",
+            "title": "⏳ طلب جديد - بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "merchant",
+            "timestamp": "٠١:٢٨ ص",
+            "description": "تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن"
+          },
+          {
+            "id": "tl-1788856171864",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٢٩ ص",
+            "description": "تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1789121244159",
+            "title": "تم تعيين المندوب احمد رشاد",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠٣:٠٧ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب احمد رشاد (01033011862) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1789121257848",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠٣:٠٧ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          }
+        ],
+        "createdAt": "2026-09-08T08:28:42.392+00:00",
+        "recipient": {
+          "city": "الخصوص",
+          "name": "عميل (الخصوص)",
+          "notes": "",
+          "phone": "01110699388",
+          "district": "",
+          "buildingNo": "",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "احمد عرابي امام صيدليه الشيما",
+          "secondaryPhone": ""
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 400,
+          "netPayout": 330,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "طرد ملابس واكسسوارات",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-299804",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      },
+      {
+        "id": "BST-763676",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "delivered",
+        "timeline": [
+          {
+            "id": "tl-1788855330409-0-w6z2",
+            "title": "⏳ طلب جديد - بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "merchant",
+            "timestamp": "٠١:١٥ ص",
+            "description": "تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن"
+          },
+          {
+            "id": "tl-1788855906314",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٢٥ ص",
+            "description": "تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856885604",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1789084791158",
+            "title": "تم التسليم بنجاح وتحصيل المبلغ",
+            "status": "delivered",
+            "actorRole": "courier",
+            "timestamp": "٠٢:٥٩ ص",
+            "description": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 215 ج.م"
+          }
+        ],
+        "createdAt": "2026-09-08T08:15:30.409+00:00",
+        "recipient": {
+          "city": "المقطم",
+          "name": "عميل (المقطم)",
+          "notes": "",
+          "phone": "01024587521",
+          "district": "",
+          "buildingNo": "122",
+          "apartmentNo": "15",
+          "governorate": "القاهرة",
+          "streetAddress": "حي الفردوس الاسمرات",
+          "secondaryPhone": "01025196590"
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 215,
+          "netPayout": 145,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "اله حاسبه",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-763676",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "proofOfDelivery": {
+          "note": "تم التسليم بنجاح بترميز التأكيد (8492) وتحصيل المبلغ 215 ج.م",
+          "verifiedPin": "8492",
+          "recipientName": ".",
+          "signatureDate": "١١‏/٩‏/٢٠٢٦، ٢:٥٩:٥١ ص"
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      },
+      {
+        "id": "BST-769320",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "delivered",
+        "timeline": [
+          {
+            "id": "tl-1788856342287-0-9a9j",
+            "title": "✨ تم إنشاء وتأكيد بوليصة الشحن بنجاح",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٣٢ ص",
+            "description": "تم إنشاء الشحنة وتأكيدها فوراً بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856862484",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1789084729247",
+            "title": "تم التسليم بنجاح وتحصيل المبلغ",
+            "status": "delivered",
+            "actorRole": "courier",
+            "timestamp": "٠٢:٥٨ ص",
+            "description": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 400 ج.م"
+          }
+        ],
+        "createdAt": "2026-09-08T08:32:22.287+00:00",
+        "recipient": {
+          "city": "الشرابية",
+          "name": "عميل (الشرابية)",
+          "notes": "",
+          "phone": "01275016104",
+          "district": "",
+          "buildingNo": "",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "،",
+          "secondaryPhone": ""
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 400,
+          "netPayout": 330,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "اله حاسبه",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-769320",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "proofOfDelivery": {
+          "note": "تم التسليم بنجاح بترميز التأكيد (8492) وتحصيل المبلغ 400 ج.م",
+          "verifiedPin": "8492",
+          "recipientName": ".",
+          "signatureDate": "١١‏/٩‏/٢٠٢٦، ٢:٥٨:٤٩ ص"
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      },
+      {
+        "id": "BST-515492",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "out_for_delivery",
+        "timeline": [
+          {
+            "id": "tl-1788856287740-0-qj8t",
+            "title": "✨ تم إنشاء وتأكيد بوليصة الشحن بنجاح",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٣١ ص",
+            "description": "تم إنشاء الشحنة وتأكيدها فوراً بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856864867",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          }
+        ],
+        "createdAt": "2026-09-08T08:31:27.74+00:00",
+        "recipient": {
+          "city": "مسطرد",
+          "name": "عميل (مسطرد)",
+          "notes": "",
+          "phone": "01012800981",
+          "district": "",
+          "buildingNo": "",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "عند جامع السنيه",
+          "secondaryPhone": ""
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 400,
+          "netPayout": 330,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "اله حاسبه",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-515492",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      },
+      {
+        "id": "BST-252066",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "delivered",
+        "timeline": [
+          {
+            "id": "tl-1788855544594-0-el2u",
+            "title": "⏳ طلب جديد - بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "merchant",
+            "timestamp": "٠١:١٩ ص",
+            "description": "تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن"
+          },
+          {
+            "id": "tl-1788855921463",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٢٥ ص",
+            "description": "تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856878983",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1789084805859",
+            "title": "تم التسليم بنجاح وتحصيل المبلغ",
+            "status": "delivered",
+            "actorRole": "courier",
+            "timestamp": "٠٣:٠٠ ص",
+            "description": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 400 ج.م"
+          }
+        ],
+        "createdAt": "2026-09-08T08:19:04.593+00:00",
+        "recipient": {
+          "city": "عين شمس",
+          "name": "عميل (عين شمس)",
+          "notes": "",
+          "phone": "01023286900",
+          "district": "",
+          "buildingNo": "52",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "الامام مالك الحرفيين من جمال عبد الناصر ",
+          "secondaryPhone": ""
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 400,
+          "netPayout": 330,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "اله حاسبه",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-252066",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "proofOfDelivery": {
+          "note": "تم التسليم بنجاح بترميز التأكيد (8492) وتحصيل المبلغ 400 ج.م",
+          "verifiedPin": "8492",
+          "recipientName": ",",
+          "signatureDate": "١١‏/٩‏/٢٠٢٦، ٣:٠٠:٠٥ ص"
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      },
+      {
+        "id": "BST-211225",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "delivered",
+        "timeline": [
+          {
+            "id": "tl-1788855772838-0-47kf",
+            "title": "⏳ طلب جديد - بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "merchant",
+            "timestamp": "٠١:٢٢ ص",
+            "description": "تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن"
+          },
+          {
+            "id": "tl-1788855915048",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٢٥ ص",
+            "description": "تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856873321",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1789085005144",
+            "title": "تم التسليم بنجاح وتحصيل المبلغ",
+            "status": "delivered",
+            "actorRole": "courier",
+            "timestamp": "٠٣:٠٣ ص",
+            "description": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 400 ج.م"
+          }
+        ],
+        "createdAt": "2026-09-08T08:22:52.838+00:00",
+        "recipient": {
+          "city": "عين شمس",
+          "name": "عميل (عين شمس)",
+          "notes": "",
+          "phone": "01119636294",
+          "district": "",
+          "buildingNo": "19",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "عمر بن الخطاب من مصطفي حافظ امام كبابجي الحشر",
+          "secondaryPhone": ""
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 400,
+          "netPayout": 330,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "اله حاسبه",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-211225",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "proofOfDelivery": {
+          "note": "تم التسليم بنجاح بترميز التأكيد (8492) وتحصيل المبلغ 400 ج.م",
+          "verifiedPin": "8492",
+          "recipientName": ",",
+          "signatureDate": "١١‏/٩‏/٢٠٢٦، ٣:٠٣:٢٥ ص"
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      },
+      {
+        "id": "BST-202841",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "out_for_delivery",
+        "timeline": [
+          {
+            "id": "tl-1788818910241-0-4zu6",
+            "title": "⏳ طلب جديد - بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "merchant",
+            "timestamp": "٠١:٠٨ ص",
+            "description": "تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن"
+          },
+          {
+            "id": "tl-1788854940080",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٠٩ ص",
+            "description": "تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856893020",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1788856929372",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٤٢ ص",
+            "description": "تم التحديث بواسطة نظام A&Mshipping الإداري"
+          },
+          {
+            "id": "tl-1788856964121",
+            "title": "تحديث حالة الشحنة",
+            "status": "picked_up",
+            "actorRole": "system",
+            "timestamp": "٠١:٤٢ ص",
+            "description": "تم التحديث بواسطة نظام A&Mshipping الإداري"
+          },
+          {
+            "id": "tl-1788856994580",
+            "title": "وصلت المستودع الرئيسي",
+            "status": "in_hub",
+            "actorRole": "system",
+            "timestamp": "٠١:٤٣ ص",
+            "description": "تم التحديث بواسطة نظام A&Mshipping الإداري"
+          },
+          {
+            "id": "tl-1788857028263",
+            "title": "بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "system",
+            "timestamp": "٠١:٤٣ ص",
+            "description": "تم التحديث بواسطة نظام A&Mshipping الإداري"
+          },
+          {
+            "id": "tl-1788857032311",
+            "title": "✅ تم تأكيد وموافقة الأوردر بواسطة الأدمن",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٤٣ ص",
+            "description": "قام أدمن النظام بمراجعة بيانات الشحنة وتأكيدها لبدء التنفيذ والاستلام"
+          },
+          {
+            "id": "tl-1789121240885",
+            "title": "تم تعيين المندوب احمد رشاد",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠٣:٠٧ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب احمد رشاد (01033011862) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1789121261379",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠٣:٠٧ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          }
+        ],
+        "createdAt": "2026-09-07T22:08:30.241+00:00",
+        "recipient": {
+          "city": "فيصل",
+          "name": "عميل (فيصل)",
+          "notes": "",
+          "phone": "01550632912",
+          "district": "",
+          "buildingNo": "",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "كفر طهرمس عند التأمين الصحي الشبراوي ",
+          "secondaryPhone": ""
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 800,
+          "netPayout": 730,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "طرد ملابس واكسسوارات",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-202841",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "estimatedDeliveryDate": "2026-09-09"
+      },
+      {
+        "id": "BST-766998",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "delivered",
+        "timeline": [
+          {
+            "id": "tl-1788855215872-0-8wym",
+            "title": "⏳ طلب جديد - بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "merchant",
+            "timestamp": "٠١:١٣ ص",
+            "description": "تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن"
+          },
+          {
+            "id": "tl-1788855902147",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٢٥ ص",
+            "description": "تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856888838",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1788863095743",
+            "title": "محاولة تسليم غير ناجحة",
+            "status": "failed_attempt",
+            "actorRole": "courier",
+            "timestamp": "٠١:٢٤ م",
+            "description": "محاولة تسليم غير ناجحة بواسطة المندوب حسن علي: رفض الاستلام بسبب السعر"
+          },
+          {
+            "id": "tl-1789085222692",
+            "title": "تم التسليم بنجاح وتحصيل المبلغ",
+            "status": "delivered",
+            "actorRole": "courier",
+            "timestamp": "٠٣:٠٧ ص",
+            "description": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 400 ج.م"
+          }
+        ],
+        "createdAt": "2026-09-08T08:13:35.872+00:00",
+        "recipient": {
+          "city": "المقطم",
+          "name": "عميل (المقطم)",
+          "notes": "",
+          "phone": "01003021318",
+          "district": "",
+          "buildingNo": "",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "اللوتس ناحيه مساكن مصر العليا ",
+          "secondaryPhone": ""
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 400,
+          "netPayout": 330,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "اله حاسبه",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-766998",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "proofOfDelivery": {
+          "note": "تم التسليم بنجاح بترميز التأكيد (8492) وتحصيل المبلغ 400 ج.م",
+          "verifiedPin": "8492",
+          "recipientName": ".",
+          "signatureDate": "١١‏/٩‏/٢٠٢٦، ٣:٠٧:٠٢ ص"
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      },
+      {
+        "id": "BST-532460",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "delivered",
+        "timeline": [
+          {
+            "id": "tl-1788855443192-0-7ovb",
+            "title": "⏳ طلب جديد - بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "merchant",
+            "timestamp": "٠١:١٧ ص",
+            "description": "تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن"
+          },
+          {
+            "id": "tl-1788855924348",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٢٥ ص",
+            "description": "تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856881904",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1788822406798",
+            "title": "مرتجع للتاجر (مستحقات التاجر 0 ج.م)",
+            "status": "returned",
+            "actorRole": "courier",
+            "timestamp": "٠٢:٠٦ ص",
+            "description": "مرتجع بواسطة حسن علي (دفع كامل الشحن 70 ج.م - الخصم من التاجر 0 ج.م): رفض استلام الطرد نهائياً"
+          },
+          {
+            "id": "tl-1788822449148",
+            "title": "محاولة تسليم غير ناجحة",
+            "status": "failed_attempt",
+            "actorRole": "courier",
+            "timestamp": "٠٢:٠٧ ص",
+            "description": "محاولة تسليم غير ناجحة بواسطة المندوب حسن علي: رفض الاستلام بسبب السعر"
+          },
+          {
+            "id": "tl-1788822564423",
+            "title": "محاولة تسليم غير ناجحة",
+            "status": "failed_attempt",
+            "actorRole": "courier",
+            "timestamp": "٠٢:٠٩ ص",
+            "description": "محاولة تسليم غير ناجحة بواسطة المندوب حسن علي: رفض الاستلام بسبب السعر"
+          },
+          {
+            "id": "tl-1789085230243",
+            "title": "تم التسليم بنجاح وتحصيل المبلغ",
+            "status": "delivered",
+            "actorRole": "courier",
+            "timestamp": "٠٣:٠٧ ص",
+            "description": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 70 ج.م"
+          }
+        ],
+        "createdAt": "2026-09-08T08:17:23.191+00:00",
+        "recipient": {
+          "city": "مدينة نصر",
+          "name": "عميل (مدينة نصر)",
+          "notes": "",
+          "phone": "01155700073",
+          "district": "",
+          "buildingNo": "69",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "الحي التامن عمارات التعاونيات",
+          "secondaryPhone": "01260022274"
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 70,
+          "netPayout": 0,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "طرد ملابس واكسسوارات",
+          "allowOpening": true
+        },
+        "refusedDetails": {
+          "reason": "رفض استلام الطرد نهائياً",
+          "amountCollected": 70,
+          "shippingFeePaid": true,
+          "merchantDeductedAmount": 0,
+          "partialShippingFeePaid": false
+        },
+        "trackingNumber": "BST-532460",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "proofOfDelivery": {
+          "note": "تم التسليم بنجاح بترميز التأكيد (8492) وتحصيل المبلغ 70 ج.م",
+          "verifiedPin": "8492",
+          "recipientName": ",",
+          "signatureDate": "١١‏/٩‏/٢٠٢٦، ٣:٠٧:١٠ ص"
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      },
+      {
+        "id": "BST-408088",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "delivered",
+        "timeline": [
+          {
+            "id": "tl-1788855895707-0-5id6",
+            "title": "⏳ طلب جديد - بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "merchant",
+            "timestamp": "٠١:٢٤ ص",
+            "description": "تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن"
+          },
+          {
+            "id": "tl-1788855911764",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٢٥ ص",
+            "description": "تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856870387",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1789084767951",
+            "title": "تم التسليم بنجاح وتحصيل المبلغ",
+            "status": "delivered",
+            "actorRole": "courier",
+            "timestamp": "٠٢:٥٩ ص",
+            "description": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 400 ج.م"
+          }
+        ],
+        "createdAt": "2026-09-08T08:24:55.707+00:00",
+        "recipient": {
+          "city": "المطرية",
+          "name": "عميل (المطرية)",
+          "notes": "",
+          "phone": "01100386414",
+          "district": "",
+          "buildingNo": "16",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "ترعه الترابي جنب جامع عمر بن الخطاب ",
+          "secondaryPhone": ""
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 400,
+          "netPayout": 330,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "اله حاسبه",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-408088",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "proofOfDelivery": {
+          "note": "تم التسليم بنجاح بترميز التأكيد (8492) وتحصيل المبلغ 400 ج.م",
+          "verifiedPin": "8492",
+          "recipientName": "،",
+          "signatureDate": "١١‏/٩‏/٢٠٢٦، ٢:٥٩:٢٧ ص"
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      },
+      {
+        "id": "BST-999306",
+        "sender": {
+          "id": "USR-1788361785496-4492",
+          "city": "مدينة نصر",
+          "phone": "01017266727",
+          "storeName": "To you",
+          "contactName": "To you",
+          "governorate": "القاهرة",
+          "pickupAddress": "مكرم عبيد، بجوار سيتي ستارز"
+        },
+        "status": "delivered",
+        "timeline": [
+          {
+            "id": "tl-1788854695018-0-jjcz",
+            "title": "⏳ طلب جديد - بانتظار موافقة الأدمن",
+            "status": "pending_approval",
+            "actorRole": "merchant",
+            "timestamp": "٠١:٠٤ ص",
+            "description": "تم إضافة الأوردر بواسطة التاجر (يدوياً أو عبر ملف إكسيل) وهي بانتظار اعتماد وموافقة الأدمن"
+          },
+          {
+            "id": "tl-1788854751574",
+            "title": "تم تأكيد واعتماد الشحنة",
+            "status": "created",
+            "actorRole": "system",
+            "timestamp": "٠١:٠٥ ص",
+            "description": "تمت مراجعة وتأكيد الأوردر بواسطة أدمن النظام"
+          },
+          {
+            "id": "tl-1788856901503",
+            "title": "تم تعيين المندوب حسن علي",
+            "status": "out_for_delivery",
+            "actorRole": "hub",
+            "timestamp": "٠١:٤١ ص",
+            "description": "تم إسناد الشحنة رسمياً للمندوب حسن علي (01093383328) للمتابعة والتسليم"
+          },
+          {
+            "id": "tl-1789084799508",
+            "title": "تم التسليم بنجاح وتحصيل المبلغ",
+            "status": "delivered",
+            "actorRole": "courier",
+            "timestamp": "٠٢:٥٩ ص",
+            "description": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 400 ج.م"
+          }
+        ],
+        "createdAt": "2026-09-08T08:04:55.018+00:00",
+        "recipient": {
+          "city": "العبور",
+          "name": "عميل (العبور)",
+          "notes": "",
+          "phone": "01156763990",
+          "district": "",
+          "buildingNo": "",
+          "apartmentNo": "",
+          "governorate": "القاهرة",
+          "streetAddress": "الحي الثامن كمبوند الشركه السعوديه",
+          "secondaryPhone": ""
+        },
+        "updatedAt": "2026-09-12T16:00:11.273+00:00",
+        "financials": {
+          "codFee": 0,
+          "codAmount": 400,
+          "netPayout": 330,
+          "paidStatus": "pending",
+          "shippingFee": 70,
+          "insuranceFee": 0
+        },
+        "assignedHub": "مستودع القاهرة الرئيسي - رمسيس",
+        "deliveryType": "standard",
+        "packageDetails": {
+          "weightKg": 1.5,
+          "isFragile": false,
+          "itemsCount": 1,
+          "description": "اله حاسبه",
+          "allowOpening": true
+        },
+        "trackingNumber": "BST-999306",
+        "assignedCourier": {
+          "id": "USR-1788364242163-4812",
+          "name": "حسن علي",
+          "phone": "01093383328",
+          "rating": 5,
+          "vehicle": "motocycle",
+          "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+          "assignedHub": "المستودع الرئيسي",
+          "codCollectedToday": 0,
+          "activeShipmentsCount": 0
+        },
+        "proofOfDelivery": {
+          "note": "تم التسليم بنجاح بترميز التأكيد (8492) وتحصيل المبلغ 400 ج.م",
+          "verifiedPin": "8492",
+          "recipientName": ".",
+          "signatureDate": "١١‏/٩‏/٢٠٢٦، ٢:٥٩:٥٩ ص"
+        },
+        "estimatedDeliveryDate": "2026-09-10"
+      }
+    ],
+    "timestamp": 1788817811320,
+    "governorates": [
+      {
+        "code": "CAI",
+        "cities": [
+          "القاهرة الجديدة (التجمع)",
+          "التجمع الخامس",
+          "التجمع الأول",
+          "التجمع الثالث",
+          "وسط البلد",
+          "الشرابية",
+          "بولاق",
+          "إمبابة",
+          "الوراق",
+          "المهندسين",
+          "هرم",
+          "فيصل",
+          "حدائق الأهرام",
+          "أكتوبر",
+          "مصر القديمة",
+          "الأباجية",
+          "المنيب",
+          "البحر الأعظم",
+          "حدائق القبة",
+          "مدينة نصر",
+          "المعادي",
+          "مصر الجديدة",
+          "الزمالك",
+          "شبرا",
+          "المقطم",
+          "حلوان",
+          "عين شمس",
+          "المرج",
+          "مؤسسة الزكاة (مؤسسة)",
+          "العباسية",
+          "الزيتون",
+          "المطرية"
+        ],
+        "nameAr": "القاهرة",
+        "nameEn": "Cairo",
+        "estDays": "24 ساعة",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "NCW",
+        "cities": [
+          "العاصمة الإدارية الجديدة",
+          "مدينتي",
+          "الشروق",
+          "بدر",
+          "مدينة المستقبل",
+          "الرحاب",
+          "حدائق العاصمة"
+        ],
+        "nameAr": "المدن الجديدة",
+        "nameEn": "New Cities",
+        "estDays": "24-48 ساعة",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "GZA",
+        "cities": [
+          "6 أكتوبر",
+          "الشيخ زايد",
+          "الدقي",
+          "المهندسين",
+          "الهرم",
+          "فيصل",
+          "حدائق الأهرام",
+          "العمرانية",
+          "البدرشين",
+          "العياط"
+        ],
+        "nameAr": "الجيزة",
+        "nameEn": "Giza",
+        "estDays": "24 ساعة",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "QLB",
+        "cities": [
+          "العبور",
+          "القلج",
+          "بنها",
+          "شبرا الخيمة",
+          "قاليوب",
+          "الخانكة",
+          "طوخ",
+          "شبين القناطر"
+        ],
+        "nameAr": "القليوبية",
+        "nameEn": "Qalyubia",
+        "estDays": "24-48 ساعة",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "ALX",
+        "cities": [
+          "سموحة",
+          "ميامي",
+          "المنتزه",
+          "العجمي",
+          "محرم بك",
+          "سيدي بشر",
+          "برج العرب",
+          "جليم"
+        ],
+        "nameAr": "الإسكندرية",
+        "nameEn": "Alexandria",
+        "estDays": "24-48 ساعة",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "BHG",
+        "cities": [
+          "دمنهور",
+          "كفر الدوار",
+          "إيتاي البارود",
+          "كوم حمادة",
+          "رشيد",
+          "أبو حمص"
+        ],
+        "nameAr": "البحيرة",
+        "nameEn": "Beheira",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "MNS",
+        "cities": [
+          "المنصورة",
+          "طلخا",
+          "ميت غمر",
+          "السنبلاوين",
+          "دكرنس",
+          "شربين",
+          "بلقاس"
+        ],
+        "nameAr": "الدقهلية",
+        "nameEn": "Dakahlia",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "GHB",
+        "cities": [
+          "طنطا",
+          "المحلة الكبرى",
+          "زفتى",
+          "كفر الزيات",
+          "بسيون",
+          "سمنود"
+        ],
+        "nameAr": "الغربية",
+        "nameEn": "Gharbia",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "MNF",
+        "cities": [
+          "شبين الكوم",
+          "مدينة السادات",
+          "أشمون",
+          "منوف",
+          "قويسنا",
+          "تلا"
+        ],
+        "nameAr": "المنوفية",
+        "nameEn": "Monufia",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "SHR",
+        "cities": [
+          "العاشر من رمضان",
+          "الزقازيق",
+          "بلبيس",
+          "أبو كبير",
+          "فاقوس",
+          "منيا القمح"
+        ],
+        "nameAr": "الشرقية",
+        "nameEn": "Sharqia",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "SUZ",
+        "cities": [
+          "السويس",
+          "الأربعين",
+          "عتاقة",
+          "فيصل (السويس)",
+          "العين السخنة"
+        ],
+        "nameAr": "السويس",
+        "nameEn": "Suez",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "ISM",
+        "cities": [
+          "الإسماعيلية",
+          "القنطرة شرق",
+          "القنطرة غرب",
+          "التل الكبير",
+          "فايد"
+        ],
+        "nameAr": "الإسماعيلية",
+        "nameEn": "Ismailia",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "PTS",
+        "cities": [
+          "بورسعيد",
+          "بورفؤاد",
+          "حي الزهور",
+          "حي المناخ",
+          "حي الشرق"
+        ],
+        "nameAr": "بورسعيد",
+        "nameEn": "Port Said",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "DMT",
+        "cities": [
+          "دمياط",
+          "دمياط الجديدة",
+          "رأس البر",
+          "فارسكور",
+          "الزرقا"
+        ],
+        "nameAr": "دمياط",
+        "nameEn": "Damietta",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "KFS",
+        "cities": [
+          "كفر الشيخ",
+          "دسوق",
+          "بيلا",
+          "بلطيم",
+          "سيدي سالم",
+          "قلين"
+        ],
+        "nameAr": "كفر الشيخ",
+        "nameEn": "Kafr El Sheikh",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "FYM",
+        "cities": [
+          "الفيوم",
+          "طامية",
+          "سنورس",
+          "إطسا",
+          "الفيوم الجديدة"
+        ],
+        "nameAr": "الفيوم",
+        "nameEn": "Fayoum",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "BNS",
+        "cities": [
+          "بني سويف",
+          "بني سويف الجديدة",
+          "الواسطى",
+          "ببا",
+          "الفشن"
+        ],
+        "nameAr": "بني سويف",
+        "nameEn": "Beni Suef",
+        "estDays": "2-3 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "MNY",
+        "cities": [
+          "المنيا",
+          "المنيا الجديدة",
+          "ملوي",
+          "سمالوط",
+          "بني مزار",
+          "مغاغة"
+        ],
+        "nameAr": "المنيا",
+        "nameEn": "Minya",
+        "estDays": "3-4 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "ASY",
+        "cities": [
+          "أسيوط",
+          "أسيوط الجديدة",
+          "ديروط",
+          "القوصية",
+          "أبنوب",
+          "منفلوط"
+        ],
+        "nameAr": "أسيوط",
+        "nameEn": "Asyut",
+        "estDays": "3-4 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "SHG",
+        "cities": [
+          "سوهاج",
+          "سوهاج الجديدة",
+          "طهطا",
+          "جرجا",
+          "أخميم",
+          "البلينا"
+        ],
+        "nameAr": "سوهاج",
+        "nameEn": "Sohag",
+        "estDays": "3-4 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "QNA",
+        "cities": [
+          "قنا",
+          "قنا الجديدة",
+          "نجع حمادي",
+          "دشنا",
+          "قوص"
+        ],
+        "nameAr": "قنا",
+        "nameEn": "Qena",
+        "estDays": "3-4 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "LXR",
+        "cities": [
+          "الأقصر",
+          "طيبة الجديدة",
+          "إسنا",
+          "أرمنت"
+        ],
+        "nameAr": "الأقصر",
+        "nameEn": "Luxor",
+        "estDays": "3-5 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "ASW",
+        "cities": [
+          "أسوان",
+          "أسوان الجديدة",
+          "كوم أمبو",
+          "إدفو",
+          "أبو سمبل"
+        ],
+        "nameAr": "أسوان",
+        "nameEn": "Aswan",
+        "estDays": "3-5 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "RSE",
+        "cities": [
+          "الغردقة",
+          "الجونة",
+          "سفاجا",
+          "القصير",
+          "مرسى علم"
+        ],
+        "nameAr": "البحر الأحمر",
+        "nameEn": "Red Sea",
+        "estDays": "3-5 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "MTR",
+        "cities": [
+          "مرسى مطروح",
+          "العلمين الجديدة",
+          "مارينا",
+          "سيدي عبد الرحمن",
+          "الضبعة"
+        ],
+        "nameAr": "مطروح والساحل الشمالي",
+        "nameEn": "Matrouh",
+        "estDays": "3-5 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      },
+      {
+        "code": "SSH",
+        "cities": [
+          "شرم الشيخ",
+          "دهب",
+          "نويبع",
+          "طور سيناء",
+          "رأس سدر",
+          "طابا"
+        ],
+        "nameAr": "جنوب سيناء",
+        "nameEn": "South Sinai",
+        "estDays": "3-5 أيام",
+        "baseRate": 0,
+        "additionalKgRate": 0
+      }
+    ],
+    "notifications": [
+      {
+        "id": "notif-1788541802012",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 970,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-04T17:10:02.012Z",
+        "timestamp": "٠٨:١٠ م",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-633295",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 970 ج.م",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-633295)",
+        "merchantName": "To you",
+        "recipientName": "ياسين محمد",
+        "recipientPhone": "1032102375",
+        "trackingNumber": "BST-633295"
+      },
+      {
+        "id": "notif-1788537812133",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 580,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-04T16:03:32.133Z",
+        "timestamp": "٠٧:٠٣ م",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-722692",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 580 ج.م",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-722692)",
+        "merchantName": "To you",
+        "recipientName": "اسلام فتحي فرج الله",
+        "recipientPhone": "1001143200",
+        "trackingNumber": "BST-722692"
+      },
+      {
+        "id": "notif-1788573663972",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 920,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-05T02:01:03.972Z",
+        "timestamp": "٠٧:٠١ م",
+        "shipmentId": "BST-313166",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "الاسم سامح",
+        "streetAddress": "عنوان كمبوند المعادي جاردنز بجوار نادي الصيد عماره ٦ د المرحلة الأولى",
+        "trackingNumber": "BST-313166"
+      },
+      {
+        "id": "notif-1788573658936",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 970,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-05T02:00:58.936Z",
+        "timestamp": "٠٧:٠٠ م",
+        "shipmentId": "BST-633295",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "ياسين محمد",
+        "streetAddress": "القاهره دار السلام امام سنتر شهين",
+        "trackingNumber": "BST-633295"
+      },
+      {
+        "id": "notif-1788573640995",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 580,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-05T02:00:40.995Z",
+        "timestamp": "٠٧:٠٠ م",
+        "shipmentId": "BST-722692",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "اسلام فتحي فرج الله",
+        "streetAddress": "القاهره عماره 34B كمبوند المعادى فيو - الشروق",
+        "trackingNumber": "BST-722692"
+      },
+      {
+        "id": "notif-1788387455976",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 580,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-02T22:17:35.976Z",
+        "timestamp": "٠١:١٧ ص",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-212631",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 580 ج.م",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-212631)",
+        "merchantName": "To you",
+        "recipientName": "احمد هاشم",
+        "recipientPhone": "1100733440",
+        "trackingNumber": "BST-212631"
+      },
+      {
+        "id": "notif-1788387411287",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 970,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-02T22:16:51.287Z",
+        "timestamp": "٠١:١٦ ص",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-893139",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 970 ج.م",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-893139)",
+        "merchantName": "To you",
+        "recipientName": "البرنس أحمد حسن",
+        "recipientPhone": "1067767955",
+        "trackingNumber": "BST-893139"
+      },
+      {
+        "id": "notif-1788423377660",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 970,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-03T08:16:17.660Z",
+        "timestamp": "٠١:١٦ ص",
+        "shipmentId": "BST-893139",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "البرنس أحمد حسن",
+        "streetAddress": "محافظة القاهرة السيدة زينب جامع أحمد بن طولون",
+        "trackingNumber": "BST-893139"
+      },
+      {
+        "id": "notif-1788387115542",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 450,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-02T22:11:55.542Z",
+        "timestamp": "٠١:١١ ص",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-862573",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 450 ج.م",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-862573)",
+        "merchantName": "To you",
+        "recipientName": "محمد رجب",
+        "recipientPhone": "1142206425",
+        "trackingNumber": "BST-862573"
+      },
+      {
+        "id": "notif-1788387109060",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_partial_delivery",
+        "codAmount": 300,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-02T22:11:49.060Z",
+        "timestamp": "٠١:١١ ص",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-480234",
+        "statusNote": "استلام جزئي بواسطة المندوب حسن علي: تسليم 1 قطعة واصل (300 ج.م) وارتجاع 1 قطعة بقيمة (290 ج.م). (تم استلام جزء من المحتويات وإرجاع المتبقي)",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "📦 استلام جزئي للشحنة (#BST-480234)",
+        "merchantName": "To you",
+        "recipientName": "محمد حسن عبد الشافي",
+        "recipientPhone": "1023376064",
+        "trackingNumber": "BST-480234"
+      },
+      {
+        "id": "notif-1788387078477",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 340,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-02T22:11:18.477Z",
+        "timestamp": "٠١:١١ ص",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-431846",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 340 ج.م",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-431846)",
+        "merchantName": "To you",
+        "recipientName": "ام زياد",
+        "recipientPhone": "1121919421",
+        "trackingNumber": "BST-431846"
+      },
+      {
+        "id": "notif-1788386956778",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_returned",
+        "codAmount": 0,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-02T22:09:16.778Z",
+        "timestamp": "٠١:٠٩ ص",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-200893",
+        "statusNote": "مرتجع بواسطة احمد رشاد (لم يدفع شحن - خصم كامل الشحن 60 ج.م من التاجر): رفض العميل المعاينة / غير مطابق للمواصفات",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "statusTitle": "❌ رفض استلام / مرتجع للتاجر (#BST-200893)",
+        "merchantName": "To you",
+        "recipientName": "مدام نيفين",
+        "recipientPhone": "1115552992",
+        "trackingNumber": "BST-200893"
+      },
+      {
+        "id": "notif-1788422901528",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 450,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-03T08:08:21.528Z",
+        "timestamp": "٠١:٠٨ ص",
+        "shipmentId": "BST-862573",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "محمد رجب",
+        "streetAddress": "25 شارع الخليفه المامون روكسي مصر الجديده البنك الاهلي نفسه",
+        "trackingNumber": "BST-862573"
+      },
+      {
+        "id": "notif-1788422898711",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 590,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-03T08:08:18.711Z",
+        "timestamp": "٠١:٠٨ ص",
+        "shipmentId": "BST-480234",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "محمد حسن عبد الشافي",
+        "streetAddress": "القاهره التجمع الخامس التسعين الجنوبي حي اول فلا 9",
+        "trackingNumber": "BST-480234"
+      },
+      {
+        "id": "notif-1788422896563",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 340,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-03T08:08:16.563Z",
+        "timestamp": "٠١:٠٨ ص",
+        "shipmentId": "BST-431846",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "ام زياد",
+        "streetAddress": "القطاميه التجمع الثالث مستقبل ثلاثه عماره ٢١ شقه ٥",
+        "trackingNumber": "BST-431846"
+      },
+      {
+        "id": "notif-1788422884930",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 270,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-03T08:08:04.930Z",
+        "timestamp": "٠١:٠٨ ص",
+        "shipmentId": "BST-585071",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "recipientName": "احلام يوسف",
+        "streetAddress": "مدينه الرحاب",
+        "trackingNumber": "BST-585071"
+      },
+      {
+        "id": "notif-1788422866914",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 330,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-03T08:07:46.914Z",
+        "timestamp": "٠١:٠٧ ص",
+        "shipmentId": "BST-200893",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "recipientName": "مدام نيفين",
+        "streetAddress": "فندق منتزه الحلميه داخل الفندق نفسه بيوتي سنتر نيفين القاهره",
+        "trackingNumber": "BST-200893"
+      },
+      {
+        "id": "notif-1788422853910",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 580,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-03T08:07:33.910Z",
+        "timestamp": "٠١:٠٧ ص",
+        "shipmentId": "BST-929361",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "recipientName": "سعد رؤوف سعد",
+        "streetAddress": "30 محمد بخيت القاهره زيتون",
+        "trackingNumber": "BST-929361"
+      },
+      {
+        "id": "notif-1788386840472",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 260,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-02T22:07:20.472Z",
+        "timestamp": "٠١:٠٧ ص",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-592398",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب احمد رشاد وتحصيل المبلغ 260 ج.م",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-592398)",
+        "merchantName": "To you",
+        "recipientName": "مدام دعاء",
+        "recipientPhone": "1274916891",
+        "trackingNumber": "BST-592398"
+      },
+      {
+        "id": "notif-1788386824681",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 330,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-02T22:07:04.681Z",
+        "timestamp": "٠١:٠٧ ص",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-339834",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب احمد رشاد وتحصيل المبلغ 330 ج.م",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-339834)",
+        "merchantName": "To you",
+        "recipientName": "الاسم احمد السني",
+        "recipientPhone": "1066844712",
+        "trackingNumber": "BST-339834"
+      },
+      {
+        "id": "notif-1788386803733",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 330,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-02T22:06:43.733Z",
+        "timestamp": "٠١:٠٦ ص",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-829765",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب احمد رشاد وتحصيل المبلغ 330 ج.م",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-829765)",
+        "merchantName": "To you",
+        "recipientName": "محمد حسين",
+        "recipientPhone": "1004047460",
+        "trackingNumber": "BST-829765"
+      },
+      {
+        "id": "notif-1788422767498",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 260,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-03T08:06:07.498Z",
+        "timestamp": "٠١:٠٦ ص",
+        "shipmentId": "BST-592398",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "recipientName": "مدام دعاء",
+        "streetAddress": "العنوان/35ش علي بن ابي طالب الاميرية ـ القاهره",
+        "trackingNumber": "BST-592398"
+      },
+      {
+        "id": "notif-1788422762465",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 850,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-03T08:06:02.465Z",
+        "timestamp": "٠١:٠٦ ص",
+        "shipmentId": "BST-898354",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "recipientName": "جومانا ياسر",
+        "streetAddress": "عمارة1000077 القاهره زهراء المعادي المعراج العلوي المجاوره العاشره",
+        "trackingNumber": "BST-898354"
+      },
+      {
+        "id": "notif-1788386043638-9f5a",
+        "city": "القاهرة",
+        "read": false,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-02T21:54:03.638Z",
+        "isDelayed": false,
+        "isRefused": false,
+        "isNoAnswer": false,
+        "shipmentId": "BST-824992",
+        "statusNote": "test",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "isDelivered": true,
+        "statusTitle": "تم التسليم بنجاح وتحصيل المبلغ",
+        "recipientName": "عبدالله سيد محمد",
+        "isAddressWrong": false,
+        "recipientPhone": "1128436282",
+        "trackingNumber": "BST-824992"
+      },
+      {
+        "id": "notif-1788366466140",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 840,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-02T16:27:46.140Z",
+        "timestamp": "٠٧:٢٧ م",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-331929",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب احمد رشاد وتحصيل المبلغ 840 ج.م",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-331929)",
+        "merchantName": "To you",
+        "recipientName": "حنان السيد حنفي",
+        "recipientPhone": "1005675625",
+        "trackingNumber": "BST-331929"
+      },
+      {
+        "id": "notif-1788402383170",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 330,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-03T02:26:23.170Z",
+        "timestamp": "٠٧:٢٦ م",
+        "shipmentId": "BST-244095",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "recipientName": "فاطمه ابو المجد",
+        "streetAddress": "القاهرة ٢ش عبدالغفار عزير من ش الفيوم دار السلام",
+        "trackingNumber": "BST-244095"
+      },
+      {
+        "id": "notif-1788402378256",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 330,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-03T02:26:18.256Z",
+        "timestamp": "٠٧:٢٦ م",
+        "shipmentId": "BST-829765",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "recipientName": "محمد حسين",
+        "streetAddress": "ش العروبه دار السلام عند مدرسه الفردوس",
+        "trackingNumber": "BST-829765"
+      },
+      {
+        "id": "notif-1788401299038",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 840,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-03T02:08:19.038Z",
+        "timestamp": "٠٧:٠٨ م",
+        "shipmentId": "BST-331929",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "recipientName": "حنان السيد حنفي",
+        "streetAddress": "104ش كسارات البلاديه أمام مصنع البيبسي كولا القصيرين الزاويه الحمراء القاهره",
+        "trackingNumber": "BST-331929"
+      },
+      {
+        "id": "notif-1788365245533",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 580,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-02T16:07:25.533Z",
+        "timestamp": "٠٧:٠٧ م",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-747443",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب احمد رشاد وتحصيل المبلغ 580 ج.م",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-747443)",
+        "merchantName": "To you",
+        "recipientName": "عماد عطيه",
+        "recipientPhone": "1145344833",
+        "trackingNumber": "BST-747443"
+      },
+      {
+        "id": "notif-1788365200783",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 450,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-02T16:06:40.783Z",
+        "timestamp": "٠٧:٠٦ م",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-924803",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 450 ج.م",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-924803)",
+        "merchantName": "To you",
+        "recipientName": "جنه شادي",
+        "recipientPhone": "1121712100",
+        "trackingNumber": "BST-924803"
+      },
+      {
+        "id": "notif-1788365189348",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 330,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-02T16:06:29.348Z",
+        "timestamp": "٠٧:٠٦ م",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-824992",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 330 ج.م",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-824992)",
+        "merchantName": "To you",
+        "recipientName": "عبدالله سيد محمد",
+        "recipientPhone": "1128436282",
+        "trackingNumber": "BST-824992"
+      },
+      {
+        "id": "notif-1788365178113",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 530,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-02T16:06:18.113Z",
+        "timestamp": "٠٧:٠٦ م",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-596169",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 530 ج.م",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-596169)",
+        "merchantName": "To you",
+        "recipientName": "اشرف",
+        "recipientPhone": "1224452169",
+        "trackingNumber": "BST-596169"
+      },
+      {
+        "id": "notif-1788365167410",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 270,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-02T16:06:07.410Z",
+        "timestamp": "٠٧:٠٦ م",
+        "merchantId": "USR-1788361785496-4492",
+        "shipmentId": "BST-710061",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي وتحصيل المبلغ 270 ج.م",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-710061)",
+        "merchantName": "To you",
+        "recipientName": "ام محمد",
+        "recipientPhone": "1065952786",
+        "trackingNumber": "BST-710061"
+      },
+      {
+        "id": "notif-1788400882580",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 580,
+        "courierId": "USR-1788364520004-8809",
+        "createdAt": "2026-09-03T02:01:22.580Z",
+        "timestamp": "٠٧:٠١ م",
+        "shipmentId": "BST-747443",
+        "courierName": "احمد رشاد",
+        "governorate": "القاهرة",
+        "recipientName": "عماد عطيه",
+        "streetAddress": "القاهره عنوان 7شارع كمال الشريف ارض الشركه في دخله التعاون عند محل اولاد شربات",
+        "trackingNumber": "BST-747443"
+      },
+      {
+        "id": "notif-1788400873614",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 450,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-03T02:01:13.614Z",
+        "timestamp": "٠٧:٠١ م",
+        "shipmentId": "BST-924803",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "جنه شادي",
+        "streetAddress": "القأهرة الزوياء الحمراء اخر شارع سيد درويش بوابه الفرز",
+        "trackingNumber": "BST-924803"
+      },
+      {
+        "id": "notif-1788400833696",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 330,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-03T02:00:33.696Z",
+        "timestamp": "٠٧:٠٠ م",
+        "shipmentId": "BST-824992",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "عبدالله سيد محمد",
+        "streetAddress": "١٩محمد عبد ربه ارض الشركه الشرابيه \\امام الشارع مسجد الصحابه",
+        "trackingNumber": "BST-824992"
+      },
+      {
+        "id": "notif-1788400830899",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 530,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-03T02:00:30.899Z",
+        "timestamp": "٠٧:٠٠ م",
+        "shipmentId": "BST-596169",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "اشرف",
+        "streetAddress": "٩٢ شارع المنيل محطه الغمراوي القاهرة",
+        "trackingNumber": "BST-596169"
+      },
+      {
+        "id": "notif-1788400826634",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 270,
+        "courierId": "USR-1788364242163-4812",
+        "createdAt": "2026-09-03T02:00:26.634Z",
+        "timestamp": "٠٧:٠٠ م",
+        "shipmentId": "BST-710061",
+        "courierName": "حسن علي",
+        "governorate": "القاهرة",
+        "recipientName": "ام محمد",
+        "streetAddress": "القاهره السيده زينب شارع بورسعيد فوق صيدليه الجمهوريه امام بنزينه التعاون عماره 17 شقه 8 الدور الرابع",
+        "trackingNumber": "BST-710061"
+      },
+      {
+        "id": "notif-1788260533225",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_returned",
+        "codAmount": 60,
+        "courierId": "cour-1788260293968-9qhi",
+        "createdAt": "2026-09-01T11:02:13.225Z",
+        "timestamp": "٠٤:٠٢ ص",
+        "merchantId": "b009b128-b1f5-4c03-b6ec-842d35cca9b0",
+        "shipmentId": "BST-123507",
+        "statusNote": "مرتجع بواسطة حسن علي  (دفع كامل الشحن 60 ج.م - الخصم من التاجر 0 ج.م): رفض العميل المعاينة / غير مطابق للمواصفات",
+        "courierName": "حسن علي ",
+        "governorate": "القاهرة",
+        "statusTitle": "❌ رفض استلام / مرتجع للتاجر (#BST-123507)",
+        "merchantName": "To tou",
+        "recipientName": "عبدالله سيد محمد",
+        "recipientPhone": "1128436282",
+        "trackingNumber": "BST-123507"
+      },
+      {
+        "id": "notif-1788260440905",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 530,
+        "courierId": "cour-1788260293968-9qhi",
+        "createdAt": "2026-09-01T11:00:40.905Z",
+        "timestamp": "٠٤:٠٠ ص",
+        "merchantId": "b009b128-b1f5-4c03-b6ec-842d35cca9b0",
+        "shipmentId": "BST-772553",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي  وتحصيل المبلغ 530 ج.م",
+        "courierName": "حسن علي ",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-772553)",
+        "merchantName": "To tou",
+        "recipientName": "اشرف",
+        "recipientPhone": "1224452169",
+        "trackingNumber": "BST-772553"
+      },
+      {
+        "id": "notif-1788260427675",
+        "city": "القاهرة",
+        "read": false,
+        "type": "status_delivered",
+        "codAmount": 270,
+        "courierId": "cour-1788260293968-9qhi",
+        "createdAt": "2026-09-01T11:00:27.675Z",
+        "timestamp": "٠٤:٠٠ ص",
+        "merchantId": "b009b128-b1f5-4c03-b6ec-842d35cca9b0",
+        "shipmentId": "BST-434058",
+        "statusNote": "تم التسليم بنجاح بواسطة المندوب حسن علي  وتحصيل المبلغ 270 ج.م",
+        "courierName": "حسن علي ",
+        "governorate": "القاهرة",
+        "statusTitle": "✅ تم تسليم الشحنة بنجاح (#BST-434058)",
+        "merchantName": "To tou",
+        "recipientName": "ام محمد",
+        "recipientPhone": "1065952786",
+        "trackingNumber": "BST-434058"
+      },
+      {
+        "id": "notif-1788260400114",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 330,
+        "courierId": "cour-1788260293968-9qhi",
+        "createdAt": "2026-09-01T11:00:00.114Z",
+        "timestamp": "٠٤:٠٠ ص",
+        "shipmentId": "BST-123507",
+        "courierName": "حسن علي ",
+        "governorate": "القاهرة",
+        "recipientName": "عبدالله سيد محمد",
+        "streetAddress": "١٩محمد عبد ربه ارض الشركه الشرابيه \\امام الشارع مسجد الصحابه",
+        "trackingNumber": "BST-123507"
+      },
+      {
+        "id": "notif-1788260394096",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 530,
+        "courierId": "cour-1788260293968-9qhi",
+        "createdAt": "2026-09-01T10:59:54.096Z",
+        "timestamp": "٠٣:٥٩ ص",
+        "shipmentId": "BST-772553",
+        "courierName": "حسن علي ",
+        "governorate": "القاهرة",
+        "recipientName": "اشرف",
+        "streetAddress": "٩٢ شارع المنيل محطه الغمراوي القاهرة",
+        "trackingNumber": "BST-772553"
+      },
+      {
+        "id": "notif-1788260304299",
+        "city": "القاهرة",
+        "read": false,
+        "codAmount": 270,
+        "courierId": "cour-1788260293968-9qhi",
+        "createdAt": "2026-09-01T10:58:24.299Z",
+        "timestamp": "٠٣:٥٨ ص",
+        "shipmentId": "BST-434058",
+        "courierName": "حسن علي ",
+        "governorate": "القاهرة",
+        "recipientName": "ام محمد",
+        "streetAddress": "القاهره السيده زينب شارع بورسعيد فوق صيدليه الجمهوريه امام بنزينه التعاون عماره 17 شقه 8 الدور الرابع",
+        "trackingNumber": "BST-434058"
+      }
+    ],
+    "companyTransactions": [
+      {
+        "id": "TXN-OUT-1788573898704-4656",
+        "date": "2026-09-05",
+        "type": "expense",
+        "notes": "صرف وتسليم مستحقات التاجر المالية من خزينة الشركة عبر INSTAPAY",
+        "title": "تسليم مستحقات وحسابات التاجر (المحفظة الرئيسية)",
+        "amount": 520,
+        "category": "تسليم مستحقات تجار",
+        "createdAt": "2026-09-05T02:04:58.704Z",
+        "createdBy": "محمد صلاح (أدمن الرئيسية)",
+        "paymentMethod": "instapay",
+        "relatedMerchant": "المحفظة الرئيسية"
+      },
+      {
+        "id": "TXN-IN-1788573847549-5383",
+        "date": "2026-09-05",
+        "type": "income",
+        "notes": "استلام وتوريد صافي عهدة كاش (560 ج.م) بعد خصم عمولة المندوب المستحقة (20 ج.م) من إجمالي المحصل (580 ج.م) إلى خزينة الشركة وتصفية الشحنات.",
+        "title": "توريد صافي عهدة كاش من المندوب (حسن علي)",
+        "amount": 560,
+        "category": "تحصيل كاش COD",
+        "createdAt": "2026-09-05T02:04:07.549Z",
+        "createdBy": "محمد صلاح (أدمن الرئيسية)",
+        "paymentMethod": "cash",
+        "relatedCourier": "حسن علي"
+      },
+      {
+        "id": "TXN-1788424056725",
+        "date": "2026-09-03",
+        "type": "expense",
+        "notes": "تسليم مستحقات بضاعة التاجر (To you) (رقم الإيصال: REC-054898)",
+        "title": "تسليم وصرف مستحقات التاجر (To you)",
+        "amount": 7160,
+        "category": "تسليم مستحقات تجار",
+        "createdAt": "2026-09-03T08:27:36.725Z",
+        "createdBy": "محمد صلاح (أدمن الرئيسية)",
+        "paymentMethod": "cash",
+        "relatedMerchant": "To you"
+      },
+      {
+        "id": "TXN-IN-1788423500088-3268",
+        "date": "2026-09-03",
+        "type": "income",
+        "notes": "استلام وتوريد صافي عهدة كاش (2,280 ج.م) بعد خصم عمولة المندوب المستحقة (60 ج.م) من إجمالي المحصل (2,340 ج.م) إلى خزينة الشركة وتصفية الشحنات.",
+        "title": "توريد صافي عهدة كاش من المندوب (حسن علي)",
+        "amount": 2280,
+        "category": "تحصيل كاش COD",
+        "createdAt": "2026-09-03T08:18:20.088Z",
+        "createdBy": "محمد صلاح (أدمن الرئيسية)",
+        "paymentMethod": "cash",
+        "relatedCourier": "حسن علي"
+      },
+      {
+        "id": "TXN-IN-1788423352287-4607",
+        "date": "2026-09-03",
+        "type": "income",
+        "notes": "استلام وتوريد صافي عهدة كاش (3,220 ج.م) بعد خصم عمولة المندوب المستحقة (180 ج.م) من إجمالي المحصل (3,400 ج.م) إلى خزينة الشركة وتصفية الشحنات.",
+        "title": "توريد صافي عهدة كاش من المندوب (احمد رشاد)",
+        "amount": 3220,
+        "category": "تحصيل كاش COD",
+        "createdAt": "2026-09-03T08:15:52.287Z",
+        "createdBy": "محمد صلاح (أدمن الرئيسية)",
+        "paymentMethod": "cash",
+        "relatedCourier": "احمد رشاد"
+      },
+      {
+        "id": "TXN-IN-1788423339100-7733",
+        "date": "2026-09-03",
+        "type": "income",
+        "notes": "استلام وتوريد صافي عهدة كاش (2,530 ج.م) بعد خصم عمولة المندوب المستحقة (140 ج.م) من إجمالي المحصل (2,670 ج.م) إلى خزينة الشركة وتصفية الشحنات.",
+        "title": "توريد صافي عهدة كاش من المندوب (حسن علي)",
+        "amount": 2530,
+        "category": "تحصيل كاش COD",
+        "createdAt": "2026-09-03T08:15:39.100Z",
+        "createdBy": "محمد صلاح (أدمن الرئيسية)",
+        "paymentMethod": "cash",
+        "relatedCourier": "حسن علي"
+      }
+    ]
+  },
+  "timestamp": 1789228961602
+}

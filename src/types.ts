@@ -91,11 +91,15 @@ export interface CourierInfo {
   name: string;
   phone: string;
   vehicle: 'motocycle' | 'van' | 'car';
-  assignedHub: string;
+  assignedHub?: string;
   rating: number;
-  activeShipmentsCount: number;
-  codCollectedToday: number;
+  activeShipmentsCount?: number;
+  activeDeliveriesCount?: number;
+  codCollectedToday?: number;
   photoUrl?: string;
+  avatarUrl?: string;
+  governorate?: string;
+  zone?: string;
   commissionType?: 'fixed' | 'percentage'; // نوع العمولة (مبلغ ثابت لكل شحنة أو نسبة من سعر الشحن)
   commissionValue?: number;                // قيمة العمولة (مثلا 20 ج.م أو 15%)
   totalCommissionEarned?: number;          // إجمالي العمولات المستحقة للمندوب

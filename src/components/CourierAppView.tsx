@@ -31,13 +31,15 @@ import {
   PhoneOff,
   BellRing,
   RotateCcw,
-  FileText
+  FileText,
+  Eye
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 import { BatchWhatsAppModal } from './BatchWhatsAppModal';
 import { CourierWaybillModal } from './CourierWaybillModal';
 import { EnableNotifications } from './EnableNotifications';
 import { playNotificationSound, requestNotificationPermission, sendDeviceNotification } from '../utils/deviceNotifications';
+import { generateWaybillMessage, generateWhatsAppLink, formatFullAddress, formatProductDetails } from '../utils/whatsapp';
 
 interface CourierAppViewProps {
   shipments: Shipment[];
@@ -747,23 +749,52 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
                         اتصال ({shipment.recipient.phone})
                       </a>
 
-                      {/* Prominent Waybill Share Button */}
-                      <button
-                        onClick={() => setWaybillShipment(shipment)}
-                        className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-extrabold py-2 px-3.5 rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-blue-900/30 transition-all shrink-0 cursor-pointer border border-blue-400/40"
-                        title="إرسال بوليصة الشحن الرسمية والشاملة للعميل"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-amber-300" />
-                        <span>بوليصة الشحن 🧾</span>
-                      </button>
+                      {/* Prominent Direct Waybill Share (WhatsApp) & Preview */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <a
+                          href={generateWhatsAppLink(
+                            shipment.recipient.phone,
+                            generateWaybillMessage({
+                              recipientName: shipment.recipient.name,
+                              recipientPhone: shipment.recipient.phone,
+                              secondaryPhone: shipment.recipient.secondaryPhone,
+                              recipientAddress: formatFullAddress(shipment.recipient),
+                              productType: formatProductDetails(shipment.packageDetails),
+                              itemsCount: shipment.packageDetails?.itemsCount,
+                              allowOpening: shipment.packageDetails?.allowOpening,
+                              trackingNumber: shipment.trackingNumber,
+                              storeName: shipment.sender.storeName,
+                              codAmount: shipment.financials.codAmount,
+                              courierName: activeCourier?.name || currentUser?.name,
+                              courierPhone: activeCourier?.phone || currentUser?.phone,
+                            })
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-extrabold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/30 transition-all cursor-pointer border border-emerald-500/40"
+                          title="إرسال بوليصة الشحن الرسمية والمختصرة للعميل عبر واتساب مباشرة بضغطة واحدة وبكافة البيانات"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-amber-300" />
+                          <span>إرسال البوليصة (واتساب) 🧾</span>
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={() => setWaybillShipment(shipment)}
+                          className="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
+                          title="معاينة كارت البوليصة وخيارات الطباعة والمشاركة"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-slate-300" />
+                        </button>
+                      </div>
 
                       <button
                         onClick={() => setWhatsappShipment(shipment)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors shrink-0 cursor-pointer"
-                        title="تراسل مع العميل عبر الواتساب"
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 px-2.5 rounded-xl flex items-center justify-center gap-1 transition-colors shrink-0 cursor-pointer"
+                        title="قوالب رسائل أخرى"
                       >
-                        <MessageSquare className="w-3.5 h-3.5 text-white" />
-                        <span>واتساب</span>
+                        <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
+                        <span>رسائل أخرى</span>
                       </button>
 
                       <button

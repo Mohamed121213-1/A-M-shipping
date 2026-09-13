@@ -376,56 +376,147 @@ if (!fs.existsSync(BACKUPS_DIR)) {
   } catch (e) {}
 }
 
-const SUPABASE_SYNCED_USERS = [
+export const PRIMARY_ADMIN_USER = {
+  id: 'admin_root',
+  name: 'محمد صلاح (أدمن الرئيسية)',
+  email: 'mohamedsalah565657@icloud.com',
+  phone: '01000000001',
+  role: 'admin',
+  avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF+%D8%B5%D9%84%D8%A7%D8%AD&background=dc2626&color=ffffff',
+  isConfirmed: true,
+  registeredAt: '2026-08-30T00:00:00.000Z',
+};
+
+export const AUTHORIZED_SYSTEM_USERS = [
+  PRIMARY_ADMIN_USER,
   {
-    id: 'admin_root',
-    name: 'محمد صلاح (أدمن الرئيسية)',
-    email: 'mohamedsalah565657@icloud.com',
-    phone: '01000000001',
-    role: 'admin',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D9%85%D8%AD%D9%85%D8%AF+%D8%B5%D9%84%D8%A7%D8%AD&background=dc2626&color=ffffff',
+    id: 'USR-1788361785496-4492',
+    name: 'ام فاتن',
+    email: '01017266727@am-shipping.eg',
+    phone: '01017266727',
+    role: 'merchant',
+    storeName: 'To you',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D9%85+%D9%81%D8%A7%D8%AA%D9%86&background=059669&color=ffffff',
     isConfirmed: true,
-    registeredAt: '2026-08-30T00:00:00.000Z',
+    registeredAt: '2026-09-01T00:00:00.000Z',
+  },
+  {
+    id: 'USR-1788364629634-8301',
+    name: 'Ibrahim',
+    email: '01118003293@am-shipping.eg',
+    phone: '01118003293',
+    role: 'hub_manager',
+    hubName: 'مستودع القاهرة الرئيسي - رمسيس',
+    avatarUrl: 'https://ui-avatars.com/api/?name=Ibrahim&background=2563eb&color=ffffff',
+    isConfirmed: true,
+    registeredAt: '2026-09-01T00:00:00.000Z',
+  },
+  {
+    id: 'USR-1788364520004-8809',
+    name: 'احمد رشاد',
+    email: '01033011862@am-shipping.eg',
+    phone: '01033011862',
+    role: 'courier',
+    courierVehicle: 'دراجة نارية / موتوسيكل',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF+%D8%B1%D8%B4%D8%A7%D8%AF&background=d97706&color=ffffff',
+    isConfirmed: true,
+    registeredAt: '2026-09-01T00:00:00.000Z',
+  },
+  {
+    id: 'USR-1788364242163-4812',
+    name: 'حسن علي',
+    email: '01093383328@am-shipping.eg',
+    phone: '01093383328',
+    role: 'courier',
+    courierVehicle: 'دراجة نارية / موتوسيكل',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86+%D8%B9%D9%84%D9%8A&background=d97706&color=ffffff',
+    isConfirmed: true,
+    registeredAt: '2026-09-01T00:00:00.000Z',
   },
 ];
 
-const PRIMARY_ADMIN_USER = SUPABASE_SYNCED_USERS[0];
+const SUPABASE_SYNCED_USERS = AUTHORIZED_SYSTEM_USERS;
 
-const DEPRECATED_DUMMY_IDS = new Set([
-  '15c6e6d1-df23-4e20-a464-e4df09590e4d',
-  'b009b128-b1f5-4c03-b6ec-842d35cca9b0',
-  '16cfabd6-f309-4c09-ad2e-3ddc10338d67',
-  '8b151dbb-660d-4169-903a-647c12967504',
-  '169880e0-ba38-416e-ab42-9ae66d67b5c3',
-  'd5892b9e-760c-4a7b-a428-04916faf5513',
-  '16256cfa-8044-4607-abce-9de1335f311a',
-  '234aa881-d193-42a3-b86a-5408ba92146e',
-  '10fdf171-fb33-4ede-9d27-2fae8a2c2d4b',
+export const AUTHORIZED_COURIERS = [
+  {
+    id: 'USR-1788364520004-8809',
+    name: 'احمد رشاد',
+    phone: '01033011862',
+    vehicle: 'motocycle',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF+%D8%B1%D8%B4%D8%A7%D8%AF&background=d97706&color=ffffff',
+    activeDeliveriesCount: 0,
+    rating: 5.0,
+    governorate: 'القاهرة',
+    zone: 'القاهرة والجيزة'
+  },
+  {
+    id: 'USR-1788364242163-4812',
+    name: 'حسن علي',
+    phone: '01093383328',
+    vehicle: 'motocycle',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86+%D8%B9%D9%84%D9%8A&background=d97706&color=ffffff',
+    activeDeliveriesCount: 12,
+    rating: 5.0,
+    governorate: 'القاهرة',
+    zone: 'القاهرة والجيزة'
+  }
+];
+
+export const DEPRECATED_DUMMY_IDS = new Set([
+  '15c6e6d1-df23-4e20-a464-e4df09590e4d', // Amr
+  'b009b128-b1f5-4c03-b6ec-842d35cca9b0', 
+  '16cfabd6-f309-4c09-ad2e-3ddc10338d67', 
+  '8b151dbb-660d-4169-903a-647c12967504', // Oo
+  '169880e0-ba38-416e-ab42-9ae66d67b5c3', // محمد
+  'd5892b9e-760c-4a7b-a428-04916faf5513', // Pp
+  '16256cfa-8044-4607-abce-9de1335f311a', // ابراهيم شريف
+  '234aa881-d193-42a3-b86a-5408ba92146e', // fake duplicate
+  '10fdf171-fb33-4ede-9d27-2fae8a2c2d4b', 
+  'b251467a-76c7-4afa-93bd-762a1bffc340', // fake client
+  '51dd3367-fffa-4f2e-af58-5503ff2bc7c5', // fake client
   'USR-1788361248924',
 ]);
 
-const DEPRECATED_DUMMY_PHONES = new Set([
-  '01015674681',
-  '01011223344', // محمد علي تاجر (متجر علي) - dummy account
-  '01093383328',
-  '01121212121',
-  '01125465248',
-  '01125465676',
-  '01155219660',
-  '01234567891',
+export const DEPRECATED_DUMMY_PHONES = new Set([
+  '01015674681', // Amr
+  '01011223344', // test
+  '01121212121', // Oo
+  '01125465248', // محمد
+  '01125465676', // Pp
+  '01155219660', // ابراهيم شريف
+  '01234567891', // fake duplicate
+]);
+
+export const PURGED_OLD_SHIPMENT_TRACKING_NUMBERS = new Set([
+  'BST-318207', 'BST-710061', 'BST-596169', 'BST-824992', 'BST-924803', 'BST-747443',
+  'BST-331929', 'BST-829765', 'BST-244095', 'BST-339834', 'BST-898354', 'BST-592398',
+  'BST-929361', 'BST-200893', 'BST-585071', 'BST-431846', 'BST-480234', 'BST-862573',
+  'BST-893139', 'BST-281073', 'BST-212631', 'BST-722692', 'BST-633295', 'BST-313166',
+  'BST-543443', 'BST-559796', 'BST-619707', 'BST-152528', 'BST-367621', 'BST-515715',
+  'BST-555076', 'BST-620920', 'BST-535734', 'BST-231465', 'BST-237828', 'BST-336905',
+  'BST-428675', 'BST-927727', 'BST-136036', 'BST-893238', 'BST-894174', 'BST-311789',
+  'BST-460427', 'BST-248160', 'BST-720323', 'BST-991501'
 ]);
 
 function isDeprecatedDummyUser(u: any): boolean {
   if (!u) return true;
+  // Always protect the 5 authorized accounts
+  if (u.id === 'admin_root' || u.phone === '01000000001' || u.email === 'mohamedsalah565657@icloud.com' || u.email === 'mohamedsalah565657@gmail.com') {
+    return false;
+  }
+  if (u.id === 'USR-1788361785496-4492' || u.phone === '01017266727') return false;
+  if (u.id === 'USR-1788364629634-8301' || u.phone === '01118003293') return false;
+  if (u.id === 'USR-1788364520004-8809' || u.phone === '01033011862') return false;
+  if (u.id === 'USR-1788364242163-4812' || u.phone === '01093383328') return false;
+
   if (u.id && DEPRECATED_DUMMY_IDS.has(String(u.id))) return true;
   if (u.phone) {
     const cleanPhone = String(u.phone).replace(/\D/g, '');
     if (cleanPhone && DEPRECATED_DUMMY_PHONES.has(cleanPhone)) return true;
   }
-  if (u.name && (u.name.includes('محمد علي تاجر') || u.name === 'محمد علي')) return true;
-  if (u.storeName && u.storeName.includes('متجر علي')) return true;
-  if (u.store_name && u.store_name.includes('متجر علي')) return true;
-  if (u.email && u.email.includes('mohamed.ali@test.com')) return true;
+  if (u.name && (u.name.includes('محمد علي تاجر') || u.name === 'محمد علي تجريبي' || u.name === 'Amr' || u.name === 'Oo' || u.name === 'Pp' || u.name === 'محمد' || u.name === 'ابراهيم شريف')) return true;
+  if (u.storeName && (u.storeName.includes('متجر علي') || u.storeName.includes('متجر Amr') || u.storeName.includes('متجر Oo') || u.storeName.includes('متجر Pp') || u.storeName.includes('متجر محمد') || u.storeName.includes('متجر ابراهيم'))) return true;
+  if (u.role === 'client') return true;
   return false;
 }
 
@@ -535,11 +626,39 @@ function sanitizeServerState(rawState: any) {
     } else {
       result.unshift(PRIMARY_ADMIN_USER);
     }
-    rawState.users = result;
+
+    const KNOWN_ROLES: Record<string, string> = {
+      'admin_root': 'admin',
+      'USR-1788361785496-4492': 'merchant',
+      'USR-1788364629634-8301': 'hub_manager',
+      'USR-1788364520004-8809': 'courier',
+      'USR-1788364242163-4812': 'courier',
+    };
+
+    rawState.users = result.map((u: any) => {
+      if (KNOWN_ROLES[u.id]) {
+        return { ...u, role: KNOWN_ROLES[u.id] };
+      }
+      return u;
+    });
   }
 
   if (Array.isArray(rawState.couriers)) {
-    rawState.couriers = rawState.couriers.filter((c: any) => c && typeof c === 'object' && c.id && c.name);
+    const list = rawState.couriers.filter((c: any) => {
+      if (!c || typeof c !== 'object' || !c.id || !c.name) return false;
+      if (c.phone && DEPRECATED_DUMMY_PHONES.has(String(c.phone).replace(/\D/g, ''))) return false;
+      return true;
+    });
+    const cMap = new Map<string, any>();
+    for (const c of AUTHORIZED_COURIERS) {
+      cMap.set(c.id, c);
+    }
+    for (const c of list) {
+      cMap.set(c.id, { ...(cMap.get(c.id) || {}), ...c });
+    }
+    rawState.couriers = Array.from(cMap.values());
+  } else {
+    rawState.couriers = [...AUTHORIZED_COURIERS];
   }
 
   if (Array.isArray(rawState.companyTransactions)) {
@@ -547,7 +666,15 @@ function sanitizeServerState(rawState: any) {
   }
 
   if (Array.isArray(rawState.shipments)) {
-    rawState.shipments = rawState.shipments.filter((s: any) => s && typeof s === 'object' && (s.id || s.trackingNumber));
+    rawState.shipments = rawState.shipments.filter((s: any) => {
+      if (!s || typeof s !== 'object' || (!s.id && !s.trackingNumber)) return false;
+      const tracking = s.trackingNumber || s.id;
+      if (tracking && PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(tracking)) return false;
+      if (s.id && PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(s.id)) return false;
+      if (s.createdAt && new Date(s.createdAt).getTime() < new Date('2026-09-07T00:00:00.000Z').getTime()) return false;
+      if (s.sender && isDeprecatedDummyUser(s.sender)) return false;
+      return true;
+    });
   }
 
   if (Array.isArray(rawState.governorates) && rawState.governorates.length > 0) {
@@ -722,14 +849,19 @@ function mergeShipmentsLists(existingList?: any[], incomingList?: any[]): any[] 
   const map = new Map<string, any>();
 
   for (const s of existingArr) {
-    if (s && (s.id || s.trackingNumber)) {
-      map.set(s.id || s.trackingNumber, s);
-    }
+    if (!s || (!s.id && !s.trackingNumber)) continue;
+    const key = s.trackingNumber || s.id;
+    if (PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(key) || (s.id && PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(s.id))) continue;
+    if (s.createdAt && new Date(s.createdAt).getTime() < new Date('2026-09-07T00:00:00.000Z').getTime()) continue;
+    map.set(key, s);
   }
 
   for (const incoming of incomingArr) {
     if (!incoming || (!incoming.id && !incoming.trackingNumber)) continue;
-    const key = incoming.id || incoming.trackingNumber;
+    const key = incoming.trackingNumber || incoming.id;
+    if (PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(key) || (incoming.id && PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(incoming.id))) continue;
+    if (incoming.createdAt && new Date(incoming.createdAt).getTime() < new Date('2026-09-07T00:00:00.000Z').getTime()) continue;
+
     const existing = map.get(key);
     if (!existing) {
       map.set(key, incoming);
@@ -877,14 +1009,16 @@ async function pullStateFromSupabaseOnBoot() {
       } else {
         // Merge shipments intelligently with anti-rollback logic
         const mergedShipments = mergeShipmentsLists(serverAppState.shipments || [], remoteState.shipments || []);
-        serverAppState = {
+        const mergedUsers = sanitizeServerState({ users: [...(remoteState.users || []), ...(serverAppState.users || [])] }).users;
+        serverAppState = sanitizeServerState({
           ...remoteState,
           ...serverAppState,
           shipments: mergedShipments,
-          users: remoteState.users || serverAppState.users,
+          users: mergedUsers,
           couriers: remoteState.couriers || serverAppState.couriers,
-        };
+        });
       }
+      serverAppState = sanitizeServerState(serverAppState);
       serverLastUpdated = Date.now();
       console.log(`⚡ Server state synchronized with Supabase Cloud Database! (${serverAppState.shipments?.length || 0} shipments, ${serverAppState.users?.length || 0} users)`);
       fs.writeFileSync(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: serverLastUpdated }, null, 2));
@@ -893,7 +1027,8 @@ async function pullStateFromSupabaseOnBoot() {
     // Ensure profiles table rows are mirrored and merged in users
     const { data: pRows, error: pErr } = await supabaseServer.from('profiles').select('*');
     if (!pErr && Array.isArray(pRows) && pRows.length > 0) {
-      const mappedProfiles = pRows.map((p: any) => ({
+      const validProfiles = pRows.filter((p: any) => !isDeprecatedDummyUser(p));
+      const mappedProfiles = validProfiles.map((p: any) => ({
         id: String(p.id),
         name: p.name || 'مستخدم',
         email: p.email || (p.phone ? `${p.phone}@am-shipping.eg` : `${p.id}@am-shipping.eg`),
@@ -916,14 +1051,30 @@ async function pullStateFromSupabaseOnBoot() {
     if (!sErr && Array.isArray(sRows) && sRows.length > 0) {
       const mapped = sRows.map((r: any) => {
         const base = (r.data && typeof r.data === 'object') ? r.data : {};
+        const currentRank = STATUS_RANK[base.status] || 0;
+        const rowRank = STATUS_RANK[r.status] || 0;
+        const effectiveStatus = (currentRank >= rowRank && currentRank > 0) ? base.status : (r.status || base.status || 'created');
+
+        const currentName = (base.recipient?.name || '').trim();
+        const rowName = (r.customer_name || '').trim();
+        let safeName = 'عميل';
+        if (currentName && !/^[\s.,'،_\-]*$/.test(currentName)) {
+          safeName = currentName;
+        } else if (rowName && !/^[\s.,'،_\-]*$/.test(rowName)) {
+          safeName = rowName;
+        } else {
+          const city = r.city || base.recipient?.city || '';
+          safeName = city ? `عميل (${city})` : `عميل (${r.customer_phone || base.recipient?.phone || 'معتمد'})`;
+        }
+
         return {
           ...base,
           id: r.id || base.id,
           trackingNumber: r.tracking_number || base.trackingNumber,
-          status: r.status || base.status || 'created',
+          status: effectiveStatus,
           recipient: {
             ...(base.recipient || {}),
-            name: r.customer_name || base.recipient?.name || '',
+            name: safeName,
             phone: r.customer_phone || base.recipient?.phone || '',
             secondaryPhone: base.recipient?.secondaryPhone || base.recipient?.phone2 || base.recipient?.secondPhone || '',
             governorate: r.governorate || base.recipient?.governorate || '',
@@ -948,6 +1099,7 @@ async function pullStateFromSupabaseOnBoot() {
 
       if (!serverAppState) serverAppState = {};
       serverAppState.shipments = mergeShipmentsLists(serverAppState.shipments || [], mapped);
+      serverAppState = sanitizeServerState(serverAppState);
       serverLastUpdated = Date.now();
       console.log(`⚡ Hydrated and merged ${mapped.length} shipments directly from Supabase shipments table!`);
       fs.writeFileSync(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: serverLastUpdated }, null, 2));
@@ -1802,15 +1954,30 @@ app.post("/api/sync/state", (req, res) => {
     }
 
     if (!isExplicitClear && serverAppState) {
-      // Users state handling: if state.users is explicitly provided, take it as authoritative (sanitizer will ensure admin exists)
+      // Users state handling: merge existing server users and incoming users so no accounts are ever lost
       if (Array.isArray(state.users) && state.users.length > 0) {
-        mergedState.users = state.users;
+        mergedState.users = sanitizeServerState({ users: [...(serverAppState.users || []), ...state.users] }).users;
       } else if (Array.isArray(serverAppState.users) && serverAppState.users.length > 0) {
         mergedState.users = serverAppState.users;
       }
 
-      if (Array.isArray(state.couriers)) {
-        mergedState.couriers = state.couriers;
+      // Wallet protection: prevent zeroing out active wallet balance from stale or uninitialized clients
+      if (state.wallet) {
+        const currentWallet = serverAppState.wallet;
+        if (currentWallet && 
+            (currentWallet.availableBalance > 0 || currentWallet.pendingCod > 0) &&
+            (state.wallet.availableBalance === 0 && state.wallet.pendingCod === 0 && state.wallet.totalPaidOut === 0)) {
+          console.warn('🛡️ Prevented zeroing out active wallet balance in sync');
+          mergedState.wallet = currentWallet;
+        } else {
+          mergedState.wallet = { ...(currentWallet || {}), ...state.wallet };
+        }
+      } else if (serverAppState.wallet) {
+        mergedState.wallet = serverAppState.wallet;
+      }
+
+      if (Array.isArray(state.couriers) && state.couriers.length > 0) {
+        mergedState.couriers = sanitizeServerState({ couriers: [...(serverAppState.couriers || []), ...state.couriers] }).couriers;
       } else if (Array.isArray(serverAppState.couriers) && serverAppState.couriers.length > 0) {
         mergedState.couriers = serverAppState.couriers;
       }

@@ -41,23 +41,6 @@ const loadLocalState = <T,>(key: string, defaultValue: T): T => {
   return defaultValue;
 };
 
-// One-time purge of legacy mock shipments & deprecated dummy accounts
-if (typeof window !== 'undefined') {
-  try {
-    const purgeKey = 'bosta_purge_clean_v6';
-    if (localStorage.getItem(purgeKey) !== 'true') {
-      localStorage.setItem('bosta_shipments', '[]');
-      localStorage.setItem('bosta_wallet', JSON.stringify({ merchantId: 'merch-admin-default', merchantName: 'المحفظة الرئيسية', availableBalance: 0, pendingCod: 0, totalPaidOut: 0 }));
-      const usersRaw = localStorage.getItem('bosta_users');
-      if (usersRaw) {
-        const cleaned = sanitizeUsers(JSON.parse(usersRaw));
-        localStorage.setItem('bosta_users', JSON.stringify(cleaned));
-      }
-      localStorage.setItem(purgeKey, 'true');
-    }
-  } catch (e) {}
-}
-
 export default function App() {
   const [shipments, setShipments] = useState<Shipment[]>(() => {
     const saved = loadLocalState<Shipment[]>('bosta_shipments', INITIAL_SHIPMENTS);
@@ -389,6 +372,38 @@ export default function App() {
 
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
+    // Immediate hydration from authoritative server state
+    fetch('/api/sync/state')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.state) {
+          isIncomingSyncRef.current = true;
+          const s = data.state;
+          if (Array.isArray(s.shipments) && s.shipments.length > 0) {
+            setShipments((prev) => {
+              const merged = mergeShipmentsLists(prev, s.shipments);
+              try { localStorage.setItem('bosta_shipments', JSON.stringify(merged)); } catch (e) {}
+              return merged;
+            });
+          }
+          if (s.wallet && (s.wallet.availableBalance > 0 || s.wallet.pendingCod > 0)) {
+            setWallet(s.wallet);
+            try { localStorage.setItem('bosta_wallet', JSON.stringify(s.wallet)); } catch (e) {}
+          }
+          if (Array.isArray(s.users) && s.users.length > 0) {
+            setUsers((prev) => {
+              const merged = sanitizeUsers([...prev, ...s.users]);
+              try { localStorage.setItem('bosta_users', JSON.stringify(merged)); } catch (e) {}
+              return merged;
+            });
+          }
+          if (Array.isArray(s.couriers) && s.couriers.length > 0) {
+            setCouriers(s.couriers);
+          }
+        }
+      })
+      .catch(() => {});
+
     // Initial fetch of authoritative users from server and Supabase
     fetch('/api/users')
       .then((res) => res.json())
