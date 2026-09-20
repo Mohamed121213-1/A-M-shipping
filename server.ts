@@ -487,16 +487,7 @@ export const DEPRECATED_DUMMY_PHONES = new Set([
   '01234567891', // fake duplicate
 ]);
 
-export const PURGED_OLD_SHIPMENT_TRACKING_NUMBERS = new Set([
-  'BST-318207', 'BST-710061', 'BST-596169', 'BST-824992', 'BST-924803', 'BST-747443',
-  'BST-331929', 'BST-829765', 'BST-244095', 'BST-339834', 'BST-898354', 'BST-592398',
-  'BST-929361', 'BST-200893', 'BST-585071', 'BST-431846', 'BST-480234', 'BST-862573',
-  'BST-893139', 'BST-281073', 'BST-212631', 'BST-722692', 'BST-633295', 'BST-313166',
-  'BST-543443', 'BST-559796', 'BST-619707', 'BST-152528', 'BST-367621', 'BST-515715',
-  'BST-555076', 'BST-620920', 'BST-535734', 'BST-231465', 'BST-237828', 'BST-336905',
-  'BST-428675', 'BST-927727', 'BST-136036', 'BST-893238', 'BST-894174', 'BST-311789',
-  'BST-460427', 'BST-248160', 'BST-720323', 'BST-991501'
-]);
+export const PURGED_OLD_SHIPMENT_TRACKING_NUMBERS = new Set<string>();
 
 function isDeprecatedDummyUser(u: any): boolean {
   if (!u) return true;
@@ -668,10 +659,6 @@ function sanitizeServerState(rawState: any) {
   if (Array.isArray(rawState.shipments)) {
     rawState.shipments = rawState.shipments.filter((s: any) => {
       if (!s || typeof s !== 'object' || (!s.id && !s.trackingNumber)) return false;
-      const tracking = s.trackingNumber || s.id;
-      if (tracking && PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(tracking)) return false;
-      if (s.id && PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(s.id)) return false;
-      if (s.createdAt && new Date(s.createdAt).getTime() < new Date('2026-09-07T00:00:00.000Z').getTime()) return false;
       if (s.sender && isDeprecatedDummyUser(s.sender)) return false;
       return true;
     });
@@ -851,16 +838,12 @@ function mergeShipmentsLists(existingList?: any[], incomingList?: any[]): any[] 
   for (const s of existingArr) {
     if (!s || (!s.id && !s.trackingNumber)) continue;
     const key = s.trackingNumber || s.id;
-    if (PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(key) || (s.id && PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(s.id))) continue;
-    if (s.createdAt && new Date(s.createdAt).getTime() < new Date('2026-09-07T00:00:00.000Z').getTime()) continue;
     map.set(key, s);
   }
 
   for (const incoming of incomingArr) {
     if (!incoming || (!incoming.id && !incoming.trackingNumber)) continue;
     const key = incoming.trackingNumber || incoming.id;
-    if (PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(key) || (incoming.id && PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(incoming.id))) continue;
-    if (incoming.createdAt && new Date(incoming.createdAt).getTime() < new Date('2026-09-07T00:00:00.000Z').getTime()) continue;
 
     const existing = map.get(key);
     if (!existing) {
@@ -1001,27 +984,30 @@ async function pullStateFromSupabaseOnBoot() {
 
     if (!error && data?.state) {
       const remoteState = sanitizeServerState(data.state);
-      const remoteShipmentsCount = remoteState.shipments?.length || 0;
-      const currentShipmentsCount = serverAppState?.shipments?.length || 0;
+      const remoteShipments = Array.isArray(remoteState.shipments) ? remoteState.shipments : [];
+      const currentShipments = Array.isArray(serverAppState?.shipments) ? serverAppState.shipments : [];
 
-      if (!serverAppState) {
-        serverAppState = remoteState;
-      } else {
-        // Merge shipments intelligently with anti-rollback logic
-        const mergedShipments = mergeShipmentsLists(serverAppState.shipments || [], remoteState.shipments || []);
-        const mergedUsers = sanitizeServerState({ users: [...(remoteState.users || []), ...(serverAppState.users || [])] }).users;
-        serverAppState = sanitizeServerState({
-          ...remoteState,
-          ...serverAppState,
-          shipments: mergedShipments,
-          users: mergedUsers,
-          couriers: remoteState.couriers || serverAppState.couriers,
-        });
-      }
+      // Merge shipments intelligently with anti-rollback logic - never drop existing shipments!
+      const mergedShipments = mergeShipmentsLists(currentShipments, remoteShipments);
+      const mergedUsers = sanitizeServerState({ users: [...(remoteState.users || []), ...(serverAppState?.users || [])] }).users;
+
+      serverAppState = sanitizeServerState({
+        ...remoteState,
+        ...(serverAppState || {}),
+        shipments: mergedShipments,
+        users: mergedUsers,
+        couriers: remoteState.couriers || serverAppState?.couriers,
+      });
+
       serverAppState = sanitizeServerState(serverAppState);
       serverLastUpdated = Date.now();
       console.log(`⚡ Server state synchronized with Supabase Cloud Database! (${serverAppState.shipments?.length || 0} shipments, ${serverAppState.users?.length || 0} users)`);
       fs.writeFileSync(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: serverLastUpdated }, null, 2));
+
+      // If server has more shipments than Supabase, push immediately to keep cloud updated
+      if (mergedShipments.length > remoteShipments.length) {
+        pushStateToSupabase(serverAppState, serverLastUpdated).catch(() => {});
+      }
     }
 
     // Ensure profiles table rows are mirrored and merged in users
@@ -1109,8 +1095,6 @@ async function pullStateFromSupabaseOnBoot() {
   }
 }
 
-pullStateFromSupabaseOnBoot();
-
 // Load initial state with backup fallback
 if (fs.existsSync(STATE_FILE)) {
   try {
@@ -1137,6 +1121,36 @@ if ((!serverAppState || Object.keys(serverAppState).length === 0) && fs.existsSy
     console.warn("Failed to load backup snapshot:", e);
   }
 }
+
+// Check all backups in BACKUPS_DIR to ensure we never lose shipments if a previous backup had more
+try {
+  let bestBackupShipments: any[] = [];
+  if (fs.existsSync(BACKUPS_DIR)) {
+    const backupFiles = fs.readdirSync(BACKUPS_DIR).filter(f => f.endsWith('.json'));
+    for (const bf of backupFiles) {
+      try {
+        const raw = fs.readFileSync(path.join(BACKUPS_DIR, bf), "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed.state?.shipments && Array.isArray(parsed.state.shipments) && parsed.state.shipments.length > bestBackupShipments.length) {
+          bestBackupShipments = parsed.state.shipments;
+        }
+      } catch (e) {}
+    }
+  }
+
+  if (bestBackupShipments.length > 0) {
+    const currentList = serverAppState?.shipments || [];
+    const merged = mergeShipmentsLists(currentList, bestBackupShipments);
+    if (!serverAppState) serverAppState = {};
+    serverAppState.shipments = merged;
+    console.log(`🛡️ Server verified ${merged.length} shipments against historical backups.`);
+  }
+} catch (e) {
+  console.warn("Backup check notice:", e);
+}
+
+// After disk state is securely loaded, sync with Supabase
+pullStateFromSupabaseOnBoot();
 
 // Web Push Registration Endpoints
 app.get("/api/push/vapid-public-key", (req, res) => {
@@ -1940,16 +1954,10 @@ app.post("/api/sync/state", (req, res) => {
 
     let mergedState = { ...state };
 
-    const shouldClearShipments = isExplicitClear === true;
-
-    if (shouldClearShipments) {
-      mergedState.shipments = [];
-      serverStatusLocks.clear();
-      saveServerStatusLocks();
-    } else if (Array.isArray(state.shipments) && state.shipments.length > 0) {
+    if (Array.isArray(state.shipments) && state.shipments.length > 0) {
       const serverList = (serverAppState && Array.isArray(serverAppState.shipments)) ? serverAppState.shipments : [];
       mergedState.shipments = mergeShipmentsLists(serverList, state.shipments);
-    } else if (serverAppState && Array.isArray(serverAppState.shipments)) {
+    } else if (serverAppState && Array.isArray(serverAppState.shipments) && serverAppState.shipments.length > 0) {
       mergedState.shipments = serverAppState.shipments;
     }
 
@@ -2314,6 +2322,69 @@ app.post("/api/users/confirm", async (req, res) => {
     }
 
     return res.json({ success: true, userId, isConfirmed });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 3.5. Change User Password endpoint (Direct Persistence, Server State & Supabase)
+app.post("/api/users/change-password", async (req, res) => {
+  try {
+    const { userId, newPassword } = req.body || {};
+    if (!userId || !newPassword || typeof newPassword !== 'string' || newPassword.trim().length < 4) {
+      return res.status(400).json({ error: "معرف الحساب وكلمة المرور الجديدة (4 أحرف على الأقل) مطلوبان" });
+    }
+
+    const cleanNewPassword = newPassword.trim();
+    let updatedUser: any = null;
+
+    if (serverAppState && Array.isArray(serverAppState.users)) {
+      const cleanTargetPhone = String(userId).replace(/\D/g, '');
+      const cleanTargetEmail = String(userId).toLowerCase();
+      
+      serverAppState.users = serverAppState.users.map((u: any) => {
+        const uPhoneDigits = u.phone ? String(u.phone).replace(/\D/g, '') : '';
+        const uEmail = u.email ? String(u.email).toLowerCase() : '';
+        if (
+          u.id === userId || 
+          (cleanTargetPhone && uPhoneDigits === cleanTargetPhone) ||
+          (uEmail && uEmail === cleanTargetEmail)
+        ) {
+          updatedUser = { ...u, password: cleanNewPassword };
+          return updatedUser;
+        }
+        return u;
+      });
+
+      // Also update in PRIMARY_ADMIN_USER if admin changed password
+      if (userId === 'admin_root' || (updatedUser && updatedUser.role === 'admin')) {
+        (PRIMARY_ADMIN_USER as any).password = cleanNewPassword;
+      }
+
+      const now = Date.now();
+      serverLastUpdated = now;
+      fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: now }), (err) => {
+        if (err) console.warn("Error writing state after password change:", err);
+      });
+      saveBackupSnapshot(serverAppState, now);
+
+      // Direct update to Supabase profiles or App state if configured
+      if (supabaseServer && updatedUser) {
+        try {
+          await supabaseServer.from('profiles').update({ updated_at: new Date().toISOString() }).eq('id', updatedUser.id);
+        } catch (err) {}
+      }
+      await pushStateToSupabase(serverAppState, now);
+
+      broadcastSseState(serverAppState, now, 'server_user_change_password');
+    }
+
+    return res.json({ 
+      success: true, 
+      userId, 
+      message: "تم تغيير كلمة المرور بنجاح وحفظها بشكل دائم في النظام",
+      user: updatedUser 
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

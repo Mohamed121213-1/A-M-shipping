@@ -371,14 +371,32 @@ class SyncEngine {
   private handleIncomingUpdate(data: SyncedAppState) {
     if (this.isProcessingIncoming) return;
 
-    // Sanitize state entities to purge dummy accounts and mock data
+    // Sanitize state entities and enforce Anti-Wipe Shield
     if (data.shipments !== undefined && Array.isArray(data.shipments)) {
+      let existingLocal: Shipment[] = [];
+      try {
+        const raw = localStorage.getItem('bosta_shipments');
+        if (raw) existingLocal = JSON.parse(raw);
+      } catch (e) {}
+      if (existingLocal.length === 0 && this.latestStateCache?.shipments) {
+        existingLocal = this.latestStateCache.shipments;
+      }
+
       if (data.shipments.length === 0) {
-        data.shipments = [];
+        // SHIELD: Do not allow empty incoming list to wipe out existing data!
+        if (existingLocal.length > 0) {
+          console.warn('🛡️ Anti-Wipe Shield: Rejected empty shipments incoming update, keeping existing shipments.');
+          data.shipments = existingLocal;
+        } else {
+          data.shipments = [];
+        }
       } else {
         const sanitizedIncoming = sanitizeShipments(data.shipments);
+        // Smart merge with existing local shipments so no shipments are accidentally dropped
+        const mergedList = mergeShipmentsLists(existingLocal, sanitizedIncoming);
+
         // Enforce persistent local locks for status transitions
-        data.shipments = sanitizedIncoming.map((s: Shipment) => {
+        data.shipments = mergedList.map((s: Shipment) => {
           const id = s.id || s.trackingNumber;
           const lock = this.localStatusLocks.get(id);
           if (lock && Date.now() - lock.timestamp < THIRTY_DAYS_MS) {
@@ -590,45 +608,31 @@ class SyncEngine {
             .from('bosta_app_state')
             .upsert({ id: 'global_state', state: payload, updated_at: new Date().toISOString() });
 
-          // 2. Sync shipments table
-          if (Array.isArray(payload.shipments)) {
-            if (payload.shipments.length === 0) {
-              try {
-                await supabase.from('shipments').delete().neq('id', '___none___');
-              } catch (err) {}
-            } else {
-              const mappedShipments = payload.shipments.map((s: any) => ({
-                id: String(s.id || s.trackingNumber),
-                tracking_number: String(s.trackingNumber || s.id || ''),
-                code: String(s.code || s.trackingNumber || s.id || ''),
-                status: String(s.status || 'created'),
-                customer_name: String(s.recipient?.name || s.customerName || ''),
-                customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
-                governorate: String(s.recipient?.governorate || s.governorate || ''),
-                city: String(s.recipient?.city || s.city || ''),
-                address: String(s.recipient?.streetAddress || s.address || ''),
-                cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
-                shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
-                net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
-                sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
-                courier_name: String(s.courier?.name || s.courierName || ''),
-                notes: String(s.recipient?.notes || s.notes || ''),
-                data: s,
-                created_at: s.createdAt || new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              }));
-              try {
-                await supabase.from('shipments').upsert(mappedShipments, { onConflict: 'id' });
-              } catch (err) {}
-
-              // Delete any shipments removed from state
-              try {
-                const currentIds = payload.shipments.map((s: any) => String(s.id || s.trackingNumber)).filter(Boolean);
-                if (currentIds.length > 0) {
-                  await supabase.from('shipments').delete().not('id', 'in', `(${currentIds.join(',')})`);
-                }
-              } catch (err) {}
-            }
+          // 2. Sync shipments table (upsert only, never mass delete on broadcast)
+          if (Array.isArray(payload.shipments) && payload.shipments.length > 0) {
+            const mappedShipments = payload.shipments.map((s: any) => ({
+              id: String(s.id || s.trackingNumber),
+              tracking_number: String(s.trackingNumber || s.id || ''),
+              code: String(s.code || s.trackingNumber || s.id || ''),
+              status: String(s.status || 'created'),
+              customer_name: String(s.recipient?.name || s.customerName || ''),
+              customer_phone: String(s.recipient?.phone || s.customerPhone || ''),
+              governorate: String(s.recipient?.governorate || s.governorate || ''),
+              city: String(s.recipient?.city || s.city || ''),
+              address: String(s.recipient?.streetAddress || s.address || ''),
+              cod_amount: Number(s.financials?.codAmount || s.codAmount || 0),
+              shipping_fee: Number(s.financials?.shippingFee || s.shippingFee || 0),
+              net_payout: Number(s.financials?.netPayout || s.netPayout || 0),
+              sender_name: String(s.sender?.storeName || s.sender?.contactName || s.senderName || ''),
+              courier_name: String(s.courier?.name || s.courierName || ''),
+              notes: String(s.recipient?.notes || s.notes || ''),
+              data: s,
+              created_at: s.createdAt || new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }));
+            try {
+              await supabase.from('shipments').upsert(mappedShipments, { onConflict: 'id' });
+            } catch (err) {}
           }
 
           // 3. Sync user profiles to 'profiles' table

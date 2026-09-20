@@ -21,7 +21,8 @@ import {
   MapPin,
   DollarSign,
   Database,
-  Users
+  Users,
+  KeyRound
 } from 'lucide-react';
 import { AppUserRole, MerchantWallet, UserSession, CourierNotification } from '../types';
 import { EnableNotifications } from './EnableNotifications';
@@ -40,6 +41,7 @@ interface HeaderProps {
   onOpenBackupModal?: () => void;
   currentUser?: UserSession | null;
   onOpenLogin?: () => void;
+  onOpenChangePassword?: () => void;
   onLogout?: () => void;
   notifications?: CourierNotification[];
   onNotificationClick?: (shipmentId: string, notifId: string) => void;
@@ -58,6 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenBackupModal,
   currentUser,
   onOpenLogin,
+  onOpenChangePassword,
   onLogout,
   notifications = [],
   onNotificationClick,
@@ -604,6 +607,17 @@ export const Header: React.FC<HeaderProps> = ({
                     </p>
                   </div>
                 </button>
+
+                {onOpenChangePassword && (
+                  <button
+                    onClick={onOpenChangePassword}
+                    title="تغيير كلمة المرور للحساب وعرضها"
+                    className="p-2 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors flex items-center gap-1 border border-transparent hover:border-amber-200"
+                  >
+                    <KeyRound className="w-4 h-4 text-amber-500" />
+                    <span className="hidden lg:inline text-[11px] font-extrabold text-slate-700">كلمة السر</span>
+                  </button>
+                )}
 
                 {onLogout && (
                   <button

@@ -89,17 +89,8 @@ export const DEPRECATED_DUMMY_PHONES = new Set([
   '01234567891', // fake duplicate
 ]);
 
-// Permanent purge list for the 46 old deleted shipments so they can never be resurrected
-export const PURGED_OLD_SHIPMENT_TRACKING_NUMBERS = new Set([
-  'BST-318207', 'BST-710061', 'BST-596169', 'BST-824992', 'BST-924803', 'BST-747443',
-  'BST-331929', 'BST-829765', 'BST-244095', 'BST-339834', 'BST-898354', 'BST-592398',
-  'BST-929361', 'BST-200893', 'BST-585071', 'BST-431846', 'BST-480234', 'BST-862573',
-  'BST-893139', 'BST-281073', 'BST-212631', 'BST-722692', 'BST-633295', 'BST-313166',
-  'BST-543443', 'BST-559796', 'BST-619707', 'BST-152528', 'BST-367621', 'BST-515715',
-  'BST-555076', 'BST-620920', 'BST-535734', 'BST-231465', 'BST-237828', 'BST-336905',
-  'BST-428675', 'BST-927727', 'BST-136036', 'BST-893238', 'BST-894174', 'BST-311789',
-  'BST-460427', 'BST-248160', 'BST-720323', 'BST-991501'
-]);
+// Empty set - no valid shipments are purged
+export const PURGED_OLD_SHIPMENT_TRACKING_NUMBERS = new Set<string>();
 
 export function isDeprecatedDummyUser(u: any): boolean {
   if (!u) return true;
@@ -303,10 +294,6 @@ export function sanitizeShipments(shipments?: Shipment[]): Shipment[] {
   return list
     .filter((s) => {
       if (!s || typeof s !== 'object' || (!s.id && !s.trackingNumber)) return false;
-      const tracking = s.trackingNumber || s.id;
-      if (tracking && PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(tracking)) return false;
-      if (s.id && PURGED_OLD_SHIPMENT_TRACKING_NUMBERS.has(s.id)) return false;
-      if (s.createdAt && new Date(s.createdAt).getTime() < new Date('2026-09-07T00:00:00.000Z').getTime()) return false;
       if (s.sender) {
         if (isDeprecatedDummyUser(s.sender)) return false;
         const sPhone = (s.sender.phone ? String(s.sender.phone) : '').replace(/\D/g, '');

@@ -16,6 +16,7 @@ import { MerchantAccountsView } from './components/MerchantAccountsView';
 import { LoginView, createSessionUser } from './components/LoginView';
 import { AdminPanelView } from './components/AdminPanelView';
 import { DataBackupModal } from './components/DataBackupModal';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { supabase, isSupabaseConfigured, mapSupabaseUserToSession } from './lib/supabase';
 import { syncEngine } from './lib/syncEngine';
 
@@ -45,12 +46,17 @@ export default function App() {
   const [shipments, setShipments] = useState<Shipment[]>(() => {
     const saved = loadLocalState<Shipment[]>('bosta_shipments', INITIAL_SHIPMENTS);
     const cleaned = sanitizeShipments(saved);
-    return cleaned;
+    const merged = mergeShipmentsLists(INITIAL_SHIPMENTS, cleaned);
+    return merged;
   });
 
   const [wallet, setWallet] = useState<MerchantWallet>(() => {
     const saved = loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET);
-    return sanitizeWallet(saved);
+    const cleaned = sanitizeWallet(saved);
+    if (cleaned.availableBalance === 0 && cleaned.pendingCod === 0 && INITIAL_MERCHANT_WALLET.availableBalance > 0) {
+      return INITIAL_MERCHANT_WALLET;
+    }
+    return cleaned;
   });
 
   // Dynamic system entities customizable by Admin
@@ -459,8 +465,12 @@ export default function App() {
 
     const unsubscribe = syncEngine.subscribe((incoming) => {
       isIncomingSyncRef.current = true;
-      if (incoming.shipments !== undefined && Array.isArray(incoming.shipments)) {
-        setShipments(incoming.shipments);
+      if (incoming.shipments !== undefined && Array.isArray(incoming.shipments) && incoming.shipments.length > 0) {
+        setShipments((prev) => {
+          const merged = mergeShipmentsLists(prev, incoming.shipments!);
+          try { localStorage.setItem('bosta_shipments', JSON.stringify(merged)); } catch (e) {}
+          return merged;
+        });
       }
       if (incoming.wallet) {
         setWallet(incoming.wallet);
@@ -852,6 +862,7 @@ export default function App() {
 
   // Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [selectedDetailShipment, setSelectedDetailShipment] = useState<Shipment | null>(null);
   const [selectedPrintShipment, setSelectedPrintShipment] = useState<Shipment | null>(null);
@@ -2763,6 +2774,7 @@ export default function App() {
           onOpenBackupModal={() => setIsBackupModalOpen(true)}
           currentUser={currentUser}
           onOpenLogin={() => setActiveTab('login')}
+          onOpenChangePassword={() => setIsChangePasswordOpen(true)}
           onLogout={handleLogout}
           notifications={courierNotifications}
           onNotificationClick={(shipmentId, notifId) => {
@@ -2802,6 +2814,7 @@ export default function App() {
                 currentUser={currentUser}
                 couriers={couriers}
                 onOpenPrintModal={(s) => setSelectedPrintShipment(s)}
+                onOpenChangePassword={() => setIsChangePasswordOpen(true)}
               />
             ) : currentUser.role === 'merchant' ? (
               <>
@@ -3083,6 +3096,29 @@ export default function App() {
         }}
         onRestoreState={handleRestoreState}
       />
+
+      {currentUser && (
+        <ChangePasswordModal
+          isOpen={isChangePasswordOpen}
+          onClose={() => setIsChangePasswordOpen(false)}
+          currentUser={currentUser}
+          onPasswordChanged={(updatedUser) => {
+            // 1. Update local users array
+            setUsers((prev) => {
+              const nextUsers = prev.map((u) => (u.id === updatedUser.id ? updatedUser : u));
+              try { localStorage.setItem('bosta_users', JSON.stringify(nextUsers)); } catch (e) {}
+              return nextUsers;
+            });
+            // 2. Close modal
+            setIsChangePasswordOpen(false);
+            // 3. Clear session and force user to log in with the new password
+            setCurrentUser(null);
+            try { localStorage.removeItem('bosta_current_user'); } catch (e) {}
+            setActiveTab('login');
+            showToast('🔒 تم تغيير كلمة المرور بنجاح! يرجى تسجيل الدخول بكلمة المرور الجديدة.');
+          }}
+        />
+      )}
 
       {/* Footer - Only shown when logged in and without image or hotline */}
       {currentUser && (

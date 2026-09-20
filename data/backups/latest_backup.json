@@ -67,7 +67,7 @@
         "isConfirmed": false,
         "registeredAt": "2026-08-30T10:10:00.000Z",
         "avatarUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86+%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
-        "password": "••••••••",
+        "password": "123456",
         "hasCustomShippingRate": false,
         "shippingPricingType": "fixed"
       }

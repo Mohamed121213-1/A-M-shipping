@@ -338,12 +338,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         // Check password validity
         const userPassword = matchingSystemUser.password;
-        const isPasswordCorrect = 
-          !userPassword || 
-          userPassword === password || 
-          password === '123456' || 
-          password === matchingSystemUser.phone ||
-          (userPassword.trim() === '' && password.length >= 4);
+        let isPasswordCorrect = false;
+        
+        if (userPassword && userPassword.trim() !== '') {
+          // If a password is set, the entered password must match it exactly
+          isPasswordCorrect = (userPassword === password);
+        } else {
+          // Fallback if no password is set at all for initial demo
+          isPasswordCorrect = (password === '123456' || password === matchingSystemUser.phone);
+        }
 
         if (!isPasswordCorrect) {
           setErrorMessage('❌ كلمة المرور غير صحيحة. يرجى التأكد من كلمة المرور المدخلة.');

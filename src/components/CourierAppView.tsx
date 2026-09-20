@@ -53,6 +53,7 @@ interface CourierAppViewProps {
   couriers?: CourierInfo[];
   onSettleCourierCustody?: (courierId: string, netAmount?: number, grossAmount?: number, commission?: number) => void;
   onOpenPrintModal?: (shipment: Shipment) => void;
+  onOpenChangePassword?: () => void;
 }
 
 export const CourierAppView: React.FC<CourierAppViewProps> = ({
@@ -67,6 +68,7 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
   couriers = [],
   onSettleCourierCustody,
   onOpenPrintModal,
+  onOpenChangePassword,
 }) => {
   const fallbackCourier: CourierInfo = couriers[0] || {
     id: 'cour-placeholder',
@@ -395,6 +397,19 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
               </span>
             )}
           </button>
+
+          {/* Change Password Button */}
+          {onOpenChangePassword && (
+            <button
+              type="button"
+              onClick={onOpenChangePassword}
+              className="p-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded-xl border border-amber-500/30 transition-all flex items-center gap-1 text-[10px] font-extrabold cursor-pointer"
+              title="تغيير كلمة المرور الخاصة بالحساب وعرضها"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">كلمة السر</span>
+            </button>
+          )}
 
           {/* Quick Device Notification Setup/Test Button for Couriers */}
           <button
