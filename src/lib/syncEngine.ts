@@ -119,10 +119,10 @@ class SyncEngine {
       this.fetchPersistedStateFromServer();
       this.initSseStream();
       
-      // Safety fallback poll every 5 seconds
+      // Safety fallback poll every 60 seconds (reduced to prevent sync storms)
       setInterval(() => {
         this.fetchPersistedStateFromServer();
-      }, 5000);
+      }, 60000);
 
       // Re-check and sync state immediately when phone is unlocked, tab becomes visible, or on focus
       document.addEventListener('visibilitychange', () => {
@@ -408,8 +408,40 @@ class SyncEngine {
         });
       }
     }
-    if (data.users) data.users = sanitizeUsers(data.users);
-    if (data.couriers) data.couriers = sanitizeCouriers(data.couriers);
+    // Anti-Wipe Shield for users — never allow empty incoming to wipe accounts
+    if (data.users !== undefined && Array.isArray(data.users)) {
+      let existingUsers: UserSession[] = [];
+      try {
+        const raw = localStorage.getItem('bosta_users');
+        if (raw) existingUsers = JSON.parse(raw);
+      } catch (e) {}
+      if (existingUsers.length === 0 && this.latestStateCache?.users) {
+        existingUsers = this.latestStateCache.users;
+      }
+      if (data.users.length === 0 && existingUsers.length > 0) {
+        console.warn('🛡️ Anti-Wipe Shield: Rejected empty users update, keeping existing accounts.');
+        data.users = existingUsers;
+      } else {
+        data.users = sanitizeUsers([...existingUsers, ...data.users]);
+      }
+    }
+
+    // Anti-Wipe Shield for couriers
+    if (data.couriers !== undefined && Array.isArray(data.couriers)) {
+      let existingCouriers: CourierInfo[] = [];
+      try {
+        const raw = localStorage.getItem('bosta_couriers');
+        if (raw) existingCouriers = JSON.parse(raw);
+      } catch (e) {}
+      if (data.couriers.length === 0 && existingCouriers.length > 0) {
+        console.warn('🛡️ Anti-Wipe Shield: Rejected empty couriers update.');
+        data.couriers = existingCouriers;
+      } else {
+        data.couriers = sanitizeCouriers(data.couriers);
+      }
+    } else if (data.couriers) {
+      data.couriers = sanitizeCouriers(data.couriers);
+    }
     if (data.wallet) data.wallet = sanitizeWallet(data.wallet);
     if (data.companyTransactions) data.companyTransactions = sanitizeCompanyTxns(data.companyTransactions);
 
@@ -482,27 +514,7 @@ class SyncEngine {
         }
       }
 
-      // Also sync profiles table rows
-      const { data: pRows } = await supabase.from('profiles').select('*');
-      if (pRows && Array.isArray(pRows) && pRows.length > 0) {
-        const mappedUsers: UserSession[] = pRows
-          .filter((p: any) => p && !isDeprecatedDummyUser(p))
-          .map((p: any) => ({
-            id: String(p.id),
-            name: p.name || 'مستخدم',
-            email: p.email || (p.phone ? `${p.phone}@am-shipping.eg` : `${p.id}@am-shipping.eg`),
-            phone: p.phone ? String(p.phone) : '',
-            role: p.role || 'merchant',
-            storeName: p.store_name || undefined,
-            isConfirmed: p.is_confirmed !== undefined ? Boolean(p.is_confirmed) : true,
-            registeredAt: p.created_at || new Date().toISOString(),
-            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'مستخدم')}&background=dc2626&color=ffffff`
-          }));
-
-        const currentUsers = this.getLatestState()?.users || [];
-        const merged = sanitizeUsers([...currentUsers, ...mappedUsers]);
-        this.handleIncomingUpdate({ users: merged, senderId: 'supabase_profiles_pull' });
-      }
+      // لا نسحب profiles تلقائياً — يمنع إعادة حسابات محذوفة من Supabase
     } catch (e) {
       // Table may not exist yet in Supabase project, ignore
     }

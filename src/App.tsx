@@ -44,19 +44,12 @@ const loadLocalState = <T,>(key: string, defaultValue: T): T => {
 
 export default function App() {
   const [shipments, setShipments] = useState<Shipment[]>(() => {
-    const saved = loadLocalState<Shipment[]>('bosta_shipments', INITIAL_SHIPMENTS);
-    const cleaned = sanitizeShipments(saved);
-    const merged = mergeShipmentsLists(INITIAL_SHIPMENTS, cleaned);
-    return merged;
+    const saved = loadLocalState<Shipment[]>('bosta_shipments', []);
+    return sanitizeShipments(saved);
   });
 
   const [wallet, setWallet] = useState<MerchantWallet>(() => {
-    const saved = loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET);
-    const cleaned = sanitizeWallet(saved);
-    if (cleaned.availableBalance === 0 && cleaned.pendingCod === 0 && INITIAL_MERCHANT_WALLET.availableBalance > 0) {
-      return INITIAL_MERCHANT_WALLET;
-    }
-    return cleaned;
+    return sanitizeWallet(loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET));
   });
 
   // Dynamic system entities customizable by Admin
@@ -376,6 +369,39 @@ export default function App() {
     activeCourierIdRef.current = activeCourierIdInApp;
   }, [activeCourierIdInApp]);
 
+  // One-time factory reset: wipe stale local data, keep admin only (v3)
+  useEffect(() => {
+    const RESET_KEY = 'bosta_factory_reset_v3_applied';
+    if (localStorage.getItem(RESET_KEY)) return;
+    try {
+      localStorage.setItem('bosta_shipments', '[]');
+      localStorage.setItem('bosta_wallet', JSON.stringify({ ...INITIAL_MERCHANT_WALLET, availableBalance: 0, pendingCod: 0, totalPaidOut: 0 }));
+      localStorage.setItem('bosta_users', JSON.stringify([PRIMARY_ADMIN_USER]));
+      localStorage.setItem('bosta_couriers', '[]');
+      localStorage.setItem('bosta_courier_notifications', '[]');
+      localStorage.setItem('bosta_company_txns', '[]');
+      localStorage.removeItem('bosta_current_user');
+      localStorage.setItem(RESET_KEY, new Date().toISOString());
+    } catch (e) {
+      console.warn('Factory reset notice:', e);
+    }
+    setShipments([]);
+    setWallet({ ...INITIAL_MERCHANT_WALLET, availableBalance: 0, pendingCod: 0, totalPaidOut: 0 });
+    setUsers([PRIMARY_ADMIN_USER]);
+    setCouriers([]);
+    setCourierNotifications([]);
+    setCompanyTransactions([]);
+    setCurrentUser(null);
+    syncEngine.broadcastState({
+      shipments: [],
+      wallet: { ...INITIAL_MERCHANT_WALLET, availableBalance: 0, pendingCod: 0, totalPaidOut: 0 },
+      users: [PRIMARY_ADMIN_USER],
+      couriers: [],
+      notifications: [],
+      companyTransactions: [],
+    }, true);
+  }, []);
+
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
     // Immediate hydration from authoritative server state
@@ -435,33 +461,7 @@ export default function App() {
       })
       .catch(() => {});
 
-    if (isSupabaseConfigured) {
-      supabase
-        .from('profiles')
-        .select('*')
-        .then(({ data: pRows }) => {
-          if (pRows && Array.isArray(pRows)) {
-            const mappedUsers: UserSession[] = pRows
-              .filter((p: any) => p && !isDeprecatedDummyUser(p))
-              .map((p: any) => ({
-                id: String(p.id),
-                name: p.name || 'مستخدم',
-                email: p.email || (p.phone ? `${p.phone}@am-shipping.eg` : `${p.id}@am-shipping.eg`),
-                phone: p.phone ? String(p.phone) : '',
-                role: p.role || 'merchant',
-                storeName: p.store_name || undefined,
-                isConfirmed: p.is_confirmed !== undefined ? Boolean(p.is_confirmed) : true,
-                registeredAt: p.created_at || new Date().toISOString(),
-                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'مستخدم')}&background=dc2626&color=ffffff`
-              }));
-            setUsers((prev) => {
-              const cleaned = sanitizeUsers([...prev, ...mappedUsers]);
-              try { localStorage.setItem('bosta_users', JSON.stringify(cleaned)); } catch (e) {}
-              return cleaned;
-            });
-          }
-        });
-    }
+    // Supabase profiles: لا ندمج تلقائياً — يمنع إعادة حسابات محذوفة
 
     const unsubscribe = syncEngine.subscribe((incoming) => {
       isIncomingSyncRef.current = true;

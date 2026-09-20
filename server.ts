@@ -387,80 +387,11 @@ export const PRIMARY_ADMIN_USER = {
   registeredAt: '2026-08-30T00:00:00.000Z',
 };
 
-export const AUTHORIZED_SYSTEM_USERS = [
-  PRIMARY_ADMIN_USER,
-  {
-    id: 'USR-1788361785496-4492',
-    name: 'ام فاتن',
-    email: '01017266727@am-shipping.eg',
-    phone: '01017266727',
-    role: 'merchant',
-    storeName: 'To you',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D9%85+%D9%81%D8%A7%D8%AA%D9%86&background=059669&color=ffffff',
-    isConfirmed: true,
-    registeredAt: '2026-09-01T00:00:00.000Z',
-  },
-  {
-    id: 'USR-1788364629634-8301',
-    name: 'Ibrahim',
-    email: '01118003293@am-shipping.eg',
-    phone: '01118003293',
-    role: 'hub_manager',
-    hubName: 'مستودع القاهرة الرئيسي - رمسيس',
-    avatarUrl: 'https://ui-avatars.com/api/?name=Ibrahim&background=2563eb&color=ffffff',
-    isConfirmed: true,
-    registeredAt: '2026-09-01T00:00:00.000Z',
-  },
-  {
-    id: 'USR-1788364520004-8809',
-    name: 'احمد رشاد',
-    email: '01033011862@am-shipping.eg',
-    phone: '01033011862',
-    role: 'courier',
-    courierVehicle: 'دراجة نارية / موتوسيكل',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF+%D8%B1%D8%B4%D8%A7%D8%AF&background=d97706&color=ffffff',
-    isConfirmed: true,
-    registeredAt: '2026-09-01T00:00:00.000Z',
-  },
-  {
-    id: 'USR-1788364242163-4812',
-    name: 'حسن علي',
-    email: '01093383328@am-shipping.eg',
-    phone: '01093383328',
-    role: 'courier',
-    courierVehicle: 'دراجة نارية / موتوسيكل',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86+%D8%B9%D9%84%D9%8A&background=d97706&color=ffffff',
-    isConfirmed: true,
-    registeredAt: '2026-09-01T00:00:00.000Z',
-  },
-];
+export const AUTHORIZED_SYSTEM_USERS = [PRIMARY_ADMIN_USER];
 
 const SUPABASE_SYNCED_USERS = AUTHORIZED_SYSTEM_USERS;
 
-export const AUTHORIZED_COURIERS = [
-  {
-    id: 'USR-1788364520004-8809',
-    name: 'احمد رشاد',
-    phone: '01033011862',
-    vehicle: 'motocycle',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF+%D8%B1%D8%B4%D8%A7%D8%AF&background=d97706&color=ffffff',
-    activeDeliveriesCount: 0,
-    rating: 5.0,
-    governorate: 'القاهرة',
-    zone: 'القاهرة والجيزة'
-  },
-  {
-    id: 'USR-1788364242163-4812',
-    name: 'حسن علي',
-    phone: '01093383328',
-    vehicle: 'motocycle',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86+%D8%B9%D9%84%D9%8A&background=d97706&color=ffffff',
-    activeDeliveriesCount: 12,
-    rating: 5.0,
-    governorate: 'القاهرة',
-    zone: 'القاهرة والجيزة'
-  }
-];
+export const AUTHORIZED_COURIERS: any[] = [];
 
 export const DEPRECATED_DUMMY_IDS = new Set([
   '15c6e6d1-df23-4e20-a464-e4df09590e4d', // Amr
@@ -495,11 +426,6 @@ function isDeprecatedDummyUser(u: any): boolean {
   if (u.id === 'admin_root' || u.phone === '01000000001' || u.email === 'mohamedsalah565657@icloud.com' || u.email === 'mohamedsalah565657@gmail.com') {
     return false;
   }
-  if (u.id === 'USR-1788361785496-4492' || u.phone === '01017266727') return false;
-  if (u.id === 'USR-1788364629634-8301' || u.phone === '01118003293') return false;
-  if (u.id === 'USR-1788364520004-8809' || u.phone === '01033011862') return false;
-  if (u.id === 'USR-1788364242163-4812' || u.phone === '01093383328') return false;
-
   if (u.id && DEPRECATED_DUMMY_IDS.has(String(u.id))) return true;
   if (u.phone) {
     const cleanPhone = String(u.phone).replace(/\D/g, '');
@@ -1095,58 +1021,96 @@ async function pullStateFromSupabaseOnBoot() {
   }
 }
 
-// Load initial state with backup fallback
-if (fs.existsSync(STATE_FILE)) {
-  try {
-    const raw = fs.readFileSync(STATE_FILE, "utf-8");
-    const parsed = JSON.parse(raw);
-    serverAppState = sanitizeServerState(parsed.state || null);
-    serverLastUpdated = parsed.timestamp || 0;
-  } catch (e) {
-    console.warn("Failed to read app_state.json:", e);
-  }
+const FACTORY_RESET_MARKER = path.join(DATA_DIR, ".factory_reset_v3_applied");
+
+function createCleanServerState() {
+  return sanitizeServerState({
+    shipments: [],
+    users: [PRIMARY_ADMIN_USER],
+    couriers: [],
+    notifications: [],
+    companyTransactions: [],
+    wallet: {
+      merchantId: "merch-admin-default",
+      merchantName: "المحفظة الرئيسية",
+      availableBalance: 0,
+      pendingCod: 0,
+      totalPaidOut: 0,
+    },
+    governorates: EGYPT_GOVERNORATES,
+  });
 }
 
-// Fallback to latest backup if main file was empty or corrupted
-if ((!serverAppState || Object.keys(serverAppState).length === 0) && fs.existsSync(LATEST_BACKUP_FILE)) {
+// Factory reset v3: wipe all operational data, keep admin only (one-time)
+if (!fs.existsSync(FACTORY_RESET_MARKER)) {
+  serverAppState = createCleanServerState();
+  serverLastUpdated = Date.now();
   try {
-    const raw = fs.readFileSync(LATEST_BACKUP_FILE, "utf-8");
-    const parsed = JSON.parse(raw);
-    if (parsed.state) {
-      serverAppState = sanitizeServerState(parsed.state);
-      serverLastUpdated = parsed.timestamp || Date.now();
-      console.log("Restored server state from latest backup snapshot!");
+    fs.writeFileSync(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: serverLastUpdated }, null, 2));
+    fs.writeFileSync(FACTORY_RESET_MARKER, new Date().toISOString());
+    console.log("🧹 Factory reset v3 applied — clean state with admin only.");
+    if (supabaseServer) {
+      supabaseServer.from("shipments").delete().neq("id", "___none___").then(() => {}).catch(() => {});
+      supabaseServer.from("bosta_app_state").upsert({
+        id: "global_state",
+        state: serverAppState,
+        updated_at: new Date().toISOString(),
+      }).then(() => {}).catch(() => {});
     }
   } catch (e) {
-    console.warn("Failed to load backup snapshot:", e);
+    console.warn("Factory reset write notice:", e);
   }
-}
-
-// Check all backups in BACKUPS_DIR to ensure we never lose shipments if a previous backup had more
-try {
-  let bestBackupShipments: any[] = [];
-  if (fs.existsSync(BACKUPS_DIR)) {
-    const backupFiles = fs.readdirSync(BACKUPS_DIR).filter(f => f.endsWith('.json'));
-    for (const bf of backupFiles) {
-      try {
-        const raw = fs.readFileSync(path.join(BACKUPS_DIR, bf), "utf-8");
-        const parsed = JSON.parse(raw);
-        if (parsed.state?.shipments && Array.isArray(parsed.state.shipments) && parsed.state.shipments.length > bestBackupShipments.length) {
-          bestBackupShipments = parsed.state.shipments;
-        }
-      } catch (e) {}
+} else {
+  // Load initial state with backup fallback
+  if (fs.existsSync(STATE_FILE)) {
+    try {
+      const raw = fs.readFileSync(STATE_FILE, "utf-8");
+      const parsed = JSON.parse(raw);
+      serverAppState = sanitizeServerState(parsed.state || null);
+      serverLastUpdated = parsed.timestamp || 0;
+    } catch (e) {
+      console.warn("Failed to read app_state.json:", e);
     }
   }
 
-  if (bestBackupShipments.length > 0) {
+  // Fallback to latest backup ONLY if main file is empty/corrupted
+  if ((!serverAppState || Object.keys(serverAppState).length === 0) && fs.existsSync(LATEST_BACKUP_FILE)) {
+    try {
+      const raw = fs.readFileSync(LATEST_BACKUP_FILE, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (parsed.state) {
+        serverAppState = sanitizeServerState(parsed.state);
+        serverLastUpdated = parsed.timestamp || Date.now();
+        console.log("Restored server state from latest backup snapshot!");
+      }
+    } catch (e) {
+      console.warn("Failed to load backup snapshot:", e);
+    }
+  }
+
+  // Restore from backups ONLY when current shipments list is empty (disaster recovery)
+  try {
     const currentList = serverAppState?.shipments || [];
-    const merged = mergeShipmentsLists(currentList, bestBackupShipments);
-    if (!serverAppState) serverAppState = {};
-    serverAppState.shipments = merged;
-    console.log(`🛡️ Server verified ${merged.length} shipments against historical backups.`);
+    if (currentList.length === 0 && fs.existsSync(BACKUPS_DIR)) {
+      let bestBackupShipments: any[] = [];
+      const backupFiles = fs.readdirSync(BACKUPS_DIR).filter((f) => f.endsWith(".json"));
+      for (const bf of backupFiles) {
+        try {
+          const raw = fs.readFileSync(path.join(BACKUPS_DIR, bf), "utf-8");
+          const parsed = JSON.parse(raw);
+          if (parsed.state?.shipments && Array.isArray(parsed.state.shipments) && parsed.state.shipments.length > bestBackupShipments.length) {
+            bestBackupShipments = parsed.state.shipments;
+          }
+        } catch (e) {}
+      }
+      if (bestBackupShipments.length > 0 && serverAppState) {
+        serverAppState.shipments = bestBackupShipments;
+        console.log(`🛡️ Disaster recovery: restored ${bestBackupShipments.length} shipments from backup.`);
+      }
+    }
+  } catch (e) {
+    console.warn("Backup check notice:", e);
   }
-} catch (e) {
-  console.warn("Backup check notice:", e);
 }
 
 // After disk state is securely loaded, sync with Supabase

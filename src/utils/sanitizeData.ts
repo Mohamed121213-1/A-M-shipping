@@ -11,57 +11,10 @@ export const PRIMARY_ADMIN_USER: UserSession = {
   registeredAt: '2026-08-30T00:00:00.000Z',
 };
 
-// The exact 5 authorized accounts requested by the user:
-// 1 Admin, 1 Merchant, 1 Hub Manager, 2 Couriers
-export const AUTHORIZED_SYSTEM_USERS: UserSession[] = [
-  PRIMARY_ADMIN_USER,
-  {
-    id: 'USR-1788361785496-4492',
-    name: 'ام فاتن',
-    email: '01017266727@am-shipping.eg',
-    phone: '01017266727',
-    role: 'merchant',
-    storeName: 'To you',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D9%85+%D9%81%D8%A7%D8%AA%D9%86&background=059669&color=ffffff',
-    isConfirmed: true,
-    registeredAt: '2026-09-01T00:00:00.000Z',
-  },
-  {
-    id: 'USR-1788364629634-8301',
-    name: 'Ibrahim',
-    email: '01118003293@am-shipping.eg',
-    phone: '01118003293',
-    role: 'hub_manager',
-    hubName: 'مستودع القاهرة الرئيسي - رمسيس',
-    avatarUrl: 'https://ui-avatars.com/api/?name=Ibrahim&background=2563eb&color=ffffff',
-    isConfirmed: true,
-    registeredAt: '2026-09-01T00:00:00.000Z',
-  },
-  {
-    id: 'USR-1788364520004-8809',
-    name: 'احمد رشاد',
-    email: '01033011862@am-shipping.eg',
-    phone: '01033011862',
-    role: 'courier',
-    courierVehicle: 'دراجة نارية / موتوسيكل',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF+%D8%B1%D8%B4%D8%A7%D8%AF&background=d97706&color=ffffff',
-    isConfirmed: true,
-    registeredAt: '2026-09-01T00:00:00.000Z',
-  },
-  {
-    id: 'USR-1788364242163-4812',
-    name: 'حسن علي',
-    email: '01093383328@am-shipping.eg',
-    phone: '01093383328',
-    role: 'courier',
-    courierVehicle: 'دراجة نارية / موتوسيكل',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86+%D8%B9%D9%84%D9%8A&background=d97706&color=ffffff',
-    isConfirmed: true,
-    registeredAt: '2026-09-01T00:00:00.000Z',
-  },
-];
+/** الحساب الإداري الوحيد المعتمد في النظام */
+export const AUTHORIZED_SYSTEM_USERS: UserSession[] = [PRIMARY_ADMIN_USER];
 
-export const SUPABASE_SYNCED_USERS: UserSession[] = AUTHORIZED_SYSTEM_USERS;
+export const SUPABASE_SYNCED_USERS: UserSession[] = [PRIMARY_ADMIN_USER];
 
 // Blacklist of unknown / fake dummy IDs that were accidentally generated
 export const DEPRECATED_DUMMY_IDS = new Set([
@@ -98,11 +51,6 @@ export function isDeprecatedDummyUser(u: any): boolean {
   if (u.id === 'admin_root' || u.phone === '01000000001' || u.email === 'mohamedsalah565657@icloud.com' || u.email === 'mohamedsalah565657@gmail.com') {
     return false;
   }
-  if (u.id === 'USR-1788361785496-4492' || u.phone === '01017266727') return false;
-  if (u.id === 'USR-1788364629634-8301' || u.phone === '01118003293') return false;
-  if (u.id === 'USR-1788364520004-8809' || u.phone === '01033011862') return false;
-  if (u.id === 'USR-1788364242163-4812' || u.phone === '01093383328') return false;
-
   if (u.id && DEPRECATED_DUMMY_IDS.has(String(u.id))) return true;
   if (u.phone) {
     const cleanPhone = String(u.phone).replace(/\D/g, '');
@@ -225,63 +173,21 @@ export function sanitizeUsers(users?: UserSession[]): UserSession[] {
     result.unshift(PRIMARY_ADMIN_USER);
   }
 
-  const KNOWN_ROLES: Record<string, AppUserRole> = {
-    'admin_root': 'admin',
-    'USR-1788361785496-4492': 'merchant',
-    'USR-1788364629634-8301': 'hub_manager',
-    'USR-1788364520004-8809': 'courier',
-    'USR-1788364242163-4812': 'courier',
-  };
-
   return result.map((u) => {
-    if (KNOWN_ROLES[u.id]) {
-      return { ...u, role: KNOWN_ROLES[u.id] };
+    if (u.id === 'admin_root') {
+      return { ...u, role: 'admin' as AppUserRole, isConfirmed: true };
     }
     return u;
   });
 }
 
-export const AUTHORIZED_COURIERS: CourierInfo[] = [
-  {
-    id: 'USR-1788364520004-8809',
-    name: 'احمد رشاد',
-    phone: '01033011862',
-    vehicle: 'motocycle',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF+%D8%B1%D8%B4%D8%A7%D8%AF&background=d97706&color=ffffff',
-    activeDeliveriesCount: 0,
-    rating: 5.0,
-    governorate: 'القاهرة',
-    zone: 'القاهرة والجيزة'
-  },
-  {
-    id: 'USR-1788364242163-4812',
-    name: 'حسن علي',
-    phone: '01093383328',
-    vehicle: 'motocycle',
-    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86+%D8%B9%D9%84%D9%8A&background=d97706&color=ffffff',
-    activeDeliveriesCount: 12,
-    rating: 5.0,
-    governorate: 'القاهرة',
-    zone: 'القاهرة والجيزة'
-  }
-];
-
 export function sanitizeCouriers(couriers?: CourierInfo[]): CourierInfo[] {
-  const list = Array.isArray(couriers) && couriers.length > 0 ? couriers : AUTHORIZED_COURIERS;
-  const filtered = list.filter((c) => {
+  const list = Array.isArray(couriers) ? couriers : [];
+  return list.filter((c) => {
     if (!c || typeof c !== 'object' || !c.id || !c.name) return false;
     if (c.phone && DEPRECATED_DUMMY_PHONES.has(String(c.phone).replace(/\D/g, ''))) return false;
     return true;
   });
-
-  const map = new Map<string, CourierInfo>();
-  for (const c of AUTHORIZED_COURIERS) {
-    map.set(c.id, c);
-  }
-  for (const c of filtered) {
-    map.set(c.id, { ...(map.get(c.id) || {}), ...c });
-  }
-  return Array.from(map.values());
 }
 
 export function sanitizeCompanyTxns(txns?: CompanyTransaction[]): CompanyTransaction[] {
