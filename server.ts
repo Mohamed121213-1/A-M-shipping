@@ -1109,35 +1109,8 @@ if ((!serverAppState || Object.keys(serverAppState).length === 0) && fs.existsSy
   }
 }
 
-// Check all backups in BACKUPS_DIR to ensure we never lose shipments if a previous backup had more
-try {
-  let bestBackupShipments: any[] = [];
-  if (fs.existsSync(BACKUPS_DIR)) {
-    const backupFiles = fs.readdirSync(BACKUPS_DIR).filter(f => f.endsWith('.json'));
-    for (const bf of backupFiles) {
-      try {
-        const raw = fs.readFileSync(path.join(BACKUPS_DIR, bf), "utf-8");
-        const parsed = JSON.parse(raw);
-        if (parsed.state?.shipments && Array.isArray(parsed.state.shipments) && parsed.state.shipments.length > bestBackupShipments.length) {
-          bestBackupShipments = parsed.state.shipments;
-        }
-      } catch (e) {}
-    }
-  }
-
-  if (bestBackupShipments.length > 0) {
-    const currentList = serverAppState?.shipments || [];
-    const filteredBackup = bestBackupShipments.filter(
-      (s: any) => !serverDeletedShipments.has(String(s?.id)) && !serverDeletedShipments.has(String(s?.trackingNumber))
-    );
-    const merged = mergeShipmentsLists(currentList, filteredBackup);
-    if (!serverAppState) serverAppState = {};
-    serverAppState.shipments = merged;
-    console.log(`🛡️ Server verified ${merged.length} shipments against historical backups.`);
-  }
-} catch (e) {
-  console.warn("Backup check notice:", e);
-}
+// Historical backups are for manual disaster recovery only and must not automatically resurrect deleted shipments
+// Startup solely uses STATE_FILE or LATEST_BACKUP_FILE if state file is completely missing or empty.
 
 // After disk state is securely loaded, sync with Supabase
 pullStateFromSupabaseOnBoot();

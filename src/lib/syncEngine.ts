@@ -452,8 +452,9 @@ class SyncEngine {
         data.shipments = [];
       } else {
         const sanitizedIncoming = sanitizeShipments(data.shipments);
-        // Smart merge with existing local shipments while strictly filtering out deleted ones
-        const mergedList = mergeShipmentsLists(existingLocal, sanitizedIncoming).filter(
+        // If the update is authoritative from server, do not resurrect vanished/deleted shipments from existingLocal
+        const isServerAuthoritative = data.senderId === 'server_authoritative_sync' || (typeof data.senderId === 'string' && data.senderId.startsWith('server'));
+        const mergedList = (isServerAuthoritative ? sanitizedIncoming : mergeShipmentsLists(existingLocal, sanitizedIncoming)).filter(
           (s) => !this.deletedShipmentIds.has(String(s.id)) && !this.deletedShipmentIds.has(String(s.trackingNumber))
         );
 
