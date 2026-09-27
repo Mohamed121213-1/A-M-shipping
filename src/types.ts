@@ -103,6 +103,7 @@ export interface CourierInfo {
   commissionType?: 'fixed' | 'percentage'; // نوع العمولة (مبلغ ثابت لكل شحنة أو نسبة من سعر الشحن)
   commissionValue?: number;                // قيمة العمولة (مثلا 20 ج.م أو 15%)
   totalCommissionEarned?: number;          // إجمالي العمولات المستحقة للمندوب
+  isConfirmed?: boolean;
 }
 
 export interface HubInfo {

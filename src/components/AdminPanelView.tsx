@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { exportShipmentsToExcel } from '../utils/excelExport';
 import { 
   Users, 
@@ -642,7 +642,46 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
     return matchesRole && matchesSearch;
   });
 
-  const filteredCouriers = couriers.filter((c) => {
+  // Merge couriers passed with any users who have role === 'courier' to guarantee 100% visibility of all delegate accounts
+  const mergedCouriersList = useMemo(() => {
+    const map = new Map<string, CourierInfo>();
+    (couriers || []).forEach((c) => {
+      if (c && c.id) map.set(String(c.id), c);
+    });
+    (users || []).forEach((u) => {
+      if (u && u.role === 'courier') {
+        const uId = String(u.id);
+        const cleanPhone = u.phone ? String(u.phone).trim() : '';
+        const existing = map.get(uId) || (cleanPhone ? Array.from(map.values()).find((x) => x.phone === cleanPhone) : undefined);
+        if (existing) {
+          map.set(existing.id, {
+            ...existing,
+            name: u.name || existing.name,
+            phone: u.phone || existing.phone,
+            photoUrl: u.avatarUrl || existing.photoUrl,
+            avatarUrl: u.avatarUrl || existing.avatarUrl,
+            isConfirmed: u.isConfirmed !== undefined ? u.isConfirmed : existing.isConfirmed,
+          });
+        } else {
+          map.set(uId, {
+            id: uId,
+            name: u.name,
+            phone: u.phone || '',
+            vehicle: u.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
+            assignedHub: u.hubName || 'المستودع الرئيسي',
+            rating: 5.0,
+            activeDeliveriesCount: 0,
+            photoUrl: u.avatarUrl,
+            avatarUrl: u.avatarUrl,
+            isConfirmed: u.isConfirmed !== undefined ? u.isConfirmed : false,
+          });
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [couriers, users]);
+
+  const filteredCouriers = mergedCouriersList.filter((c) => {
     if (!c) return false;
     const search = (courierSearch || '').trim().toLowerCase();
     if (!search) return true;
@@ -803,7 +842,7 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
           }`}
         >
           <Truck className="w-4 h-4" />
-          <span>إدارة الكباتن والمندوبين ({couriers.length})</span>
+          <span>إدارة الكباتن والمندوبين ({mergedCouriersList.length})</span>
         </button>
 
         <button
@@ -1626,25 +1665,53 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({
                           <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded font-extrabold">
                             {c.assignedHub}
                           </span>
+                          {c.isConfirmed === false && (
+                            <span className="bg-amber-100 text-amber-950 border border-amber-300 px-2 py-0.5 rounded font-black flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              بانتظار موافقة الأدمن
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-1">
-                      <button
-                        onClick={() => openEditCourier(c)}
-                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200 cursor-pointer"
-                        title="تعديل بيانات والعمولة"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => onDeleteCourier(c.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200 cursor-pointer"
-                        title="حذف المندوب"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div className="flex flex-col gap-1 items-end">
+                      {c.isConfirmed === false && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const matchingUser = users.find((u) => u.id === c.id || (c.phone && u.phone === c.phone));
+                            if (matchingUser) {
+                              onUpdateUser({ ...matchingUser, isConfirmed: true });
+                            }
+                            onUpdateCourier({ ...c, isConfirmed: true });
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-xs whitespace-nowrap mb-1"
+                          title="تأكيد وتفعيل حساب المندوب الآن"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          تفعيل الكابتن
+                        </button>
+                      )}
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEditCourier(c)}
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200 cursor-pointer"
+                          title="تعديل بيانات والعمولة"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            onDeleteCourier(c.id);
+                            onDeleteUser(c.id);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200 cursor-pointer"
+                          title="حذف المندوب"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
 

@@ -11,53 +11,50 @@ export const PRIMARY_ADMIN_USER: UserSession = {
   registeredAt: '2026-08-30T00:00:00.000Z',
 };
 
-/** الحساب الإداري الوحيد المعتمد في النظام */
-export const AUTHORIZED_SYSTEM_USERS: UserSession[] = [PRIMARY_ADMIN_USER];
+// The exact 5 authorized accounts requested by the user:
+// 1 Admin, 1 Merchant (approved)
+export const AUTHORIZED_SYSTEM_USERS: UserSession[] = [
+  PRIMARY_ADMIN_USER,
+  {
+    id: 'USR-1788361785496-4492',
+    name: 'ام فاتن',
+    email: '01017266727@am-shipping.eg',
+    phone: '01017266727',
+    role: 'merchant',
+    storeName: 'To you',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D9%85+%D9%81%D8%A7%D8%AA%D9%86&background=059669&color=ffffff',
+    isConfirmed: true,
+    registeredAt: '2026-09-01T00:00:00.000Z',
+  },
+];
 
-export const SUPABASE_SYNCED_USERS: UserSession[] = [PRIMARY_ADMIN_USER];
+export const SUPABASE_SYNCED_USERS: UserSession[] = AUTHORIZED_SYSTEM_USERS;
 
-// Blacklist of unknown / fake dummy IDs that were accidentally generated
-export const DEPRECATED_DUMMY_IDS = new Set([
-  '15c6e6d1-df23-4e20-a464-e4df09590e4d', // Amr
-  'b009b128-b1f5-4c03-b6ec-842d35cca9b0', 
-  '16cfabd6-f309-4c09-ad2e-3ddc10338d67', 
-  '8b151dbb-660d-4169-903a-647c12967504', // Oo
-  '169880e0-ba38-416e-ab42-9ae66d67b5c3', // محمد
-  'd5892b9e-760c-4a7b-a428-04916faf5513', // Pp
-  '16256cfa-8044-4607-abce-9de1335f311a', // ابراهيم شريف
-  '234aa881-d193-42a3-b86a-5408ba92146e', // fake duplicate
-  '10fdf171-fb33-4ede-9d27-2fae8a2c2d4b', 
-  'b251467a-76c7-4afa-93bd-762a1bffc340', // fake client
-  '51dd3367-fffa-4f2e-af58-5503ff2bc7c5', // fake client
-  'USR-1788361248924',
+// Legacy corrupt test IDs that were removed from the initial setup
+export const DEPRECATED_DUMMY_IDS = new Set<string>([
+  '15c6e6d1-df23-4e20-a464-e4df09590e4d',
+  '16256cfa-8044-4607-abce-9de1335f311a',
+  '234aa881-d193-42a3-b86a-5408ba92146e',
+  'b251467a-76c7-4afa-93bd-762a1bffc340',
+  '51dd3367-fffa-4f2e-af58-5503ff2bc7c5',
 ]);
 
-export const DEPRECATED_DUMMY_PHONES = new Set([
-  '01015674681', // Amr
-  '01011223344', // test
-  '01121212121', // Oo
-  '01125465248', // محمد
-  '01125465676', // Pp
-  '01155219660', // ابراهيم شريف
-  '01234567891', // fake duplicate
-]);
+// Empty set - all phone numbers can be registered if the user registers them again
+export const DEPRECATED_DUMMY_PHONES = new Set<string>();
 
 // Empty set - no valid shipments are purged
 export const PURGED_OLD_SHIPMENT_TRACKING_NUMBERS = new Set<string>();
 
 export function isDeprecatedDummyUser(u: any): boolean {
   if (!u) return true;
-  // Always protect the 5 authorized accounts
+  // Always protect the primary admin and confirmed legitimate merchant
   if (u.id === 'admin_root' || u.phone === '01000000001' || u.email === 'mohamedsalah565657@icloud.com' || u.email === 'mohamedsalah565657@gmail.com') {
     return false;
   }
+  if (u.id === 'USR-1788361785496-4492' || u.phone === '01017266727') return false; // ام فاتن
+
+  // Only reject old legacy corrupt test IDs; allow ANY user to register again if re-registered
   if (u.id && DEPRECATED_DUMMY_IDS.has(String(u.id))) return true;
-  if (u.phone) {
-    const cleanPhone = String(u.phone).replace(/\D/g, '');
-    if (cleanPhone && DEPRECATED_DUMMY_PHONES.has(cleanPhone)) return true;
-  }
-  if (u.name && (u.name.includes('محمد علي تاجر') || u.name === 'محمد علي تجريبي' || u.name === 'Amr' || u.name === 'Oo' || u.name === 'Pp' || u.name === 'محمد' || u.name === 'ابراهيم شريف')) return true;
-  if (u.storeName && (u.storeName.includes('متجر علي') || u.storeName.includes('متجر Amr') || u.storeName.includes('متجر Oo') || u.storeName.includes('متجر Pp') || u.storeName.includes('متجر محمد') || u.storeName.includes('متجر ابراهيم'))) return true;
   if (u.role === 'client') return true;
   return false;
 }
@@ -173,21 +170,66 @@ export function sanitizeUsers(users?: UserSession[]): UserSession[] {
     result.unshift(PRIMARY_ADMIN_USER);
   }
 
+  const KNOWN_ROLES: Record<string, AppUserRole> = {
+    'admin_root': 'admin',
+    'USR-1788361785496-4492': 'merchant',
+  };
+
   return result.map((u) => {
-    if (u.id === 'admin_root') {
-      return { ...u, role: 'admin' as AppUserRole, isConfirmed: true };
+    if (KNOWN_ROLES[u.id]) {
+      return { ...u, role: KNOWN_ROLES[u.id] };
     }
     return u;
   });
 }
 
-export function sanitizeCouriers(couriers?: CourierInfo[]): CourierInfo[] {
+// Couriers are now dynamic and managed by the admin/user without hardcoded zombie couriers
+export const AUTHORIZED_COURIERS: CourierInfo[] = [];
+
+export function sanitizeCouriers(couriers?: CourierInfo[], users?: UserSession[]): CourierInfo[] {
   const list = Array.isArray(couriers) ? couriers : [];
-  return list.filter((c) => {
-    if (!c || typeof c !== 'object' || !c.id || !c.name) return false;
-    if (c.phone && DEPRECATED_DUMMY_PHONES.has(String(c.phone).replace(/\D/g, ''))) return false;
-    return true;
-  });
+  const map = new Map<string, CourierInfo>();
+
+  for (const c of list) {
+    if (!c || typeof c !== 'object' || !c.id || !c.name) continue;
+    if (DEPRECATED_DUMMY_IDS.has(String(c.id))) continue;
+    map.set(String(c.id), c);
+  }
+
+  // Also include any user whose role is courier so new delegate registrations are never lost
+  if (Array.isArray(users)) {
+    for (const u of users) {
+      if (!u || u.role !== 'courier' || isDeprecatedDummyUser(u)) continue;
+      const uId = String(u.id);
+      const cleanPhone = u.phone ? String(u.phone).trim() : '';
+      const existing = map.get(uId) || (cleanPhone ? Array.from(map.values()).find((x) => x.phone === cleanPhone) : undefined);
+      if (existing) {
+        map.set(existing.id, {
+          ...existing,
+          name: u.name || existing.name,
+          phone: u.phone || existing.phone,
+          avatarUrl: u.avatarUrl || existing.avatarUrl,
+          photoUrl: u.avatarUrl || existing.photoUrl,
+          isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : existing.isConfirmed,
+        });
+      } else {
+        map.set(uId, {
+          id: uId,
+          name: u.name,
+          phone: u.phone || '',
+          vehicle: u.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
+          assignedHub: u.hubName || 'المستودع الرئيسي',
+          rating: 5.0,
+          activeDeliveriesCount: 0,
+          avatarUrl: u.avatarUrl,
+          photoUrl: u.avatarUrl,
+          isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : false,
+        });
+      }
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 export function sanitizeCompanyTxns(txns?: CompanyTransaction[]): CompanyTransaction[] {

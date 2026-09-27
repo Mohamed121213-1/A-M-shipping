@@ -226,6 +226,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(pendingUser),
           });
+          if (selectedRoleTab === 'courier') {
+            await fetch('/api/couriers', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: pendingUser.id,
+                name: pendingUser.name,
+                phone: pendingUser.phone,
+                vehicle: pendingUser.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
+                assignedHub: pendingUser.hubName || 'المستودع الرئيسي',
+                isConfirmed: false,
+                photoUrl: pendingUser.avatarUrl,
+              }),
+            });
+          }
         } catch (serverErr) {
           console.warn('Direct server registration sync notice:', serverErr);
         }

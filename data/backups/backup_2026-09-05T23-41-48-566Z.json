@@ -16,34 +16,6 @@
         "shippingPricingType": "fixed"
       },
       {
-        "id": "USR-1788364629634-8301",
-        "name": "Ibrahim",
-        "email": "01118003293@am-shipping.eg",
-        "phone": "01118003293",
-        "role": "hub_manager",
-        "isConfirmed": true,
-        "registeredAt": "2026-09-02T15:57:09.634+00:00",
-        "avatarUrl": "https://ui-avatars.com/api/?name=Ibrahim&background=dc2626&color=ffffff",
-        "hubName": "المستودع الرئيسي",
-        "password": "Mm123456",
-        "hasCustomShippingRate": false,
-        "shippingPricingType": "fixed"
-      },
-      {
-        "id": "USR-1788364520004-8809",
-        "name": "احمد رشاد",
-        "email": "01033011862@am-shipping.eg",
-        "phone": "01033011862",
-        "role": "courier",
-        "isConfirmed": true,
-        "registeredAt": "2026-09-02T15:55:20.004+00:00",
-        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF%20%D8%B1%D8%B4%D8%A7%D8%AF&background=dc2626&color=ffffff",
-        "courierVehicle": "سيارة نقل / تروسيكل",
-        "password": "Mm123455",
-        "hasCustomShippingRate": false,
-        "shippingPricingType": "fixed"
-      },
-      {
         "id": "USR-1788361785496-4492",
         "name": "ام فاتن",
         "email": "01017266727@am-shipping.eg",
@@ -56,32 +28,6 @@
         "password": "123456",
         "hasCustomShippingRate": false,
         "shippingPricingType": "fixed"
-      },
-      {
-        "id": "51dd3367-fffa-4f2e-af58-5503ff2bc7c5",
-        "name": "Ibrahim",
-        "email": "51dd3367-fffa-4f2e-af58-5503ff2bc7c5@am-shipping.eg",
-        "phone": "",
-        "role": "client",
-        "isConfirmed": true,
-        "registeredAt": "2026-09-02T15:57:12.313097+00:00",
-        "avatarUrl": "https://ui-avatars.com/api/?name=Ibrahim&background=dc2626&color=ffffff",
-        "password": "123456",
-        "hasCustomShippingRate": false,
-        "shippingPricingType": "fixed"
-      },
-      {
-        "id": "b251467a-76c7-4afa-93bd-762a1bffc340",
-        "name": "احمد رشاد",
-        "email": "b251467a-76c7-4afa-93bd-762a1bffc340@am-shipping.eg",
-        "phone": "",
-        "role": "client",
-        "isConfirmed": true,
-        "registeredAt": "2026-09-02T15:55:21.582738+00:00",
-        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF%20%D8%B1%D8%B4%D8%A7%D8%AF&background=dc2626&color=ffffff",
-        "password": "123456",
-        "hasCustomShippingRate": false,
-        "shippingPricingType": "fixed"
       }
     ],
     "wallet": {
@@ -91,30 +37,7 @@
       "totalPaidOut": 0,
       "availableBalance": 2240
     },
-    "couriers": [
-      {
-        "id": "USR-1788364242163-4812",
-        "name": "حسن علي",
-        "phone": "01093383328",
-        "rating": 5,
-        "vehicle": "motocycle",
-        "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
-        "assignedHub": "المستودع الرئيسي",
-        "codCollectedToday": 0,
-        "activeShipmentsCount": 0
-      },
-      {
-        "id": "USR-1788364520004-8809",
-        "name": "احمد رشاد",
-        "phone": "01033011862",
-        "rating": 5,
-        "vehicle": "motocycle",
-        "photoUrl": "https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF%20%D8%B1%D8%B4%D8%A7%D8%AF&background=dc2626&color=ffffff",
-        "assignedHub": "المستودع الرئيسي",
-        "codCollectedToday": 0,
-        "activeShipmentsCount": 0
-      }
-    ],
+    "couriers": [],
     "senderId": "CLIENT-1kd58nx",
     "shipments": [
       {

@@ -264,6 +264,28 @@ const STATE_FILE = path.join(DATA_DIR, "app_state.json");
 const LATEST_BACKUP_FILE = path.join(BACKUPS_DIR, "latest_backup.json");
 const VAPID_KEYS_FILE = path.join(DATA_DIR, "vapid_keys.json");
 const PUSH_SUBS_FILE = path.join(DATA_DIR, "push_subscriptions.json");
+const DELETED_SHIPMENTS_FILE = path.join(DATA_DIR, "deleted_shipments.json");
+
+export let serverDeletedShipments = new Set<string>();
+if (fs.existsSync(DELETED_SHIPMENTS_FILE)) {
+  try {
+    const raw = fs.readFileSync(DELETED_SHIPMENTS_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      serverDeletedShipments = new Set(parsed.map(String));
+    }
+  } catch (e) {
+    console.warn("Failed to load deleted_shipments.json:", e);
+  }
+}
+
+export function saveDeletedShipments() {
+  try {
+    fs.writeFileSync(DELETED_SHIPMENTS_FILE, JSON.stringify(Array.from(serverDeletedShipments), null, 2));
+  } catch (e) {
+    console.warn("Failed to save deleted_shipments.json:", e);
+  }
+}
 
 // Permanent Static Web Push VAPID Keys (Guarantees push subscriptions remain valid across restarts)
 const vapidKeys = {
@@ -387,52 +409,50 @@ export const PRIMARY_ADMIN_USER = {
   registeredAt: '2026-08-30T00:00:00.000Z',
 };
 
-export const AUTHORIZED_SYSTEM_USERS = [PRIMARY_ADMIN_USER];
+export const AUTHORIZED_SYSTEM_USERS = [
+  PRIMARY_ADMIN_USER,
+  {
+    id: 'USR-1788361785496-4492',
+    name: 'ام فاتن',
+    email: '01017266727@am-shipping.eg',
+    phone: '01017266727',
+    role: 'merchant',
+    storeName: 'To you',
+    avatarUrl: 'https://ui-avatars.com/api/?name=%D8%A7%D9%85+%D9%81%D8%A7%D8%AA%D9%86&background=059669&color=ffffff',
+    isConfirmed: true,
+    registeredAt: '2026-09-01T00:00:00.000Z',
+  },
+];
 
 const SUPABASE_SYNCED_USERS = AUTHORIZED_SYSTEM_USERS;
 
+// Dynamic couriers - no hardcoded zombie couriers
 export const AUTHORIZED_COURIERS: any[] = [];
 
-export const DEPRECATED_DUMMY_IDS = new Set([
-  '15c6e6d1-df23-4e20-a464-e4df09590e4d', // Amr
-  'b009b128-b1f5-4c03-b6ec-842d35cca9b0', 
-  '16cfabd6-f309-4c09-ad2e-3ddc10338d67', 
-  '8b151dbb-660d-4169-903a-647c12967504', // Oo
-  '169880e0-ba38-416e-ab42-9ae66d67b5c3', // محمد
-  'd5892b9e-760c-4a7b-a428-04916faf5513', // Pp
-  '16256cfa-8044-4607-abce-9de1335f311a', // ابراهيم شريف
-  '234aa881-d193-42a3-b86a-5408ba92146e', // fake duplicate
-  '10fdf171-fb33-4ede-9d27-2fae8a2c2d4b', 
-  'b251467a-76c7-4afa-93bd-762a1bffc340', // fake client
-  '51dd3367-fffa-4f2e-af58-5503ff2bc7c5', // fake client
-  'USR-1788361248924',
+// Legacy corrupt test IDs that were removed from the initial setup
+export const DEPRECATED_DUMMY_IDS = new Set<string>([
+  '15c6e6d1-df23-4e20-a464-e4df09590e4d',
+  '16256cfa-8044-4607-abce-9de1335f311a',
+  '234aa881-d193-42a3-b86a-5408ba92146e',
+  'b251467a-76c7-4afa-93bd-762a1bffc340',
+  '51dd3367-fffa-4f2e-af58-5503ff2bc7c5',
 ]);
 
-export const DEPRECATED_DUMMY_PHONES = new Set([
-  '01015674681', // Amr
-  '01011223344', // test
-  '01121212121', // Oo
-  '01125465248', // محمد
-  '01125465676', // Pp
-  '01155219660', // ابراهيم شريف
-  '01234567891', // fake duplicate
-]);
+// Empty set - all phone numbers can be registered if the user registers them again
+export const DEPRECATED_DUMMY_PHONES = new Set<string>();
 
 export const PURGED_OLD_SHIPMENT_TRACKING_NUMBERS = new Set<string>();
 
 function isDeprecatedDummyUser(u: any): boolean {
   if (!u) return true;
-  // Always protect the 5 authorized accounts
+  // Always protect the primary admin and confirmed legitimate merchant
   if (u.id === 'admin_root' || u.phone === '01000000001' || u.email === 'mohamedsalah565657@icloud.com' || u.email === 'mohamedsalah565657@gmail.com') {
     return false;
   }
+  if (u.id === 'USR-1788361785496-4492' || u.phone === '01017266727') return false; // ام فاتن
+
+  // Only reject old legacy corrupt test IDs; allow ANY user to register again if re-registered
   if (u.id && DEPRECATED_DUMMY_IDS.has(String(u.id))) return true;
-  if (u.phone) {
-    const cleanPhone = String(u.phone).replace(/\D/g, '');
-    if (cleanPhone && DEPRECATED_DUMMY_PHONES.has(cleanPhone)) return true;
-  }
-  if (u.name && (u.name.includes('محمد علي تاجر') || u.name === 'محمد علي تجريبي' || u.name === 'Amr' || u.name === 'Oo' || u.name === 'Pp' || u.name === 'محمد' || u.name === 'ابراهيم شريف')) return true;
-  if (u.storeName && (u.storeName.includes('متجر علي') || u.storeName.includes('متجر Amr') || u.storeName.includes('متجر Oo') || u.storeName.includes('متجر Pp') || u.storeName.includes('متجر محمد') || u.storeName.includes('متجر ابراهيم'))) return true;
   if (u.role === 'client') return true;
   return false;
 }
@@ -547,9 +567,6 @@ function sanitizeServerState(rawState: any) {
     const KNOWN_ROLES: Record<string, string> = {
       'admin_root': 'admin',
       'USR-1788361785496-4492': 'merchant',
-      'USR-1788364629634-8301': 'hub_manager',
-      'USR-1788364520004-8809': 'courier',
-      'USR-1788364242163-4812': 'courier',
     };
 
     rawState.users = result.map((u: any) => {
@@ -560,23 +577,52 @@ function sanitizeServerState(rawState: any) {
     });
   }
 
-  if (Array.isArray(rawState.couriers)) {
-    const list = rawState.couriers.filter((c: any) => {
-      if (!c || typeof c !== 'object' || !c.id || !c.name) return false;
-      if (c.phone && DEPRECATED_DUMMY_PHONES.has(String(c.phone).replace(/\D/g, ''))) return false;
-      return true;
-    });
-    const cMap = new Map<string, any>();
-    for (const c of AUTHORIZED_COURIERS) {
-      cMap.set(c.id, c);
-    }
-    for (const c of list) {
-      cMap.set(c.id, { ...(cMap.get(c.id) || {}), ...c });
-    }
-    rawState.couriers = Array.from(cMap.values());
-  } else {
-    rawState.couriers = [...AUTHORIZED_COURIERS];
+  // Synchronize couriers:
+  // 1. Filter out deprecated dummy accounts
+  // 2. Seamlessly include any user with role === 'courier' so new delegate registrations ALWAYS appear for the admin!
+  if (!Array.isArray(rawState.couriers)) {
+    rawState.couriers = [];
   }
+  const cMap = new Map<string, any>();
+  for (const c of rawState.couriers) {
+    if (!c || typeof c !== 'object' || !c.id || !c.name) continue;
+    if (DEPRECATED_DUMMY_IDS.has(String(c.id))) continue;
+    cMap.set(String(c.id), c);
+  }
+
+  // Ensure all users with role === 'courier' are mapped into couriers
+  if (Array.isArray(rawState.users)) {
+    for (const u of rawState.users) {
+      if (!u || u.role !== 'courier' || isDeprecatedDummyUser(u)) continue;
+      const uId = String(u.id);
+      const cleanPhone = u.phone ? String(u.phone).trim() : '';
+      const existing = cMap.get(uId) || (cleanPhone ? Array.from(cMap.values()).find((x: any) => x.phone === cleanPhone) : undefined);
+      if (existing) {
+        cMap.set(existing.id, {
+          ...existing,
+          name: u.name || existing.name,
+          phone: u.phone || existing.phone,
+          avatarUrl: u.avatarUrl || existing.avatarUrl,
+          photoUrl: u.avatarUrl || existing.photoUrl,
+          isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : existing.isConfirmed,
+        });
+      } else {
+        cMap.set(uId, {
+          id: uId,
+          name: u.name,
+          phone: u.phone || '',
+          vehicle: u.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
+          assignedHub: u.hubName || 'المستودع الرئيسي',
+          rating: 5.0,
+          activeDeliveriesCount: 0,
+          avatarUrl: u.avatarUrl,
+          photoUrl: u.avatarUrl,
+          isConfirmed: u.isConfirmed !== undefined ? Boolean(u.isConfirmed) : false,
+        });
+      }
+    }
+  }
+  rawState.couriers = Array.from(cMap.values());
 
   if (Array.isArray(rawState.companyTransactions)) {
     rawState.companyTransactions = rawState.companyTransactions.filter((t: any) => t && typeof t === 'object' && t.id);
@@ -585,6 +631,7 @@ function sanitizeServerState(rawState: any) {
   if (Array.isArray(rawState.shipments)) {
     rawState.shipments = rawState.shipments.filter((s: any) => {
       if (!s || typeof s !== 'object' || (!s.id && !s.trackingNumber)) return false;
+      if (serverDeletedShipments.has(String(s.id)) || serverDeletedShipments.has(String(s.trackingNumber))) return false;
       if (s.sender && isDeprecatedDummyUser(s.sender)) return false;
       return true;
     });
@@ -763,12 +810,14 @@ function mergeShipmentsLists(existingList?: any[], incomingList?: any[]): any[] 
 
   for (const s of existingArr) {
     if (!s || (!s.id && !s.trackingNumber)) continue;
+    if (serverDeletedShipments.has(String(s.id)) || serverDeletedShipments.has(String(s.trackingNumber))) continue;
     const key = s.trackingNumber || s.id;
     map.set(key, s);
   }
 
   for (const incoming of incomingArr) {
     if (!incoming || (!incoming.id && !incoming.trackingNumber)) continue;
+    if (serverDeletedShipments.has(String(incoming.id)) || serverDeletedShipments.has(String(incoming.trackingNumber))) continue;
     const key = incoming.trackingNumber || incoming.id;
 
     const existing = map.get(key);
@@ -779,7 +828,9 @@ function mergeShipmentsLists(existingList?: any[], incomingList?: any[]): any[] 
     }
   }
 
-  return Array.from(map.values());
+  return Array.from(map.values()).filter(
+    (s: any) => !serverDeletedShipments.has(String(s.id)) && !serverDeletedShipments.has(String(s.trackingNumber))
+  );
 }
 
 let serverAppState: any = null;
@@ -958,6 +1009,16 @@ async function pullStateFromSupabaseOnBoot() {
       serverAppState.users = cleanedObj.users;
     }
 
+    // Clean up Supabase tables from deprecated zombie accounts
+    for (const badId of DEPRECATED_DUMMY_IDS) {
+      Promise.resolve(supabaseServer.from('profiles').delete().eq('id', badId)).catch(() => {});
+      Promise.resolve(supabaseServer.from('couriers').delete().eq('id', badId)).catch(() => {});
+    }
+    for (const badPhone of DEPRECATED_DUMMY_PHONES) {
+      Promise.resolve(supabaseServer.from('profiles').delete().eq('phone', badPhone)).catch(() => {});
+      Promise.resolve(supabaseServer.from('couriers').delete().eq('phone', badPhone)).catch(() => {});
+    }
+
     // Always merge individual rows from Supabase shipments table
     const { data: sRows, error: sErr } = await supabaseServer.from('shipments').select('*').limit(1000);
     if (!sErr && Array.isArray(sRows) && sRows.length > 0) {
@@ -1021,96 +1082,61 @@ async function pullStateFromSupabaseOnBoot() {
   }
 }
 
-const FACTORY_RESET_MARKER = path.join(DATA_DIR, ".factory_reset_v3_applied");
-
-function createCleanServerState() {
-  return sanitizeServerState({
-    shipments: [],
-    users: [PRIMARY_ADMIN_USER],
-    couriers: [],
-    notifications: [],
-    companyTransactions: [],
-    wallet: {
-      merchantId: "merch-admin-default",
-      merchantName: "المحفظة الرئيسية",
-      availableBalance: 0,
-      pendingCod: 0,
-      totalPaidOut: 0,
-    },
-    governorates: EGYPT_GOVERNORATES,
-  });
+// Load initial state with backup fallback
+if (fs.existsSync(STATE_FILE)) {
+  try {
+    const raw = fs.readFileSync(STATE_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    serverAppState = sanitizeServerState(parsed.state || null);
+    serverLastUpdated = parsed.timestamp || 0;
+  } catch (e) {
+    console.warn("Failed to read app_state.json:", e);
+  }
 }
 
-// Factory reset v3: wipe all operational data, keep admin only (one-time)
-if (!fs.existsSync(FACTORY_RESET_MARKER)) {
-  serverAppState = createCleanServerState();
-  serverLastUpdated = Date.now();
+// Fallback to latest backup if main file was empty or corrupted
+if ((!serverAppState || Object.keys(serverAppState).length === 0) && fs.existsSync(LATEST_BACKUP_FILE)) {
   try {
-    fs.writeFileSync(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: serverLastUpdated }, null, 2));
-    fs.writeFileSync(FACTORY_RESET_MARKER, new Date().toISOString());
-    console.log("🧹 Factory reset v3 applied — clean state with admin only.");
-    if (supabaseServer) {
-      supabaseServer.from("shipments").delete().neq("id", "___none___").then(() => {}).catch(() => {});
-      supabaseServer.from("bosta_app_state").upsert({
-        id: "global_state",
-        state: serverAppState,
-        updated_at: new Date().toISOString(),
-      }).then(() => {}).catch(() => {});
+    const raw = fs.readFileSync(LATEST_BACKUP_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (parsed.state) {
+      serverAppState = sanitizeServerState(parsed.state);
+      serverLastUpdated = parsed.timestamp || Date.now();
+      console.log("Restored server state from latest backup snapshot!");
     }
   } catch (e) {
-    console.warn("Factory reset write notice:", e);
+    console.warn("Failed to load backup snapshot:", e);
   }
-} else {
-  // Load initial state with backup fallback
-  if (fs.existsSync(STATE_FILE)) {
-    try {
-      const raw = fs.readFileSync(STATE_FILE, "utf-8");
-      const parsed = JSON.parse(raw);
-      serverAppState = sanitizeServerState(parsed.state || null);
-      serverLastUpdated = parsed.timestamp || 0;
-    } catch (e) {
-      console.warn("Failed to read app_state.json:", e);
+}
+
+// Check all backups in BACKUPS_DIR to ensure we never lose shipments if a previous backup had more
+try {
+  let bestBackupShipments: any[] = [];
+  if (fs.existsSync(BACKUPS_DIR)) {
+    const backupFiles = fs.readdirSync(BACKUPS_DIR).filter(f => f.endsWith('.json'));
+    for (const bf of backupFiles) {
+      try {
+        const raw = fs.readFileSync(path.join(BACKUPS_DIR, bf), "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed.state?.shipments && Array.isArray(parsed.state.shipments) && parsed.state.shipments.length > bestBackupShipments.length) {
+          bestBackupShipments = parsed.state.shipments;
+        }
+      } catch (e) {}
     }
   }
 
-  // Fallback to latest backup ONLY if main file is empty/corrupted
-  if ((!serverAppState || Object.keys(serverAppState).length === 0) && fs.existsSync(LATEST_BACKUP_FILE)) {
-    try {
-      const raw = fs.readFileSync(LATEST_BACKUP_FILE, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (parsed.state) {
-        serverAppState = sanitizeServerState(parsed.state);
-        serverLastUpdated = parsed.timestamp || Date.now();
-        console.log("Restored server state from latest backup snapshot!");
-      }
-    } catch (e) {
-      console.warn("Failed to load backup snapshot:", e);
-    }
-  }
-
-  // Restore from backups ONLY when current shipments list is empty (disaster recovery)
-  try {
+  if (bestBackupShipments.length > 0) {
     const currentList = serverAppState?.shipments || [];
-    if (currentList.length === 0 && fs.existsSync(BACKUPS_DIR)) {
-      let bestBackupShipments: any[] = [];
-      const backupFiles = fs.readdirSync(BACKUPS_DIR).filter((f) => f.endsWith(".json"));
-      for (const bf of backupFiles) {
-        try {
-          const raw = fs.readFileSync(path.join(BACKUPS_DIR, bf), "utf-8");
-          const parsed = JSON.parse(raw);
-          if (parsed.state?.shipments && Array.isArray(parsed.state.shipments) && parsed.state.shipments.length > bestBackupShipments.length) {
-            bestBackupShipments = parsed.state.shipments;
-          }
-        } catch (e) {}
-      }
-      if (bestBackupShipments.length > 0 && serverAppState) {
-        serverAppState.shipments = bestBackupShipments;
-        console.log(`🛡️ Disaster recovery: restored ${bestBackupShipments.length} shipments from backup.`);
-      }
-    }
-  } catch (e) {
-    console.warn("Backup check notice:", e);
+    const filteredBackup = bestBackupShipments.filter(
+      (s: any) => !serverDeletedShipments.has(String(s?.id)) && !serverDeletedShipments.has(String(s?.trackingNumber))
+    );
+    const merged = mergeShipmentsLists(currentList, filteredBackup);
+    if (!serverAppState) serverAppState = {};
+    serverAppState.shipments = merged;
+    console.log(`🛡️ Server verified ${merged.length} shipments against historical backups.`);
   }
+} catch (e) {
+  console.warn("Backup check notice:", e);
 }
 
 // After disk state is securely loaded, sync with Supabase
@@ -1813,11 +1839,20 @@ app.delete("/api/shipments/:id", async (req, res) => {
     const { id } = req.params;
     const { senderId } = req.body || {};
 
+    const targetShipment = serverAppState?.shipments?.find((s: any) => s.id === id || s.trackingNumber === id);
+    serverDeletedShipments.add(String(id));
+    if (targetShipment?.trackingNumber) serverDeletedShipments.add(String(targetShipment.trackingNumber));
+    if (targetShipment?.id) serverDeletedShipments.add(String(targetShipment.id));
+    saveDeletedShipments();
+
     if (serverAppState && Array.isArray(serverAppState.shipments)) {
-      serverAppState.shipments = serverAppState.shipments.filter((s: any) => s.id !== id && s.trackingNumber !== id);
+      serverAppState.shipments = serverAppState.shipments.filter(
+        (s: any) => s.id !== id && s.trackingNumber !== id && !serverDeletedShipments.has(String(s.id)) && !serverDeletedShipments.has(String(s.trackingNumber))
+      );
       serverStatusLocks.delete(id);
       saveServerStatusLocks();
       recalculateServerWallet();
+      serverAppState.deletedShipmentIds = Array.from(serverDeletedShipments);
       persistAndBroadcast(senderId || 'api_delete_shipment');
     }
 
@@ -1839,13 +1874,21 @@ app.post("/api/shipments/batch-delete", async (req, res) => {
   try {
     const { ids, senderId } = req.body || {};
     if (Array.isArray(ids) && serverAppState && Array.isArray(serverAppState.shipments)) {
-      const idSet = new Set(ids);
-      serverAppState.shipments = serverAppState.shipments.filter((s: any) => !idSet.has(s.id) && !idSet.has(s.trackingNumber));
       for (const id of ids) {
+        serverDeletedShipments.add(String(id));
+        const s = serverAppState.shipments.find((x: any) => x.id === id || x.trackingNumber === id);
+        if (s?.trackingNumber) serverDeletedShipments.add(String(s.trackingNumber));
+        if (s?.id) serverDeletedShipments.add(String(s.id));
         serverStatusLocks.delete(id);
       }
+      saveDeletedShipments();
       saveServerStatusLocks();
+
+      serverAppState.shipments = serverAppState.shipments.filter(
+        (s: any) => !serverDeletedShipments.has(String(s.id)) && !serverDeletedShipments.has(String(s.trackingNumber))
+      );
       recalculateServerWallet();
+      serverAppState.deletedShipmentIds = Array.from(serverDeletedShipments);
       persistAndBroadcast(senderId || 'api_batch_delete');
 
       // Direct batch delete from Supabase 'shipments' table
@@ -1866,8 +1909,16 @@ app.post("/api/shipments/batch-delete", async (req, res) => {
 app.post("/api/shipments/clear-all", async (req, res) => {
   try {
     const { senderId } = req.body || {};
+    if (serverAppState?.shipments && Array.isArray(serverAppState.shipments)) {
+      for (const s of serverAppState.shipments) {
+        if (s.id) serverDeletedShipments.add(String(s.id));
+        if (s.trackingNumber) serverDeletedShipments.add(String(s.trackingNumber));
+      }
+      saveDeletedShipments();
+    }
     if (!serverAppState) serverAppState = {};
     serverAppState.shipments = [];
+    serverAppState.deletedShipmentIds = Array.from(serverDeletedShipments);
     serverStatusLocks.clear();
     saveServerStatusLocks();
     recalculateServerWallet();
@@ -1916,14 +1967,26 @@ app.post("/api/sync/state", (req, res) => {
       return res.status(400).json({ error: "بيانات الإرسال فارغة" });
     }
 
+    // Process incoming deletedShipmentIds
+    if (Array.isArray(state.deletedShipmentIds)) {
+      for (const dId of state.deletedShipmentIds) {
+        if (dId) serverDeletedShipments.add(String(dId));
+      }
+      saveDeletedShipments();
+    }
+
     let mergedState = { ...state };
 
     if (Array.isArray(state.shipments) && state.shipments.length > 0) {
       const serverList = (serverAppState && Array.isArray(serverAppState.shipments)) ? serverAppState.shipments : [];
       mergedState.shipments = mergeShipmentsLists(serverList, state.shipments);
     } else if (serverAppState && Array.isArray(serverAppState.shipments) && serverAppState.shipments.length > 0) {
-      mergedState.shipments = serverAppState.shipments;
+      mergedState.shipments = serverAppState.shipments.filter(
+        (s: any) => !serverDeletedShipments.has(String(s.id)) && !serverDeletedShipments.has(String(s.trackingNumber))
+      );
     }
+
+    mergedState.deletedShipmentIds = Array.from(serverDeletedShipments);
 
     if (!isExplicitClear && serverAppState) {
       // Users state handling: merge existing server users and incoming users so no accounts are ever lost
@@ -2267,6 +2330,7 @@ app.post("/api/users/confirm", async (req, res) => {
         return u;
       });
 
+      serverAppState = sanitizeServerState(serverAppState);
       const now = Date.now();
       serverLastUpdated = now;
       fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: now }), (err) => {
@@ -2367,6 +2431,7 @@ app.post("/api/users/delete", async (req, res) => {
       if (Array.isArray(serverAppState.couriers)) {
         serverAppState.couriers = serverAppState.couriers.filter((c: any) => c.id !== userId && c.phone !== userId);
       }
+      serverAppState = sanitizeServerState(serverAppState);
 
       const now = Date.now();
       serverLastUpdated = now;
@@ -2375,10 +2440,11 @@ app.post("/api/users/delete", async (req, res) => {
       });
       saveBackupSnapshot(serverAppState, now);
 
-      // Direct Delete from Supabase profiles table
+      // Direct Delete from Supabase profiles and couriers tables
       if (supabaseServer) {
         try {
           await supabaseServer.from('profiles').delete().eq('id', userId);
+          await supabaseServer.from('couriers').delete().eq('id', userId);
         } catch (err) {}
       }
       await pushStateToSupabase(serverAppState, now);
@@ -2386,7 +2452,79 @@ app.post("/api/users/delete", async (req, res) => {
       broadcastSseState(serverAppState, now, 'server_user_delete');
     }
 
-    return res.json({ success: true, userId });
+    return res.json({ success: true, userId, state: serverAppState });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 4.5. Courier Add / Update Endpoint (guarantees direct persistence and instant sync)
+app.post("/api/couriers", async (req, res) => {
+  try {
+    const rawCourier = req.body;
+    if (!rawCourier || !rawCourier.name || !rawCourier.phone) {
+      return res.status(400).json({ error: "اسم ورقم هاتف المندوب مطلوبان" });
+    }
+
+    const cleanPhone = String(rawCourier.phone).trim();
+    const courierId = rawCourier.id || `cour-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const courierUser = {
+      id: courierId,
+      name: String(rawCourier.name).trim(),
+      email: rawCourier.email ? String(rawCourier.email).trim() : `${cleanPhone}@am-shipping.eg`,
+      phone: cleanPhone,
+      role: 'courier',
+      courierVehicle: rawCourier.vehicle === 'van' || rawCourier.courierVehicle === 'سيارة فان' ? 'سيارة فان' : 'دراجة نارية / موتوسيكل',
+      hubName: rawCourier.assignedHub || 'المستودع الرئيسي',
+      avatarUrl: rawCourier.photoUrl || rawCourier.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(rawCourier.name)}&background=2563eb&color=ffffff`,
+      isConfirmed: rawCourier.isConfirmed !== undefined ? Boolean(rawCourier.isConfirmed) : true,
+      registeredAt: rawCourier.registeredAt || new Date().toISOString(),
+    };
+
+    if (!serverAppState) serverAppState = { users: [], couriers: [] };
+    if (!Array.isArray(serverAppState.users)) serverAppState.users = [];
+    if (!Array.isArray(serverAppState.couriers)) serverAppState.couriers = [];
+
+    const existingUserIdx = serverAppState.users.findIndex((u: any) => u.id === courierId || (u.phone && u.phone === cleanPhone));
+    if (existingUserIdx >= 0) {
+      serverAppState.users[existingUserIdx] = { ...serverAppState.users[existingUserIdx], ...courierUser };
+    } else {
+      serverAppState.users.unshift(courierUser);
+    }
+
+    serverAppState = sanitizeServerState(serverAppState);
+    const now = Date.now();
+    serverLastUpdated = now;
+
+    fs.writeFile(STATE_FILE, JSON.stringify({ state: serverAppState, timestamp: now }), () => {});
+    saveBackupSnapshot(serverAppState, now);
+
+    if (supabaseServer) {
+      Promise.resolve(supabaseServer.from('profiles').upsert({
+        id: courierUser.id,
+        name: courierUser.name,
+        email: courierUser.email,
+        phone: courierUser.phone,
+        role: 'courier',
+        is_confirmed: true,
+        created_at: courierUser.registeredAt,
+      }, { onConflict: 'id' })).catch(() => {});
+
+      Promise.resolve(supabaseServer.from('couriers').upsert({
+        id: courierId,
+        name: courierUser.name,
+        phone: courierUser.phone,
+        vehicle: rawCourier.vehicle || 'motocycle',
+        assigned_hub: courierUser.hubName,
+        status: 'active',
+        created_at: new Date().toISOString(),
+      }, { onConflict: 'id' })).catch(() => {});
+    }
+    await pushStateToSupabase(serverAppState, now);
+
+    broadcastSseState(serverAppState, now, 'server_courier_save');
+    return res.json({ success: true, courier: rawCourier, state: serverAppState });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

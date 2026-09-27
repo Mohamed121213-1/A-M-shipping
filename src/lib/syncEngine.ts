@@ -11,6 +11,7 @@ export interface SyncedAppState {
   governorates?: GovernorateRate[];
   notifications?: CourierNotification[];
   companyTransactions?: CompanyTransaction[];
+  deletedShipmentIds?: string[];
   timestamp?: number;
   senderId?: string;
 }
@@ -28,6 +29,53 @@ class SyncEngine {
   private latestStateCache: SyncedAppState | null = null;
   private latestTimestamp: number = 0;
   private localStatusLocks: Map<string, { status: string; timestamp: number; fullShipment?: any }> = new Map();
+  private deletedShipmentIds: Set<string> = new Set();
+
+  private loadDeletedShipments() {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('bosta_deleted_shipments');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          this.deletedShipmentIds = new Set(parsed.map(String));
+        }
+      }
+    } catch (e) {}
+  }
+
+  private saveDeletedShipments() {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('bosta_deleted_shipments', JSON.stringify(Array.from(this.deletedShipmentIds)));
+    } catch (e) {}
+  }
+
+  public markShipmentDeleted(id: string, trackingNumber?: string) {
+    if (!id && !trackingNumber) return;
+    if (id) this.deletedShipmentIds.add(String(id));
+    if (trackingNumber) this.deletedShipmentIds.add(String(trackingNumber));
+    this.saveDeletedShipments();
+
+    // Immediately remove from localStorage
+    try {
+      const raw = localStorage.getItem('bosta_shipments');
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          const filtered = list.filter((s: any) => 
+            s && s.id !== id && s.trackingNumber !== id && 
+            (!trackingNumber || (s.id !== trackingNumber && s.trackingNumber !== trackingNumber))
+          );
+          localStorage.setItem('bosta_shipments', JSON.stringify(filtered));
+        }
+      }
+    } catch (e) {}
+  }
+
+  public getDeletedShipmentIds(): string[] {
+    return Array.from(this.deletedShipmentIds);
+  }
 
   private loadSavedLocks() {
     if (typeof window === 'undefined') return;
@@ -66,6 +114,7 @@ class SyncEngine {
 
   constructor() {
     this.loadSavedLocks();
+    this.loadDeletedShipments();
     // 0. Initialize latest timestamp & full state cache from localStorage if available
     if (typeof window !== 'undefined') {
       try {
@@ -119,10 +168,10 @@ class SyncEngine {
       this.fetchPersistedStateFromServer();
       this.initSseStream();
       
-      // Safety fallback poll every 60 seconds (reduced to prevent sync storms)
+      // Safety fallback poll every 5 seconds
       setInterval(() => {
         this.fetchPersistedStateFromServer();
-      }, 60000);
+      }, 5000);
 
       // Re-check and sync state immediately when phone is unlocked, tab becomes visible, or on focus
       document.addEventListener('visibilitychange', () => {
@@ -371,6 +420,14 @@ class SyncEngine {
   private handleIncomingUpdate(data: SyncedAppState) {
     if (this.isProcessingIncoming) return;
 
+    // Process incoming deleted shipment IDs
+    if (Array.isArray(data.deletedShipmentIds)) {
+      for (const dId of data.deletedShipmentIds) {
+        if (dId) this.deletedShipmentIds.add(String(dId));
+      }
+      this.saveDeletedShipments();
+    }
+
     // Sanitize state entities and enforce Anti-Wipe Shield
     if (data.shipments !== undefined && Array.isArray(data.shipments)) {
       let existingLocal: Shipment[] = [];
@@ -382,18 +439,23 @@ class SyncEngine {
         existingLocal = this.latestStateCache.shipments;
       }
 
+      // Purge any deleted shipments from existingLocal and data.shipments
+      existingLocal = existingLocal.filter(
+        (s) => !this.deletedShipmentIds.has(String(s.id)) && !this.deletedShipmentIds.has(String(s.trackingNumber))
+      );
+      data.shipments = data.shipments.filter(
+        (s) => !this.deletedShipmentIds.has(String(s.id)) && !this.deletedShipmentIds.has(String(s.trackingNumber))
+      );
+
       if (data.shipments.length === 0) {
-        // SHIELD: Do not allow empty incoming list to wipe out existing data!
-        if (existingLocal.length > 0) {
-          console.warn('🛡️ Anti-Wipe Shield: Rejected empty shipments incoming update, keeping existing shipments.');
-          data.shipments = existingLocal;
-        } else {
-          data.shipments = [];
-        }
+        // If server explicitly has 0 shipments, keep 0 if local is also 0, or honor clear
+        data.shipments = [];
       } else {
         const sanitizedIncoming = sanitizeShipments(data.shipments);
-        // Smart merge with existing local shipments so no shipments are accidentally dropped
-        const mergedList = mergeShipmentsLists(existingLocal, sanitizedIncoming);
+        // Smart merge with existing local shipments while strictly filtering out deleted ones
+        const mergedList = mergeShipmentsLists(existingLocal, sanitizedIncoming).filter(
+          (s) => !this.deletedShipmentIds.has(String(s.id)) && !this.deletedShipmentIds.has(String(s.trackingNumber))
+        );
 
         // Enforce persistent local locks for status transitions
         data.shipments = mergedList.map((s: Shipment) => {
@@ -408,40 +470,8 @@ class SyncEngine {
         });
       }
     }
-    // Anti-Wipe Shield for users — never allow empty incoming to wipe accounts
-    if (data.users !== undefined && Array.isArray(data.users)) {
-      let existingUsers: UserSession[] = [];
-      try {
-        const raw = localStorage.getItem('bosta_users');
-        if (raw) existingUsers = JSON.parse(raw);
-      } catch (e) {}
-      if (existingUsers.length === 0 && this.latestStateCache?.users) {
-        existingUsers = this.latestStateCache.users;
-      }
-      if (data.users.length === 0 && existingUsers.length > 0) {
-        console.warn('🛡️ Anti-Wipe Shield: Rejected empty users update, keeping existing accounts.');
-        data.users = existingUsers;
-      } else {
-        data.users = sanitizeUsers([...existingUsers, ...data.users]);
-      }
-    }
-
-    // Anti-Wipe Shield for couriers
-    if (data.couriers !== undefined && Array.isArray(data.couriers)) {
-      let existingCouriers: CourierInfo[] = [];
-      try {
-        const raw = localStorage.getItem('bosta_couriers');
-        if (raw) existingCouriers = JSON.parse(raw);
-      } catch (e) {}
-      if (data.couriers.length === 0 && existingCouriers.length > 0) {
-        console.warn('🛡️ Anti-Wipe Shield: Rejected empty couriers update.');
-        data.couriers = existingCouriers;
-      } else {
-        data.couriers = sanitizeCouriers(data.couriers);
-      }
-    } else if (data.couriers) {
-      data.couriers = sanitizeCouriers(data.couriers);
-    }
+    if (data.users) data.users = sanitizeUsers(data.users);
+    if (data.couriers) data.couriers = sanitizeCouriers(data.couriers, data.users);
     if (data.wallet) data.wallet = sanitizeWallet(data.wallet);
     if (data.companyTransactions) data.companyTransactions = sanitizeCompanyTxns(data.companyTransactions);
 
@@ -514,7 +544,27 @@ class SyncEngine {
         }
       }
 
-      // لا نسحب profiles تلقائياً — يمنع إعادة حسابات محذوفة من Supabase
+      // Also sync profiles table rows
+      const { data: pRows } = await supabase.from('profiles').select('*');
+      if (pRows && Array.isArray(pRows) && pRows.length > 0) {
+        const mappedUsers: UserSession[] = pRows
+          .filter((p: any) => p && !isDeprecatedDummyUser(p))
+          .map((p: any) => ({
+            id: String(p.id),
+            name: p.name || 'مستخدم',
+            email: p.email || (p.phone ? `${p.phone}@am-shipping.eg` : `${p.id}@am-shipping.eg`),
+            phone: p.phone ? String(p.phone) : '',
+            role: p.role || 'merchant',
+            storeName: p.store_name || undefined,
+            isConfirmed: p.is_confirmed !== undefined ? Boolean(p.is_confirmed) : true,
+            registeredAt: p.created_at || new Date().toISOString(),
+            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'مستخدم')}&background=dc2626&color=ffffff`
+          }));
+
+        const currentUsers = this.getLatestState()?.users || [];
+        const merged = sanitizeUsers([...currentUsers, ...mappedUsers]);
+        this.handleIncomingUpdate({ users: merged, senderId: 'supabase_profiles_pull' });
+      }
     } catch (e) {
       // Table may not exist yet in Supabase project, ignore
     }

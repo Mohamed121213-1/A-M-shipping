@@ -44,12 +44,19 @@ const loadLocalState = <T,>(key: string, defaultValue: T): T => {
 
 export default function App() {
   const [shipments, setShipments] = useState<Shipment[]>(() => {
-    const saved = loadLocalState<Shipment[]>('bosta_shipments', []);
-    return sanitizeShipments(saved);
+    const saved = loadLocalState<Shipment[]>('bosta_shipments', INITIAL_SHIPMENTS);
+    const cleaned = sanitizeShipments(saved);
+    const merged = mergeShipmentsLists(INITIAL_SHIPMENTS, cleaned);
+    return merged;
   });
 
   const [wallet, setWallet] = useState<MerchantWallet>(() => {
-    return sanitizeWallet(loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET));
+    const saved = loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET);
+    const cleaned = sanitizeWallet(saved);
+    if (cleaned.availableBalance === 0 && cleaned.pendingCod === 0 && INITIAL_MERCHANT_WALLET.availableBalance > 0) {
+      return INITIAL_MERCHANT_WALLET;
+    }
+    return cleaned;
   });
 
   // Dynamic system entities customizable by Admin
@@ -65,9 +72,9 @@ export default function App() {
   });
 
   const [couriers, setCouriers] = useState<CourierInfo[]>(() => {
-    const saved = loadLocalState<CourierInfo[]>('bosta_couriers', BOSTA_COURIERS);
-    const cleaned = sanitizeCouriers(saved);
-    return cleaned.length > 0 ? cleaned : BOSTA_COURIERS;
+    const saved = loadLocalState<CourierInfo[]>('bosta_couriers', []);
+    const savedUsers = loadLocalState<UserSession[]>('bosta_users', []);
+    return sanitizeCouriers(saved, savedUsers);
   });
 
   const [hubs, setHubs] = useState<HubInfo[]>(() =>
@@ -369,39 +376,6 @@ export default function App() {
     activeCourierIdRef.current = activeCourierIdInApp;
   }, [activeCourierIdInApp]);
 
-  // One-time factory reset: wipe stale local data, keep admin only (v3)
-  useEffect(() => {
-    const RESET_KEY = 'bosta_factory_reset_v3_applied';
-    if (localStorage.getItem(RESET_KEY)) return;
-    try {
-      localStorage.setItem('bosta_shipments', '[]');
-      localStorage.setItem('bosta_wallet', JSON.stringify({ ...INITIAL_MERCHANT_WALLET, availableBalance: 0, pendingCod: 0, totalPaidOut: 0 }));
-      localStorage.setItem('bosta_users', JSON.stringify([PRIMARY_ADMIN_USER]));
-      localStorage.setItem('bosta_couriers', '[]');
-      localStorage.setItem('bosta_courier_notifications', '[]');
-      localStorage.setItem('bosta_company_txns', '[]');
-      localStorage.removeItem('bosta_current_user');
-      localStorage.setItem(RESET_KEY, new Date().toISOString());
-    } catch (e) {
-      console.warn('Factory reset notice:', e);
-    }
-    setShipments([]);
-    setWallet({ ...INITIAL_MERCHANT_WALLET, availableBalance: 0, pendingCod: 0, totalPaidOut: 0 });
-    setUsers([PRIMARY_ADMIN_USER]);
-    setCouriers([]);
-    setCourierNotifications([]);
-    setCompanyTransactions([]);
-    setCurrentUser(null);
-    syncEngine.broadcastState({
-      shipments: [],
-      wallet: { ...INITIAL_MERCHANT_WALLET, availableBalance: 0, pendingCod: 0, totalPaidOut: 0 },
-      users: [PRIMARY_ADMIN_USER],
-      couriers: [],
-      notifications: [],
-      companyTransactions: [],
-    }, true);
-  }, []);
-
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
     // Immediate hydration from authoritative server state
@@ -429,8 +403,12 @@ export default function App() {
               return merged;
             });
           }
-          if (Array.isArray(s.couriers) && s.couriers.length > 0) {
-            setCouriers(s.couriers);
+          if (Array.isArray(s.couriers)) {
+            setCouriers((prev) => {
+              const cleaned = sanitizeCouriers(s.couriers, s.users || prev as any);
+              try { localStorage.setItem('bosta_couriers', JSON.stringify(cleaned)); } catch (e) {}
+              return cleaned;
+            });
           }
         }
       })
@@ -461,7 +439,33 @@ export default function App() {
       })
       .catch(() => {});
 
-    // Supabase profiles: لا ندمج تلقائياً — يمنع إعادة حسابات محذوفة
+    if (isSupabaseConfigured) {
+      supabase
+        .from('profiles')
+        .select('*')
+        .then(({ data: pRows }) => {
+          if (pRows && Array.isArray(pRows)) {
+            const mappedUsers: UserSession[] = pRows
+              .filter((p: any) => p && !isDeprecatedDummyUser(p))
+              .map((p: any) => ({
+                id: String(p.id),
+                name: p.name || 'مستخدم',
+                email: p.email || (p.phone ? `${p.phone}@am-shipping.eg` : `${p.id}@am-shipping.eg`),
+                phone: p.phone ? String(p.phone) : '',
+                role: p.role || 'merchant',
+                storeName: p.store_name || undefined,
+                isConfirmed: p.is_confirmed !== undefined ? Boolean(p.is_confirmed) : true,
+                registeredAt: p.created_at || new Date().toISOString(),
+                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'مستخدم')}&background=dc2626&color=ffffff`
+              }));
+            setUsers((prev) => {
+              const cleaned = sanitizeUsers([...prev, ...mappedUsers]);
+              try { localStorage.setItem('bosta_users', JSON.stringify(cleaned)); } catch (e) {}
+              return cleaned;
+            });
+          }
+        });
+    }
 
     const unsubscribe = syncEngine.subscribe((incoming) => {
       isIncomingSyncRef.current = true;
@@ -536,6 +540,7 @@ export default function App() {
       governorates: GovernorateRate[];
       notifications: CourierNotification[];
       companyTransactions: CompanyTransaction[];
+      deletedShipmentIds: string[];
     }>,
     isExplicitClear = false
   ) => {
@@ -548,6 +553,7 @@ export default function App() {
       governorates: overrideState?.governorates !== undefined ? overrideState.governorates : governorates,
       notifications: overrideState?.notifications !== undefined ? overrideState.notifications : courierNotifications,
       companyTransactions: overrideState?.companyTransactions !== undefined ? overrideState.companyTransactions : companyTransactions,
+      deletedShipmentIds: overrideState?.deletedShipmentIds !== undefined ? overrideState.deletedShipmentIds : syncEngine.getDeletedShipmentIds(),
     }, isExplicitClear);
   };
 
@@ -1478,13 +1484,20 @@ export default function App() {
   // Delete Single Shipment Handler
   const handleDeleteShipment = (shipmentId: string) => {
     let nextShipments: Shipment[] = [];
+    const target = shipments.find((s) => s.id === shipmentId || s.trackingNumber === shipmentId);
+    syncEngine.markShipmentDeleted(shipmentId, target?.trackingNumber);
+
     setShipments((prev) => {
-      nextShipments = prev.filter((s) => s.id !== shipmentId);
+      nextShipments = prev.filter((s) => s.id !== shipmentId && s.trackingNumber !== shipmentId);
+      try {
+        localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
+      } catch (e) {}
       return nextShipments;
     });
 
+    const deletedIds = [shipmentId, target?.trackingNumber].filter(Boolean) as string[];
     setTimeout(() => {
-      broadcastDataChange({ shipments: nextShipments });
+      broadcastDataChange({ shipments: nextShipments, deletedShipmentIds: deletedIds });
     }, 20);
 
     fetch(`/api/shipments/${encodeURIComponent(shipmentId)}`, {
@@ -1493,11 +1506,11 @@ export default function App() {
       body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
     }).catch((err) => console.warn('Delete shipment API error:', err));
 
-    if (selectedDetailShipment && selectedDetailShipment.id === shipmentId) {
+    if (selectedDetailShipment && (selectedDetailShipment.id === shipmentId || selectedDetailShipment.trackingNumber === shipmentId)) {
       setSelectedDetailShipment(null);
     }
 
-    showToast('تم حذف الأوردر بنجاح');
+    showToast('تم حذف الأوردر نهائياً من السيستم');
   };
 
   // Mark Shipment Returned to Merchant Handler
@@ -1537,6 +1550,14 @@ export default function App() {
 
   // Delete Multiple Shipments Handler
   const handleDeleteMultipleShipments = (shipmentIds: string[]) => {
+    const allDeletedIds: string[] = [];
+    shipmentIds.forEach((id) => {
+      const target = shipments.find((s) => s.id === id || s.trackingNumber === id);
+      syncEngine.markShipmentDeleted(id, target?.trackingNumber);
+      allDeletedIds.push(id);
+      if (target?.trackingNumber) allDeletedIds.push(target.trackingNumber);
+    });
+
     let nextShipments: Shipment[] = [];
     setShipments((prev) => {
       nextShipments = prev.filter((s) => !shipmentIds.includes(s.id) && !shipmentIds.includes(s.trackingNumber));
@@ -1546,7 +1567,7 @@ export default function App() {
       return nextShipments;
     });
 
-    broadcastDataChange({ shipments: nextShipments });
+    broadcastDataChange({ shipments: nextShipments, deletedShipmentIds: allDeletedIds });
 
     fetch('/api/shipments/batch-delete', {
       method: 'POST',
@@ -1563,7 +1584,7 @@ export default function App() {
       setSelectedDetailShipment(null);
     }
 
-    showToast(`تم حذف ${shipmentIds.length} أوردر بنجاح`);
+    showToast(`تم حذف ${shipmentIds.length} أوردر نهائياً من السيستم`);
   };
 
   // Assign Courier Handler
@@ -2262,7 +2283,15 @@ export default function App() {
         activeShipmentsCount: 0,
         codCollectedToday: 0,
         photoUrl: fullUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullUser.name)}&background=2563eb&color=ffffff`,
+        isConfirmed: fullUser.isConfirmed !== false,
       };
+
+      fetch('/api/couriers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(courierObj),
+      }).catch((e) => console.warn('Courier direct add notice:', e));
+
       setCouriers((prev) => {
         let nextCouriers: CourierInfo[];
         if (prev.some((c) => c.id === courierObj.id || (c.phone && c.phone === courierObj.phone))) {
@@ -2385,8 +2414,8 @@ export default function App() {
   };
 
   const handleAddCourier = (courier: CourierInfo) => {
-    const courierId = courier.id || `cour-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const fullCourier: CourierInfo = { ...courier, id: courierId };
+    const courierId = courier.id || `cour-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const fullCourier: CourierInfo = { ...courier, id: courierId, isConfirmed: true };
 
     let nextCouriers: CourierInfo[] = [];
     setCouriers((prev) => {
@@ -2403,12 +2432,14 @@ export default function App() {
     const courierUser: UserSession = {
       id: courierId,
       name: fullCourier.name,
-      email: `${courierId}@dropline.eg`,
+      email: `${courierId}@am-shipping.eg`,
       phone: fullCourier.phone,
       role: 'courier',
-      avatarUrl: fullCourier.photoUrl,
-      courierVehicle: fullCourier.vehicle === 'motocycle' ? 'دراجة نارية' : 'سيارة فان',
-      hubName: fullCourier.assignedHub,
+      isConfirmed: true,
+      avatarUrl: fullCourier.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullCourier.name)}&background=2563eb&color=ffffff`,
+      courierVehicle: fullCourier.vehicle === 'van' ? 'سيارة فان' : 'دراجة نارية / موتوسيكل',
+      hubName: fullCourier.assignedHub || 'المستودع الرئيسي',
+      registeredAt: new Date().toISOString(),
     };
 
     let nextUsers: UserSession[] = [];
@@ -2421,6 +2452,18 @@ export default function App() {
       try { localStorage.setItem('bosta_users', JSON.stringify(nextUsers)); } catch (e) {}
       return nextUsers;
     });
+
+    fetch('/api/users/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(courierUser),
+    }).catch((e) => console.warn('Courier user registration notice:', e));
+
+    fetch('/api/couriers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullCourier),
+    }).catch((e) => console.warn('Courier registration notice:', e));
 
     broadcastDataChange({ couriers: nextCouriers, users: nextUsers });
     showToast(`🚚 تم إضافة الكابتن ${fullCourier.name} بنجاح وربطه بحسابات لوحة التحكم`);
@@ -2445,14 +2488,35 @@ export default function App() {
               ...u,
               name: fullCourier.name,
               phone: fullCourier.phone,
-              courierVehicle: fullCourier.vehicle === 'motocycle' ? 'دراجة نارية' : 'سيارة فان',
+              courierVehicle: fullCourier.vehicle === 'van' ? 'سيارة فان' : 'دراجة نارية / موتوسيكل',
               hubName: fullCourier.assignedHub,
+              isConfirmed: fullCourier.isConfirmed !== undefined ? fullCourier.isConfirmed : u.isConfirmed,
             }
           : u
       );
       try { localStorage.setItem('bosta_users', JSON.stringify(nextUsers)); } catch (e) {}
       return nextUsers;
     });
+
+    fetch('/api/users/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: courierId,
+        name: fullCourier.name,
+        phone: fullCourier.phone,
+        role: 'courier',
+        courierVehicle: fullCourier.vehicle === 'van' ? 'سيارة فان' : 'دراجة نارية / موتوسيكل',
+        hubName: fullCourier.assignedHub,
+        isConfirmed: fullCourier.isConfirmed !== false,
+      }),
+    }).catch((e) => console.warn('Server courier user update notice:', e));
+
+    fetch('/api/couriers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullCourier),
+    }).catch((e) => console.warn('Server courier update notice:', e));
 
     broadcastDataChange({ couriers: nextCouriers, users: nextUsers });
     showToast(`✏️ تم تحديث بيانات الكابتن ${fullCourier.name}`);
