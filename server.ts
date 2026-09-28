@@ -1950,9 +1950,15 @@ app.post("/api/sync/state", (req, res) => {
 
     let mergedState = { ...state };
 
-    if (Array.isArray(state.shipments) && state.shipments.length > 0) {
-      const serverList = (serverAppState && Array.isArray(serverAppState.shipments)) ? serverAppState.shipments : [];
-      mergedState.shipments = mergeShipmentsLists(serverList, state.shipments);
+    if (isExplicitClear && Array.isArray(state.shipments) && state.shipments.length === 0) {
+      mergedState.shipments = [];
+    } else if (Array.isArray(state.shipments)) {
+      if (state.shipments.length === 0 && !isExplicitClear) {
+        mergedState.shipments = serverAppState?.shipments || [];
+      } else {
+        const serverList = (serverAppState && Array.isArray(serverAppState.shipments)) ? serverAppState.shipments : [];
+        mergedState.shipments = mergeShipmentsLists(serverList, state.shipments);
+      }
     } else if (serverAppState && Array.isArray(serverAppState.shipments) && serverAppState.shipments.length > 0) {
       mergedState.shipments = serverAppState.shipments.filter(
         (s: any) => !serverDeletedShipments.has(String(s.id)) && !serverDeletedShipments.has(String(s.trackingNumber))

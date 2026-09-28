@@ -29,34 +29,134 @@ import { DeviceNotificationBanner } from './components/DeviceNotificationBanner'
 import { registerServiceWorker, subscribeUserToWebPush, sendDeviceNotification, isNotificationRelevantForUser, markNotificationAsNotified, hasNotificationBeenNotified, isNotificationFresh } from './utils/deviceNotifications';
 import droplineLogoImg from './assets/images/dropline_official_logo_1787442134000.jpg';
 
-// Safe localStorage loader helper
-const loadLocalState = <T,>(key: string, defaultValue: T): T => {
+// Schema Validation & Safety Check helpers for localStorage
+const isValidEntityObject = (item: any): boolean => {
+  return typeof item === 'object' && item !== null && !Array.isArray(item);
+};
+
+const validateLoadedArray = (key: string, list: any[]): any[] => {
+  if (key === 'bosta_shipments') {
+    const deletedSet = new Set(syncEngine.getDeletedShipmentIds());
+    return list.filter((item) => {
+      // 1. Must be a valid, non-null object
+      if (!isValidEntityObject(item)) return false;
+
+      // 2. Must have a valid identifier
+      const id = item.id || item.trackingNumber;
+      if (!id || typeof id !== 'string' || id.trim() === '') return false;
+
+      // 3. Safety Check: Discard any item matching deleted/purged reference IDs
+      if (deletedSet.has(String(item.id)) || deletedSet.has(String(item.trackingNumber))) {
+        return false;
+      }
+
+      // 4. Schema Validation: Check required shipment fields to eliminate corrupt objects
+      if (!item.recipient || typeof item.recipient !== 'object') return false;
+      if (!item.financials || typeof item.financials !== 'object') return false;
+      if (!item.status || typeof item.status !== 'string') return false;
+
+      return true;
+    });
+  }
+
+  if (key === 'bosta_users') {
+    return list.filter((item) => {
+      if (!isValidEntityObject(item)) return false;
+      return typeof item.id === 'string' && item.id.trim() !== '' && typeof item.name === 'string';
+    });
+  }
+
+  if (key === 'bosta_couriers') {
+    return list.filter((item) => {
+      if (!isValidEntityObject(item)) return false;
+      return typeof item.id === 'string' && item.id.trim() !== '' && typeof item.name === 'string';
+    });
+  }
+
+  if (key === 'bosta_hubs') {
+    return list.filter((item) => {
+      if (!isValidEntityObject(item)) return false;
+      return typeof item.id === 'string' && typeof item.name === 'string';
+    });
+  }
+
+  if (key === 'bosta_governorates') {
+    return list.filter((item) => {
+      if (!isValidEntityObject(item)) return false;
+      return typeof item.id === 'string' && typeof item.rate === 'number';
+    });
+  }
+
+  // Generic fallback: filter out corrupt/null values
+  return list.filter((item) => item !== null && item !== undefined);
+};
+
+// Safe localStorage loader helper with Safety Check & Schema Validation
+const loadLocalState = <T,>(
+  key: string,
+  defaultValue: T,
+  customValidator?: (parsed: any) => boolean
+): T => {
   try {
     const saved = localStorage.getItem(key);
     if (saved !== null) {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+
+      // Custom validator check
+      if (customValidator && !customValidator(parsed)) {
+        console.warn(`🛡️ [Safety Check] Custom validation failed for "${key}". Falling back to safe default.`);
+        return defaultValue;
+      }
+
+      // Array Schema Validation & Safety Filter
+      if (Array.isArray(parsed)) {
+        const validatedList = validateLoadedArray(key, parsed);
+        return validatedList as unknown as T;
+      }
+
+      // Object Schema Validation
+      if (isValidEntityObject(parsed)) {
+        if (key === 'bosta_wallet') {
+          if (
+            typeof parsed.availableBalance === 'number' &&
+            !isNaN(parsed.availableBalance)
+          ) {
+            return parsed as unknown as T;
+          }
+          return defaultValue;
+        }
+        return parsed as unknown as T;
+      }
+
+      return parsed as unknown as T;
     }
   } catch (error) {
-    console.error(`Error loading ${key} from localStorage:`, error);
+    console.error(`🛡️ [Safety Check] Error validating/loading ${key} from localStorage:`, error);
   }
   return defaultValue;
 };
 
 export default function App() {
   const [shipments, setShipments] = useState<Shipment[]>(() => {
-    const saved = loadLocalState<Shipment[]>('bosta_shipments', INITIAL_SHIPMENTS);
-    const cleaned = sanitizeShipments(saved);
-    const merged = mergeShipmentsLists(INITIAL_SHIPMENTS, cleaned);
-    return merged;
+    const deletedIds = new Set(syncEngine.getDeletedShipmentIds());
+    const saved = loadLocalState<Shipment[] | null>('bosta_shipments', null);
+    const source = (saved !== null && Array.isArray(saved)) ? saved : INITIAL_SHIPMENTS;
+    const filtered = source.filter(
+      (s) => !deletedIds.has(String(s.id)) && !deletedIds.has(String(s.trackingNumber))
+    );
+    const cleaned = sanitizeShipments(filtered);
+    try {
+      localStorage.setItem('bosta_shipments', JSON.stringify(cleaned));
+    } catch (e) {}
+    return cleaned;
   });
 
   const [wallet, setWallet] = useState<MerchantWallet>(() => {
-    const saved = loadLocalState<MerchantWallet>('bosta_wallet', INITIAL_MERCHANT_WALLET);
-    const cleaned = sanitizeWallet(saved);
-    if (cleaned.availableBalance === 0 && cleaned.pendingCod === 0 && INITIAL_MERCHANT_WALLET.availableBalance > 0) {
-      return INITIAL_MERCHANT_WALLET;
+    const saved = loadLocalState<MerchantWallet | null>('bosta_wallet', null);
+    if (saved !== null && typeof saved === 'object') {
+      return sanitizeWallet(saved);
     }
-    return cleaned;
+    return sanitizeWallet(INITIAL_MERCHANT_WALLET);
   });
 
   // Dynamic system entities customizable by Admin
@@ -461,6 +561,11 @@ export default function App() {
             setUsers((prev) => {
               const cleaned = sanitizeUsers([...prev, ...mappedUsers]);
               try { localStorage.setItem('bosta_users', JSON.stringify(cleaned)); } catch (e) {}
+              setCouriers((prevCouriers) => {
+                const updatedCouriers = sanitizeCouriers(prevCouriers, cleaned);
+                try { localStorage.setItem('bosta_couriers', JSON.stringify(updatedCouriers)); } catch (e) {}
+                return updatedCouriers;
+              });
               return cleaned;
             });
           }
@@ -469,12 +574,13 @@ export default function App() {
 
     const unsubscribe = syncEngine.subscribe((incoming) => {
       isIncomingSyncRef.current = true;
-      if (incoming.shipments !== undefined && Array.isArray(incoming.shipments) && incoming.shipments.length > 0) {
-        setShipments((prev) => {
-          const merged = mergeShipmentsLists(prev, incoming.shipments!);
-          try { localStorage.setItem('bosta_shipments', JSON.stringify(merged)); } catch (e) {}
-          return merged;
-        });
+      if (incoming.shipments !== undefined && Array.isArray(incoming.shipments)) {
+        const deletedSet = new Set(syncEngine.getDeletedShipmentIds());
+        const filtered = incoming.shipments.filter(
+          (s) => !deletedSet.has(String(s.id)) && !deletedSet.has(String(s.trackingNumber))
+        );
+        setShipments(filtered);
+        try { localStorage.setItem('bosta_shipments', JSON.stringify(filtered)); } catch (e) {}
       }
       if (incoming.wallet) {
         setWallet(incoming.wallet);
@@ -1481,36 +1587,93 @@ export default function App() {
     }`);
   };
 
-  // Delete Single Shipment Handler
-  const handleDeleteShipment = (shipmentId: string) => {
-    let nextShipments: Shipment[] = [];
-    const target = shipments.find((s) => s.id === shipmentId || s.trackingNumber === shipmentId);
-    syncEngine.markShipmentDeleted(shipmentId, target?.trackingNumber);
+  /**
+   * Reference-based Shipment Deletion:
+   * Guarantees that deleted shipments are added to the permanent exclusion blacklist
+   * in syncEngine and localStorage ('bosta_deleted_shipments'), purged from
+   * localStorage ('bosta_shipments'), immediately updated in UI state,
+   * and synchronized to the server and Supabase so they NEVER resurrect upon refresh.
+   */
+  const deleteShipmentsByReference = (shipmentIds: string[]) => {
+    if (!shipmentIds || shipmentIds.length === 0) return;
 
+    // 1. Resolve IDs and tracking numbers from memory and localStorage
+    const idsSet = new Set(shipmentIds.map(String));
+    let localSaved: Shipment[] = [];
+    try {
+      const raw = localStorage.getItem('bosta_shipments');
+      if (raw) localSaved = JSON.parse(raw);
+    } catch (e) {}
+
+    const allKnown = [...shipments, ...localSaved];
+    const itemsToDelete: Array<{ id: string; trackingNumber?: string }> = [];
+    const allBlacklistIds: string[] = [];
+
+    shipmentIds.forEach((id) => {
+      const target = allKnown.find((s) => s && (s.id === id || s.trackingNumber === id));
+      const targetId = target?.id || id;
+      const targetTrack = target?.trackingNumber;
+      itemsToDelete.push({ id: targetId, trackingNumber: targetTrack });
+      allBlacklistIds.push(targetId);
+      if (targetTrack) allBlacklistIds.push(targetTrack);
+    });
+
+    // 2. Mark in syncEngine & bosta_deleted_shipments reference storage
+    syncEngine.markMultipleShipmentsDeleted(itemsToDelete);
+    const globalDeletedSet = new Set(syncEngine.getDeletedShipmentIds());
+
+    // 3. Compute pristine nextShipments strictly filtering out any blacklisted reference
+    let nextShipments: Shipment[] = [];
     setShipments((prev) => {
-      nextShipments = prev.filter((s) => s.id !== shipmentId && s.trackingNumber !== shipmentId);
+      const base = (prev && prev.length > 0) ? prev : localSaved;
+      nextShipments = base.filter(
+        (s) => !idsSet.has(String(s.id)) &&
+               !idsSet.has(String(s.trackingNumber)) &&
+               !globalDeletedSet.has(String(s.id)) &&
+               !globalDeletedSet.has(String(s.trackingNumber))
+      );
       try {
         localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
       } catch (e) {}
       return nextShipments;
     });
 
-    const deletedIds = [shipmentId, target?.trackingNumber].filter(Boolean) as string[];
-    setTimeout(() => {
-      broadcastDataChange({ shipments: nextShipments, deletedShipmentIds: deletedIds });
-    }, 20);
-
-    fetch(`/api/shipments/${encodeURIComponent(shipmentId)}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
-    }).catch((err) => console.warn('Delete shipment API error:', err));
-
-    if (selectedDetailShipment && (selectedDetailShipment.id === shipmentId || selectedDetailShipment.trackingNumber === shipmentId)) {
+    // 4. Close any open detail/modal for the deleted shipments
+    if (selectedDetailShipment && (idsSet.has(selectedDetailShipment.id) || idsSet.has(selectedDetailShipment.trackingNumber))) {
       setSelectedDetailShipment(null);
     }
 
-    showToast('تم حذف الأوردر نهائياً من السيستم');
+    // 5. Broadcast to tabs and persist to server
+    broadcastDataChange({ shipments: nextShipments, deletedShipmentIds: allBlacklistIds });
+
+    // 6. Network persistence (Single or Batch)
+    if (shipmentIds.length === 1) {
+      const singleId = shipmentIds[0];
+      fetch(`/api/shipments/${encodeURIComponent(singleId)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderId: syncEngine.getInstanceId() }),
+      }).catch((err) => console.warn('Delete shipment API error:', err));
+    } else {
+      fetch('/api/shipments/batch-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: shipmentIds, senderId: syncEngine.getInstanceId() }),
+      }).catch((err) => console.warn('Batch delete API error:', err));
+    }
+
+    // 7. Supabase direct delete
+    if (isSupabaseConfigured) {
+      Promise.resolve(supabase.from('shipments').delete().in('id', shipmentIds)).catch(() => {});
+      Promise.resolve(supabase.from('shipments').delete().in('tracking_number', shipmentIds)).catch(() => {});
+    }
+
+    showToast(shipmentIds.length === 1 ? 'تم حذف الأوردر نهائياً من السيستم' : `تم حذف ${shipmentIds.length} أوردر نهائياً من السيستم`);
+  };
+
+  // Delete Single Shipment Handler
+  const handleDeleteShipment = (shipmentId: string) => {
+    deleteShipmentsByReference([shipmentId]);
   };
 
   // Mark Shipment Returned to Merchant Handler
@@ -1550,41 +1713,7 @@ export default function App() {
 
   // Delete Multiple Shipments Handler
   const handleDeleteMultipleShipments = (shipmentIds: string[]) => {
-    const allDeletedIds: string[] = [];
-    shipmentIds.forEach((id) => {
-      const target = shipments.find((s) => s.id === id || s.trackingNumber === id);
-      syncEngine.markShipmentDeleted(id, target?.trackingNumber);
-      allDeletedIds.push(id);
-      if (target?.trackingNumber) allDeletedIds.push(target.trackingNumber);
-    });
-
-    let nextShipments: Shipment[] = [];
-    setShipments((prev) => {
-      nextShipments = prev.filter((s) => !shipmentIds.includes(s.id) && !shipmentIds.includes(s.trackingNumber));
-      try {
-        localStorage.setItem('bosta_shipments', JSON.stringify(nextShipments));
-      } catch (e) {}
-      return nextShipments;
-    });
-
-    broadcastDataChange({ shipments: nextShipments, deletedShipmentIds: allDeletedIds });
-
-    fetch('/api/shipments/batch-delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: shipmentIds, senderId: syncEngine.getInstanceId() }),
-    }).catch((err) => console.warn('Batch delete API error:', err));
-
-    if (isSupabaseConfigured) {
-      Promise.resolve(supabase.from('shipments').delete().in('id', shipmentIds)).catch(() => {});
-      Promise.resolve(supabase.from('shipments').delete().in('tracking_number', shipmentIds)).catch(() => {});
-    }
-
-    if (selectedDetailShipment && (shipmentIds.includes(selectedDetailShipment.id) || shipmentIds.includes(selectedDetailShipment.trackingNumber))) {
-      setSelectedDetailShipment(null);
-    }
-
-    showToast(`تم حذف ${shipmentIds.length} أوردر نهائياً من السيستم`);
+    deleteShipmentsByReference(shipmentIds);
   };
 
   // Assign Courier Handler
@@ -2229,6 +2358,57 @@ export default function App() {
     const userId = user.id || `USR-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const fullUser: UserSession = { ...user, id: userId };
 
+    let nextUsersList: UserSession[] = [];
+    setUsers((prev) => {
+      const existsIndex = prev.findIndex(
+        (u) => u.id === fullUser.id ||
+               (u.email && fullUser.email && u.email.toLowerCase() === fullUser.email.toLowerCase()) ||
+               (u.phone && fullUser.phone && u.phone === fullUser.phone)
+      );
+
+      if (existsIndex >= 0) {
+        nextUsersList = prev.map((u, i) => (i === existsIndex ? { ...u, ...fullUser } : u));
+      } else {
+        nextUsersList = [fullUser, ...prev];
+      }
+      nextUsersList = sanitizeUsers(nextUsersList);
+
+      try { localStorage.setItem('bosta_users', JSON.stringify(nextUsersList)); } catch (e) {}
+      return nextUsersList;
+    });
+
+    let nextCouriersList: CourierInfo[] | undefined;
+    if (fullUser.role === 'courier') {
+      const courierObj: CourierInfo = {
+        id: fullUser.id,
+        name: fullUser.name,
+        phone: fullUser.phone,
+        vehicle: fullUser.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
+        assignedHub: fullUser.hubName || 'المستودع الرئيسي',
+        rating: 5.0,
+        activeShipmentsCount: 0,
+        codCollectedToday: 0,
+        photoUrl: fullUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullUser.name)}&background=2563eb&color=ffffff`,
+        isConfirmed: fullUser.isConfirmed !== false,
+      };
+
+      setCouriers((prev) => {
+        if (prev.some((c) => c.id === courierObj.id || (c.phone && c.phone === courierObj.phone))) {
+          nextCouriersList = prev.map((c) => (c.id === courierObj.id || (c.phone && c.phone === courierObj.phone) ? { ...c, ...courierObj } : c));
+        } else {
+          nextCouriersList = [courierObj, ...prev];
+        }
+        try { localStorage.setItem('bosta_couriers', JSON.stringify(nextCouriersList)); } catch (e) {}
+        return nextCouriersList;
+      });
+
+      fetch('/api/couriers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(courierObj),
+      }).catch((e) => console.warn('Courier direct add notice:', e));
+    }
+
     // 1. Direct server persistence
     fetch('/api/users/register', {
       method: 'POST',
@@ -2252,59 +2432,14 @@ export default function App() {
       ).catch((e) => console.warn('Supabase profile add err:', e));
     }
 
-    setUsers((prev) => {
-      const existsIndex = prev.findIndex(
-        (u) => u.id === fullUser.id ||
-               (u.email && fullUser.email && u.email.toLowerCase() === fullUser.email.toLowerCase()) ||
-               (u.phone && fullUser.phone && u.phone === fullUser.phone)
-      );
-
-      let nextUsers: UserSession[];
-      if (existsIndex >= 0) {
-        nextUsers = prev.map((u, i) => (i === existsIndex ? { ...u, ...fullUser } : u));
-      } else {
-        nextUsers = [fullUser, ...prev];
-      }
-      nextUsers = sanitizeUsers(nextUsers);
-
-      localStorage.setItem('bosta_users', JSON.stringify(nextUsers));
-      broadcastDataChange({ users: nextUsers });
-      return nextUsers;
-    });
-
-    if (fullUser.role === 'courier') {
-      const courierObj: CourierInfo = {
-        id: fullUser.id,
-        name: fullUser.name,
-        phone: fullUser.phone,
-        vehicle: fullUser.courierVehicle === 'سيارة فان' ? 'van' : 'motocycle',
-        assignedHub: fullUser.hubName || 'المستودع الرئيسي',
-        rating: 5.0,
-        activeShipmentsCount: 0,
-        codCollectedToday: 0,
-        photoUrl: fullUser.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullUser.name)}&background=2563eb&color=ffffff`,
-        isConfirmed: fullUser.isConfirmed !== false,
-      };
-
-      fetch('/api/couriers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(courierObj),
-      }).catch((e) => console.warn('Courier direct add notice:', e));
-
-      setCouriers((prev) => {
-        let nextCouriers: CourierInfo[];
-        if (prev.some((c) => c.id === courierObj.id || (c.phone && c.phone === courierObj.phone))) {
-          nextCouriers = prev.map((c) => (c.id === courierObj.id || (c.phone && c.phone === courierObj.phone) ? { ...c, ...courierObj } : c));
-        } else {
-          nextCouriers = [...prev, courierObj];
-        }
-        localStorage.setItem('bosta_couriers', JSON.stringify(nextCouriers));
-        broadcastDataChange({ couriers: nextCouriers });
-        return nextCouriers;
+    setTimeout(() => {
+      broadcastDataChange({
+        users: nextUsersList.length > 0 ? nextUsersList : undefined,
+        couriers: nextCouriersList && nextCouriersList.length > 0 ? nextCouriersList : undefined,
       });
-    }
-    showToast(`✅ تم حفظ وإدراج الحساب ${fullUser.name} بنجاح في النظام وSupabase`);
+    }, 10);
+
+    showToast(`✅ تم حفظ وإدراج الحساب ${fullUser.name} بنجاح في النظام`);
   };
 
   const handleUpdateUser = (updatedUser: UserSession) => {

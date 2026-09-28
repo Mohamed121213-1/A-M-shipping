@@ -16,15 +16,30 @@
         "shippingPricingType": "fixed"
       },
       {
-        "id": "USR-1790544450033-8718",
-        "name": "مندوب تجريبي جديد",
-        "email": "01099887766@am-shipping.eg",
-        "phone": "01099887766",
+        "id": "USR-1788364629634-8301",
+        "name": "Ibrahim",
+        "email": "01118003293@am-shipping.eg",
+        "phone": "01118003293",
+        "role": "hub_manager",
+        "isConfirmed": true,
+        "registeredAt": "2026-09-02T15:57:09.634+00:00",
+        "avatarUrl": "https://ui-avatars.com/api/?name=Ibrahim&background=dc2626&color=ffffff",
+        "hubName": "المستودع الرئيسي",
+        "password": "Mm123456",
+        "hasCustomShippingRate": false,
+        "shippingPricingType": "fixed"
+      },
+      {
+        "id": "USR-1788364520004-8809",
+        "name": "احمد رشاد",
+        "email": "01033011862@am-shipping.eg",
+        "phone": "01033011862",
         "role": "courier",
-        "isConfirmed": false,
-        "registeredAt": "2026-09-27T21:27:30.033+00:00",
-        "avatarUrl": "https://ui-avatars.com/api/?name=%D9%85%D9%86%D8%AF%D9%88%D8%A8%20%D8%AA%D8%AC%D8%B1%D9%8A%D8%A8%D9%8A%20%D8%AC%D8%AF%D9%8A%D8%AF&background=dc2626&color=ffffff",
-        "password": "123456",
+        "isConfirmed": true,
+        "registeredAt": "2026-09-02T15:55:20.004+00:00",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF%20%D8%B1%D8%B4%D8%A7%D8%AF&background=dc2626&color=ffffff",
+        "courierVehicle": "سيارة نقل / تروسيكل",
+        "password": "Mm123455",
         "hasCustomShippingRate": false,
         "shippingPricingType": "fixed"
       },
@@ -44,18 +59,16 @@
         "shippingPricingType": "fixed"
       },
       {
-        "id": "USR-1790529528973-1401",
-        "name": "مصطفي النوبي",
-        "email": "01006717644@am-shipping.eg",
-        "phone": "01006717644",
-        "role": "merchant",
-        "storeName": "Magic",
+        "id": "USR-1788364242163-4812",
+        "name": "حسن علي",
+        "email": "01093383328@am-shipping.eg",
+        "phone": "01093383328",
+        "role": "courier",
         "isConfirmed": true,
-        "registeredAt": "2026-09-27T17:18:48.973Z",
-        "avatarUrl": "https://ui-avatars.com/api/?name=%D9%85%D8%B5%D8%B7%D9%81%D9%8A%20%D8%A7%D9%84%D9%86%D9%88%D8%A8%D9%8A%20&background=dc2626&color=ffffff",
-        "password": "Mm123456",
-        "hasCustomShippingRate": true,
-        "customShippingRate": 80,
+        "registeredAt": "2026-09-02T15:50:42.163+00:00",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+        "password": "123456",
+        "hasCustomShippingRate": false,
         "shippingPricingType": "fixed"
       },
       {
@@ -71,6 +84,47 @@
         "password": "123456",
         "hasCustomShippingRate": false,
         "shippingPricingType": "fixed"
+      },
+      {
+        "id": "USR-1790529528973-1401",
+        "name": "مصطفي النوبي",
+        "email": "01006717644@am-shipping.eg",
+        "phone": "01006717644",
+        "role": "merchant",
+        "storeName": "Magic",
+        "isConfirmed": true,
+        "registeredAt": "2026-09-27T17:18:48.973Z",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D9%85%D8%B5%D8%B7%D9%81%D9%8A%20%D8%A7%D9%84%D9%86%D9%88%D8%A8%D9%8A%20&background=dc2626&color=ffffff",
+        "password": "Mm123456",
+        "hasCustomShippingRate": true,
+        "customShippingRate": 80,
+        "shippingPricingType": "fixed"
+      },
+      {
+        "id": "USR-1790544450033-8718",
+        "name": "مندوب تجريبي جديد",
+        "email": "01099887766@am-shipping.eg",
+        "phone": "01099887766",
+        "role": "courier",
+        "isConfirmed": false,
+        "registeredAt": "2026-09-27T21:27:30.033+00:00",
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D9%85%D9%86%D8%AF%D9%88%D8%A8%20%D8%AA%D8%AC%D8%B1%D9%8A%D8%A8%D9%8A%20%D8%AC%D8%AF%D9%8A%D8%AF&background=dc2626&color=ffffff",
+        "password": "123456",
+        "hasCustomShippingRate": false,
+        "shippingPricingType": "fixed"
+      },
+      {
+        "id": "USR-1790546305908-3001",
+        "name": "Mohamed",
+        "email": "01125465248@am-shipping.eg",
+        "phone": "01125465248",
+        "role": "courier",
+        "isConfirmed": true,
+        "registeredAt": "2026-09-27T21:58:25.908+00:00",
+        "avatarUrl": "https://ui-avatars.com/api/?name=Mohamed&background=dc2626&color=ffffff",
+        "password": "123456",
+        "hasCustomShippingRate": false,
+        "shippingPricingType": "fixed"
       }
     ],
     "wallet": {
@@ -82,16 +136,52 @@
     },
     "couriers": [
       {
+        "id": "USR-1788364520004-8809",
+        "name": "احمد رشاد",
+        "phone": "01033011862",
+        "vehicle": "motocycle",
+        "assignedHub": "المستودع الرئيسي",
+        "rating": 5,
+        "activeDeliveriesCount": 0,
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF%20%D8%B1%D8%B4%D8%A7%D8%AF&background=dc2626&color=ffffff",
+        "photoUrl": "https://ui-avatars.com/api/?name=%D8%A7%D8%AD%D9%85%D8%AF%20%D8%B1%D8%B4%D8%A7%D8%AF&background=dc2626&color=ffffff",
+        "isConfirmed": true
+      },
+      {
+        "id": "USR-1788364242163-4812",
+        "name": "حسن علي",
+        "phone": "01093383328",
+        "vehicle": "motocycle",
+        "assignedHub": "المستودع الرئيسي",
+        "rating": 5,
+        "activeDeliveriesCount": 0,
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+        "photoUrl": "https://ui-avatars.com/api/?name=%D8%AD%D8%B3%D9%86%20%D8%B9%D9%84%D9%8A&background=dc2626&color=ffffff",
+        "isConfirmed": true
+      },
+      {
         "id": "USR-1790544450033-8718",
         "name": "مندوب تجريبي جديد",
         "phone": "01099887766",
-        "rating": 5,
         "vehicle": "motocycle",
-        "photoUrl": "https://ui-avatars.com/api/?name=%D9%85%D9%86%D8%AF%D9%88%D8%A8%20%D8%AA%D8%AC%D8%B1%D9%8A%D8%A8%D9%8A%20%D8%AC%D8%AF%D9%8A%D8%AF&background=dc2626&color=ffffff",
-        "avatarUrl": "https://ui-avatars.com/api/?name=%D9%85%D9%86%D8%AF%D9%88%D8%A8%20%D8%AA%D8%AC%D8%B1%D9%8A%D8%A8%D9%8A%20%D8%AC%D8%AF%D9%8A%D8%AF&background=dc2626&color=ffffff",
         "assignedHub": "المستودع الرئيسي",
-        "isConfirmed": false,
-        "activeDeliveriesCount": 0
+        "rating": 5,
+        "activeDeliveriesCount": 0,
+        "avatarUrl": "https://ui-avatars.com/api/?name=%D9%85%D9%86%D8%AF%D9%88%D8%A8%20%D8%AA%D8%AC%D8%B1%D9%8A%D8%A8%D9%8A%20%D8%AC%D8%AF%D9%8A%D8%AF&background=dc2626&color=ffffff",
+        "photoUrl": "https://ui-avatars.com/api/?name=%D9%85%D9%86%D8%AF%D9%88%D8%A8%20%D8%AA%D8%AC%D8%B1%D9%8A%D8%A8%D9%8A%20%D8%AC%D8%AF%D9%8A%D8%AF&background=dc2626&color=ffffff",
+        "isConfirmed": false
+      },
+      {
+        "id": "USR-1790546305908-3001",
+        "name": "Mohamed",
+        "phone": "01125465248",
+        "vehicle": "motocycle",
+        "assignedHub": "المستودع الرئيسي",
+        "rating": 5,
+        "activeDeliveriesCount": 0,
+        "avatarUrl": "https://ui-avatars.com/api/?name=Mohamed&background=dc2626&color=ffffff",
+        "photoUrl": "https://ui-avatars.com/api/?name=Mohamed&background=dc2626&color=ffffff",
+        "isConfirmed": true
       }
     ],
     "senderId": "CLIENT-1aax877",
@@ -139,7 +229,7 @@
           "streetAddress": "علي كرم بجوار مترو منشيه الصدر اتجاه شارع ترعه الجبل ",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-28T14:56:53.536Z",
         "financials": {
           "codFee": 0,
           "codAmount": 400,
@@ -158,7 +248,8 @@
           "allowOpening": true
         },
         "trackingNumber": "BST-591674",
-        "estimatedDeliveryDate": "2026-09-29"
+        "estimatedDeliveryDate": "2026-09-29",
+        "notes": ""
       },
       {
         "id": "BST-259787",
@@ -203,7 +294,7 @@
           "streetAddress": "عرب المعادي ",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 430,
@@ -267,7 +358,7 @@
           "streetAddress": "ميدان الجزاير ٢٦٣",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 380,
@@ -331,7 +422,7 @@
           "streetAddress": "احمد ذكي ",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 730,
@@ -395,7 +486,7 @@
           "streetAddress": "مصر حلوان الزراعي بجوار لابوار ",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 730,
@@ -459,7 +550,7 @@
           "streetAddress": "منشيه اطلس شارع سعد الدسوقي ",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 580,
@@ -523,7 +614,7 @@
           "streetAddress": "شارع الجيش حدايق حلوان ",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 430,
@@ -587,7 +678,7 @@
           "streetAddress": "شارع شركات البترول خلف المطافي الزاويه الحمراء مشويات ابو سويلم ",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 730,
@@ -651,7 +742,7 @@
           "streetAddress": "جسر السويس بيرتي عماره سكر مكه الجديدة",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 730,
@@ -721,7 +812,7 @@
           "streetAddress": "منطقه المصانع جسر السويس شركه اباظة",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 380,
@@ -792,7 +883,7 @@
           "streetAddress": "احمد عويس من سيد حماده",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 730,
@@ -863,7 +954,7 @@
           "streetAddress": "شارع ١٧ الهضبه العليا",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 380,
@@ -934,7 +1025,7 @@
           "streetAddress": "شارع محمد مندور من الطيران",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 730,
@@ -1004,7 +1095,7 @@
           "streetAddress": "عند جامع السلام",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 380,
@@ -1084,7 +1175,7 @@
           "streetAddress": "شارع ضيطف الله روض الفرج",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 730,
@@ -1148,7 +1239,7 @@
           "streetAddress": "المرج ١١ محمد عبد الغنيخلف مسجد عبد العظيم عرابي",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 1685,
@@ -1212,7 +1303,7 @@
           "streetAddress": "التجمع الأول",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 1000,
@@ -1276,7 +1367,7 @@
           "streetAddress": "شارع المركز الاجتماعي من عبدالله رفاعي اول المفارق امام مسجد القاضي",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 1000,
@@ -1340,7 +1431,7 @@
           "streetAddress": "دار السلام ٣٦ محمود علي من المحجر شقه رقم ٢",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 585,
@@ -1404,7 +1495,7 @@
           "streetAddress": "التجمع الخامس مستشفي نسايم باب العيادات الخارجيه بجوار مستشفي الجوي",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 585,
@@ -1468,7 +1559,7 @@
           "streetAddress": "عزبة خيرالله عند مدرسه تواصل",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 1035,
@@ -1532,7 +1623,7 @@
           "streetAddress": "عين شمس شارع السلام تقاطع إبراهيم عبد الرازق جنب صيدليه امل",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 570,
@@ -1596,7 +1687,7 @@
           "streetAddress": "كوبري محمد نجيب شارع الانابيب المرج",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 570,
@@ -1660,7 +1751,7 @@
           "streetAddress": "جسر السويس شارع عبد المحسن الوسيمي ممر ٣ من شارع الزعيم",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 585,
@@ -1724,7 +1815,7 @@
           "streetAddress": "مدينة نصر الحي العاشر بلوك ١٣ خلف المحلاوي",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 570,
@@ -1788,7 +1879,7 @@
           "streetAddress": "التجمع التالت ١٤ مساكن الجيزة القطاميه",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 1145,
@@ -1852,7 +1943,7 @@
           "streetAddress": "زهراء المعادى الشطر العاشر كمبوند ايميرالد القديم عماره ١ مدخل أ الدور ٣ شقه ٣٦",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 570,
@@ -1916,7 +2007,7 @@
           "streetAddress": "مساكن شيراتون ٢ الاديب علي ادهم بجوار النساجون الدور  ٢ شقه  ٣٠٢",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 1035,
@@ -1980,7 +2071,7 @@
           "streetAddress": "البساتين ٥ علي أبو الدهب من سوق الزهور",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 585,
@@ -2044,7 +2135,7 @@
           "streetAddress": "عين شمس ١٤ جمال عبد المنعم قريب من مترو عين شمس",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 585,
@@ -2108,7 +2199,7 @@
           "streetAddress": "الخصوص شارع عباد الرحمن",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 585,
@@ -2172,7 +2263,7 @@
           "streetAddress": "المرج القديمة  ٤٣ عبد العزيز القاضي من شارع البترول الناحيه الغربيه",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 585,
@@ -2236,7 +2327,7 @@
           "streetAddress": "مصر القديمة ٣٠ علي سالم امام جامع عمرو بن العاص",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 1145,
@@ -2300,7 +2391,7 @@
           "streetAddress": "بولاق الدكرور صفط اللبن ترعه عبد العال ٢ فرن أبو  حديدة",
           "secondaryPhone": ""
         },
-        "updatedAt": "2026-09-27T21:37:22.992+00:00",
+        "updatedAt": "2026-09-27T22:31:52.72+00:00",
         "financials": {
           "codFee": 0,
           "codAmount": 590,
@@ -3670,9 +3761,10 @@
       "BST-766998",
       "BST-532460",
       "BST-408088",
-      "BST-999306"
+      "BST-999306",
+      "BST-TEMP-TEST-99"
     ]
   },
-  "timestamp": 1790545042843,
-  "savedAt": "2026-09-27T21:37:22.845Z"
+  "timestamp": 1790607414038,
+  "savedAt": "2026-09-28T14:56:54.039Z"
 }

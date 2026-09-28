@@ -53,9 +53,24 @@ class SyncEngine {
 
   public markShipmentDeleted(id: string, trackingNumber?: string) {
     if (!id && !trackingNumber) return;
-    if (id) this.deletedShipmentIds.add(String(id));
-    if (trackingNumber) this.deletedShipmentIds.add(String(trackingNumber));
+    if (id) {
+      this.deletedShipmentIds.add(String(id));
+      this.localStatusLocks.delete(String(id));
+    }
+    if (trackingNumber) {
+      this.deletedShipmentIds.add(String(trackingNumber));
+      this.localStatusLocks.delete(String(trackingNumber));
+    }
+    this.saveLocks();
     this.saveDeletedShipments();
+
+    // Immediately remove from latestStateCache
+    if (this.latestStateCache?.shipments) {
+      this.latestStateCache.shipments = this.latestStateCache.shipments.filter(
+        (s) => s && s.id !== id && s.trackingNumber !== id && 
+               (!trackingNumber || (s.id !== trackingNumber && s.trackingNumber !== trackingNumber))
+      );
+    }
 
     // Immediately remove from localStorage
     try {
@@ -66,6 +81,41 @@ class SyncEngine {
           const filtered = list.filter((s: any) => 
             s && s.id !== id && s.trackingNumber !== id && 
             (!trackingNumber || (s.id !== trackingNumber && s.trackingNumber !== trackingNumber))
+          );
+          localStorage.setItem('bosta_shipments', JSON.stringify(filtered));
+        }
+      }
+    } catch (e) {}
+  }
+
+  public markMultipleShipmentsDeleted(items: Array<{ id: string; trackingNumber?: string }>) {
+    if (!items || items.length === 0) return;
+    for (const item of items) {
+      if (item.id) {
+        this.deletedShipmentIds.add(String(item.id));
+        this.localStatusLocks.delete(String(item.id));
+      }
+      if (item.trackingNumber) {
+        this.deletedShipmentIds.add(String(item.trackingNumber));
+        this.localStatusLocks.delete(String(item.trackingNumber));
+      }
+    }
+    this.saveLocks();
+    this.saveDeletedShipments();
+
+    if (this.latestStateCache?.shipments) {
+      this.latestStateCache.shipments = this.latestStateCache.shipments.filter(
+        (s) => !this.deletedShipmentIds.has(String(s.id)) && !this.deletedShipmentIds.has(String(s.trackingNumber))
+      );
+    }
+
+    try {
+      const raw = localStorage.getItem('bosta_shipments');
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          const filtered = list.filter(
+            (s: any) => !this.deletedShipmentIds.has(String(s.id)) && !this.deletedShipmentIds.has(String(s.trackingNumber))
           );
           localStorage.setItem('bosta_shipments', JSON.stringify(filtered));
         }
