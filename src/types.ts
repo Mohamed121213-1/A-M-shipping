@@ -71,11 +71,13 @@ export interface TimelineEvent {
   id: string;
   status: ShipmentStatus;
   title: string;
-  description: string;
+  description?: string;
   timestamp: string;
+  date?: string;
   location?: string;
-  actorRole: 'merchant' | 'system' | 'hub' | 'courier' | 'customer';
+  actorRole?: 'merchant' | 'system' | 'hub' | 'courier' | 'customer';
   notes?: string;
+  note?: string;
 }
 
 export interface ProofOfDelivery {
