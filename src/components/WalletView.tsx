@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { MerchantWallet, Shipment, CourierInfo, UserSession } from '../types';
+import React, { useState, useMemo } from 'react';
+import { MerchantWallet, Shipment, CourierInfo, UserSession, CompanyTransaction } from '../types';
 import { BOSTA_COURIERS } from '../data/mockData';
 import { ReturnsAccountingView } from './ReturnsAccountingView';
+import { calculateMerchantFinancials } from '../utils/merchantFinancials';
 import { 
   Wallet, 
   ArrowDownLeft, 
@@ -22,7 +23,9 @@ import {
   Edit3,
   X,
   Sliders,
-  RefreshCw
+  RefreshCw,
+  Calendar,
+  AlertCircle
 } from 'lucide-react';
 
 interface WalletViewProps {
@@ -32,6 +35,8 @@ interface WalletViewProps {
   couriers?: CourierInfo[];
   systemUsers?: UserSession[];
   currentUser?: UserSession | null;
+  companyTransactions?: CompanyTransaction[];
+  onAddTransaction?: (txn: Omit<CompanyTransaction, 'id' | 'createdAt'>) => void;
   onSettleCourierCustody?: (courierId: string, netAmount?: number, grossAmount?: number, commission?: number) => void;
   onUpdateWallet?: (updatedWallet: MerchantWallet) => void;
   onToggleMerchantSettlement?: (shipmentId: string, isSettled: boolean) => void;
@@ -45,12 +50,28 @@ export const WalletView: React.FC<WalletViewProps> = ({
   couriers = BOSTA_COURIERS,
   systemUsers = [],
   currentUser = null,
+  companyTransactions = [],
+  onAddTransaction,
   onSettleCourierCustody,
   onUpdateWallet,
   onToggleMerchantSettlement,
   onSettleAllMerchantShipments,
 }) => {
   const isAdmin = currentUser ? currentUser.role === 'admin' : false;
+
+  // Merchant financial stats (شغله بكام، قيد التوصيل، المرتجع، الدفعات المقدمة، الصافي اللي ليه)
+  const merchantFinancials = useMemo(() => {
+    return calculateMerchantFinancials(
+      shipments,
+      companyTransactions,
+      currentUser ? {
+        id: currentUser.id,
+        storeName: currentUser.storeName,
+        name: currentUser.name,
+        phone: currentUser.phone,
+      } : undefined
+    );
+  }, [shipments, companyTransactions, currentUser]);
   const [activeSubTab, setActiveSubTab] = useState<'merchant' | 'returns' | 'couriers'>('merchant');
   const [payoutAmount, setPayoutAmount] = useState<number>(wallet.availableBalance);
   const [payoutMethod, setPayoutMethod] = useState<'instapay' | 'vodafone' | 'bank'>('instapay');
@@ -466,8 +487,184 @@ export const WalletView: React.FC<WalletViewProps> = ({
             </div>
           )}
 
-          {/* Wallet Summary Cards (Available Balance, Total Paid Out, and Pending COD for Admin) */}
-          <div className={`grid grid-cols-1 ${isAdmin ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
+          {/* Wallet Summary Cards: 5 Cards for Merchant, or Admin Controls */}
+          {!isAdmin ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                {/* 1. شغل المتجر المسلم */}
+                <div className="bg-white border-2 border-emerald-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-600">شغلك المسلم (المحصل)</span>
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-black text-emerald-700 mt-2">
+                    {merchantFinancials.deliveredCod.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[11px]">
+                    <span className="text-slate-600 font-bold">
+                      صافي البضاعة: <strong className="text-emerald-700">{merchantFinancials.deliveredNetGoods.toLocaleString()} ج.م</strong>
+                    </span>
+                    <span className="text-slate-400">
+                      عدد: {merchantFinancials.deliveredCount} شحنة مسلمة
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. قيد التوصيل */}
+                <div className="bg-white border border-teal-200 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-teal-800">قيد التوصيل (في الطريق)</span>
+                    <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+                      <Truck className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-black text-teal-700 mt-2">
+                    {merchantFinancials.inTransitCod.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[11px]">
+                    <span className="text-teal-900 font-bold">
+                      صافي متوقع: <strong className="text-teal-700">{merchantFinancials.inTransitNetExpected.toLocaleString()} ج.م</strong>
+                    </span>
+                    <span className="text-slate-400">
+                      عدد: {merchantFinancials.inTransitCount} شحنة مع المناديب والمستودع
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. المرتجعات */}
+                <div className="bg-white border border-rose-200 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-rose-800">حساب المرتجعات</span>
+                    <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                      <RotateCcw className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-black text-rose-700 mt-2">
+                    {merchantFinancials.returnsGoodsValue.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[11px]">
+                    <span className="text-rose-900 font-bold">
+                      {merchantFinancials.returnsShippingDeducted > 0 ? (
+                        <>خصم شحن: <strong className="text-rose-600">-{merchantFinancials.returnsShippingDeducted.toLocaleString()} ج.م</strong></>
+                      ) : (
+                        <span className="text-slate-500">شحن المرتجع: 0 ج.م (لم يخصم)</span>
+                      )}
+                    </span>
+                    <span className="text-slate-400">
+                      عدد: {merchantFinancials.returnsCount} شحنة مرتجعة
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4. سلف ومقدمات */}
+                <div className="bg-white border-2 border-amber-300 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-amber-900">سلف ومقدمات (مخصومة)</span>
+                    <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                      <HandCoins className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-black text-amber-700 mt-2">
+                    {merchantFinancials.totalAdvancePaid.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[11px]">
+                    <span className="text-amber-950 font-bold">
+                      مخصومة من المستحق النهائي
+                    </span>
+                    <span className="text-slate-400">
+                      عدد: {merchantFinancials.advanceTransactions.length} دفعة مقدمة
+                    </span>
+                  </div>
+                </div>
+
+                {/* 5. الصافي المستحق لك */}
+                <div className={`rounded-2xl p-5 shadow-md relative overflow-hidden border-2 ${
+                  merchantFinancials.hasDebt
+                    ? 'bg-gradient-to-br from-rose-900 to-slate-900 text-white border-rose-500'
+                    : 'bg-gradient-to-br from-emerald-900 via-slate-900 to-slate-950 text-white border-emerald-500/80 shadow-emerald-950/20'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-emerald-300">الصافي اللي ليك</span>
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center justify-center">
+                      <Wallet className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-black mt-2 text-white">
+                    {merchantFinancials.netDueBalance.toLocaleString()} <span className="text-xs font-bold text-emerald-300">ج.م</span>
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-white/10 flex flex-col gap-0.5 text-[11px]">
+                    {merchantFinancials.hasDebt ? (
+                      <span className="text-rose-300 font-black">
+                        عجز سلف مطلوب سداده: {Math.abs(merchantFinancials.netDueBalance).toLocaleString()} ج.م
+                      </span>
+                    ) : merchantFinancials.netDueBalance > 0 ? (
+                      <span className="text-emerald-300 font-black">
+                        جاهز للصرف والسحب الآن ⚡
+                      </span>
+                    ) : (
+                      <span className="text-slate-300 font-bold">
+                        الحساب خالص ومسدد بالكامل
+                      </span>
+                    )}
+                    <span className="text-slate-400 text-[10px]">
+                      بعد خصم الشحن والمرتجع والسلف
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Advance Payments Breakdown Table if merchant has received advances */}
+              {merchantFinancials.advanceTransactions.length > 0 && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-black text-xs text-amber-950 flex items-center gap-2">
+                      <HandCoins className="w-4 h-4 text-amber-700" />
+                      <span>بيان السلف والدفعات المقدمة المستلمة والمخصومة من حسابك:</span>
+                    </h4>
+                    <span className="text-xs font-black text-amber-900 bg-amber-200 px-2 py-0.5 rounded-full">
+                      الإجمالي: {merchantFinancials.totalAdvancePaid.toLocaleString()} ج.م
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right text-xs">
+                      <thead>
+                        <tr className="border-b border-amber-200 text-amber-900 font-black">
+                          <th className="py-1.5 px-3">التاريخ</th>
+                          <th className="py-1.5 px-3">البيان / الوصف</th>
+                          <th className="py-1.5 px-3">طريقة الدفع</th>
+                          <th className="py-1.5 px-3 text-left">المبلغ المخصوم</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-amber-200/60 font-medium">
+                        {merchantFinancials.advanceTransactions.map((adv) => (
+                          <tr key={adv.id} className="hover:bg-amber-100/50">
+                            <td className="py-2 px-3 text-slate-600">{adv.date}</td>
+                            <td className="py-2 px-3 text-slate-800 font-bold">
+                              {adv.title}
+                              {adv.notes && <span className="block text-[10px] text-amber-800 mt-0.5">{adv.notes}</span>}
+                            </td>
+                            <td className="py-2 px-3 text-slate-600">
+                              {adv.paymentMethod === 'vodafone_cash' ? 'فودافون كاش' :
+                               adv.paymentMethod === 'instapay' ? 'إنستاباي' :
+                               adv.paymentMethod === 'bank_transfer' ? 'تحويل بنكي' : 'نقداً (كاش)'}
+                            </td>
+                            <td className="py-2 px-3 text-left font-black text-amber-800">
+                              -{adv.amount.toLocaleString()} ج.م
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Admin Summary Cards */
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Available Balance Box */}
             <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden group transition-all">
               <div className="absolute right-0 bottom-0 opacity-10 p-4 pointer-events-none">
@@ -702,6 +899,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
               </div>
             )}
           </div>
+        )}
 
           {/* Instant Payout Form */}
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs space-y-4">

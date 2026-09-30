@@ -370,7 +370,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {currentRole === 'admin' && (
+              {(currentRole === 'admin' || currentRole === 'merchant') && (
                 <button
                   onClick={() => handleNavClick('merchant_accounts')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
@@ -380,7 +380,7 @@ export const Header: React.FC<HeaderProps> = ({
                   }`}
                 >
                   <Users className="w-4 h-4 text-blue-600" />
-                  حسابات التجار (كشف الحساب)
+                  {currentRole === 'merchant' ? 'كشف حسابي المالي' : 'حسابات التجار (كشف الحساب)'}
                 </button>
               )}
 

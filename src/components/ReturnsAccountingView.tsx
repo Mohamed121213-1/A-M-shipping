@@ -151,7 +151,11 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
         const total = s.partialDetails?.originalCodAmount ?? s.financials.codAmount;
         return sum + (s.partialDetails?.remainingCodAmount ?? Math.max(0, total - collected));
       }
-      return sum + s.financials.codAmount;
+      const orderCod = s.refusedDetails?.originalCodAmount ?? s.financials.codAmount ?? 0;
+      const fee = s.financials.shippingFee || 0;
+      // قيمة بضاعة المرتجع (من غير الشحن طبعاً كما طلب التاجر)
+      const goodsVal = s.refusedDetails?.originalGoodsValue ?? (orderCod > fee ? orderCod - fee : orderCod);
+      return sum + (goodsVal > 0 ? goodsVal : orderCod);
     }, 0);
   }, [merchantReturns]);
 
@@ -465,10 +469,12 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                 const returnedItems = s.partialDetails?.returnedItemsCount ?? Math.max(0, totalItems - acceptedItems);
 
                 const collectedAmt = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
-                const totalOrigCod = s.partialDetails?.originalCodAmount ?? s.financials.codAmount;
+                const totalOrigCod = s.refusedDetails?.originalCodAmount ?? s.partialDetails?.originalCodAmount ?? s.financials.codAmount;
+                const fee = s.financials.shippingFee || 0;
+                const goodsValueWithoutShipping = s.refusedDetails?.originalGoodsValue ?? (totalOrigCod > fee ? totalOrigCod - fee : totalOrigCod);
                 const returnedCodVal = isPartial
                   ? (s.partialDetails?.remainingCodAmount ?? Math.max(0, totalOrigCod - collectedAmt))
-                  : s.financials.codAmount;
+                  : goodsValueWithoutShipping;
 
                 let statusBadge = (
                   <span className="bg-red-50 text-red-800 border border-red-200 px-3 py-1.5 rounded-xl text-xs font-black inline-flex items-center gap-1.5 leading-snug">
@@ -486,17 +492,40 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                   );
                 } else if (s.status === 'refused' || s.status === 'returned') {
                   const collected = s.refusedDetails?.amountCollected || 0;
+                  const isCancelExempt = s.refusedDetails?.isCustomerCancellationWithoutFee === true;
+                  const isPartialShipping = s.refusedDetails?.partialShippingFeePaid || (collected > 0 && collected < fee);
+                  const isFullShipping = s.refusedDetails?.shippingFeePaid || (collected >= fee && fee > 0);
+                  const deducted = isCancelExempt ? 0 : (s.refusedDetails?.merchantDeductedAmount ?? Math.max(0, fee - collected));
+
                   statusBadge = (
-                    <span className="bg-amber-50 text-amber-900 border border-amber-200 px-3 py-1.5 rounded-xl text-xs font-black inline-flex items-center gap-1.5 leading-snug">
-                      <RotateCcw className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                      <span>
-                        {s.refusedDetails?.shippingFeePaid
-                          ? 'مرفوض (دفع كامل الشحن)'
-                          : s.refusedDetails?.partialShippingFeePaid || collected > 0
-                          ? `مرفوض (دفع جزء من الشحن ${collected} ج.م)`
-                          : 'مرفوض من العميل (خصم الشحن من التاجر)'}
-                      </span>
-                    </span>
+                    <div className="space-y-1">
+                      {isCancelExempt ? (
+                        <span className="bg-sky-50 text-sky-950 border border-sky-300 px-2.5 py-1 rounded-lg text-xs font-black inline-flex items-center gap-1.5 leading-snug">
+                          <RotateCcw className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+                          <span>🚫 إلغاء بطلب العميل (معفى من الشحن)</span>
+                        </span>
+                      ) : isPartialShipping ? (
+                        <span className="bg-amber-50 text-amber-950 border border-amber-300 px-2.5 py-1 rounded-lg text-xs font-black inline-flex items-center gap-1.5 leading-snug">
+                          <RotateCcw className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          <span>🚚 دفع جزء من الشحن ({collected} ج.م)</span>
+                        </span>
+                      ) : isFullShipping ? (
+                        <span className="bg-emerald-50 text-emerald-950 border border-emerald-300 px-2.5 py-1 rounded-lg text-xs font-black inline-flex items-center gap-1.5 leading-snug">
+                          <RotateCcw className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <span>✅ دفع كامل الشحن ({collected || fee} ج.م)</span>
+                        </span>
+                      ) : (
+                        <span className="bg-rose-50 text-rose-950 border border-rose-300 px-2.5 py-1 rounded-lg text-xs font-black inline-flex items-center gap-1.5 leading-snug">
+                          <RotateCcw className="w-3.5 h-3.5 text-rose-700 shrink-0" />
+                          <span>❌ لم يدفع شحن (خصم {deducted} ج.م)</span>
+                        </span>
+                      )}
+                      {isPartialShipping && (
+                        <span className="block text-[10px] text-amber-800 font-bold">
+                          المتبقي المخصوم من التاجر: {deducted} ج.م
+                        </span>
+                      )}
+                    </div>
                   );
                 } else if (s.status === 'failed_attempt') {
                   statusBadge = (
@@ -628,10 +657,12 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                     const returnedItems = s.partialDetails?.returnedItemsCount ?? Math.max(0, totalItems - acceptedItems);
 
                     const collectedAmt = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
-                    const totalOrigCod = s.partialDetails?.originalCodAmount ?? s.financials.codAmount;
+                    const totalOrigCod = s.refusedDetails?.originalCodAmount ?? s.partialDetails?.originalCodAmount ?? s.financials.codAmount;
+                    const fee = s.financials.shippingFee || 0;
+                    const goodsValueWithoutShipping = s.refusedDetails?.originalGoodsValue ?? (totalOrigCod > fee ? totalOrigCod - fee : totalOrigCod);
                     const returnedCodVal = isPartial
                       ? (s.partialDetails?.remainingCodAmount ?? Math.max(0, totalOrigCod - collectedAmt))
-                      : s.financials.codAmount;
+                      : goodsValueWithoutShipping;
 
                     let statusBadge = (
                       <span className="bg-red-50 text-red-800 border border-red-200 px-2.5 py-1 rounded-lg text-[10px] font-black inline-block leading-snug">
@@ -647,14 +678,36 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                       );
                     } else if (s.status === 'refused' || s.status === 'returned') {
                       const collected = s.refusedDetails?.amountCollected || 0;
+                      const isCancelExempt = s.refusedDetails?.isCustomerCancellationWithoutFee === true;
+                      const isPartialShipping = s.refusedDetails?.partialShippingFeePaid || (collected > 0 && collected < fee);
+                      const isFullShipping = s.refusedDetails?.shippingFeePaid || (collected >= fee && fee > 0);
+                      const deducted = isCancelExempt ? 0 : (s.refusedDetails?.merchantDeductedAmount ?? Math.max(0, fee - collected));
+
                       statusBadge = (
-                        <span className="bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-1 rounded-lg text-[10px] font-black inline-block leading-snug">
-                          {s.refusedDetails?.shippingFeePaid
-                            ? 'مرفوض (دفع كامل الشحن)'
-                            : s.refusedDetails?.partialShippingFeePaid || collected > 0
-                            ? `مرفوض (دفع جزء من الشحن ${collected} ج.م)`
-                            : 'مرفوض من العميل (خصم الشحن من التاجر)'}
-                        </span>
+                        <div className="space-y-0.5">
+                          {isCancelExempt ? (
+                            <span className="bg-sky-50 text-sky-950 border border-sky-300 px-2 py-0.5 rounded text-[10px] font-black inline-block leading-snug">
+                              🚫 إلغاء بطلب العميل (معفى)
+                            </span>
+                          ) : isPartialShipping ? (
+                            <span className="bg-amber-50 text-amber-950 border border-amber-300 px-2 py-0.5 rounded text-[10px] font-black inline-block leading-snug">
+                              🚚 دفع جزء من الشحن ({collected} ج.م)
+                            </span>
+                          ) : isFullShipping ? (
+                            <span className="bg-emerald-50 text-emerald-950 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-black inline-block leading-snug">
+                              ✅ دفع كامل الشحن ({collected || fee} ج.م)
+                            </span>
+                          ) : (
+                            <span className="bg-rose-50 text-rose-950 border border-rose-300 px-2 py-0.5 rounded text-[10px] font-black inline-block leading-snug">
+                              ❌ لم يدفع شحن (خصم {deducted} ج.م)
+                            </span>
+                          )}
+                          {isPartialShipping && (
+                            <span className="block text-[9px] text-amber-800 font-bold">
+                              خصم من التاجر: {deducted} ج.م
+                            </span>
+                          )}
+                        </div>
                       );
                     } else if (s.status === 'failed_attempt') {
                       statusBadge = (

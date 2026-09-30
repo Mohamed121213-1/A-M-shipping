@@ -146,6 +146,8 @@ export interface Shipment {
     amountCollected: number;
     merchantDeductedAmount?: number;
     isCustomerCancellationWithoutFee?: boolean;
+    originalCodAmount?: number;
+    originalGoodsValue?: number;
     reason: string;
   };
   noResponseDetails?: {

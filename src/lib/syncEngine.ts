@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { Shipment, MerchantWallet, UserSession, CourierInfo, HubInfo, GovernorateRate, CourierNotification, CompanyTransaction } from '../types';
-import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet, isDeprecatedDummyUser, mergeShipmentsLists, mergeSingleShipment } from '../utils/sanitizeData';
+import { sanitizeUsers, sanitizeCouriers, sanitizeCompanyTxns, sanitizeShipments, sanitizeWallet, isDeprecatedDummyUser, mergeShipmentsLists, mergeSingleShipment, STATUS_RANK } from '../utils/sanitizeData';
 
 export interface SyncedAppState {
   shipments?: Shipment[];
@@ -18,7 +18,8 @@ export interface SyncedAppState {
 
 type SyncCallback = (newState: SyncedAppState) => void;
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+// Optimistic status locks should only last 15 seconds to prevent flicker, NEVER 30 days
+const LOCK_EXPIRY_MS = 15 * 1000;
 
 class SyncEngine {
   private localChannel: BroadcastChannel | null = null;
@@ -135,7 +136,7 @@ class SyncEngine {
         const parsed = JSON.parse(raw);
         const now = Date.now();
         for (const [id, lock] of Object.entries(parsed) as any) {
-          if (lock && now - lock.timestamp < THIRTY_DAYS_MS) { // 30 days lock
+          if (lock && now - lock.timestamp < LOCK_EXPIRY_MS) {
             this.localStatusLocks.set(id, lock);
           }
         }
@@ -149,7 +150,7 @@ class SyncEngine {
       const obj: Record<string, any> = {};
       const now = Date.now();
       for (const [id, lock] of this.localStatusLocks.entries()) {
-        if (now - lock.timestamp < THIRTY_DAYS_MS) {
+        if (now - lock.timestamp < LOCK_EXPIRY_MS) {
           obj[id] = lock;
         }
       }
@@ -423,15 +424,23 @@ class SyncEngine {
   private async fetchPersistedStateFromServer() {
     if (typeof window === 'undefined') return;
     try {
-      const res = await fetch('/api/sync/state');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data && data.state) {
-        const remoteTime = Number(data.timestamp) || Date.now();
+      const [resState, resShipments] = await Promise.all([
+        fetch('/api/sync/state').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/api/shipments').then(r => r.ok ? r.json() : null).catch(() => null)
+      ]);
 
+      let state = resState && resState.state ? { ...resState.state } : null;
+      const remoteTime = Number(resState?.timestamp) || Date.now();
+
+      if (resShipments && resShipments.success && Array.isArray(resShipments.shipments) && resShipments.shipments.length > 0) {
+        if (!state) state = {};
+        state.shipments = resShipments.shipments;
+      }
+
+      if (state) {
         // Authoritative server state applied to client
         this.handleIncomingUpdate({
-          ...data.state,
+          ...state,
           timestamp: remoteTime,
           senderId: 'server_authoritative_sync',
         });
@@ -508,17 +517,31 @@ class SyncEngine {
           (s) => !this.deletedShipmentIds.has(String(s.id)) && !this.deletedShipmentIds.has(String(s.trackingNumber))
         );
 
-        // Enforce persistent local locks for status transitions
+        // Enforce brief local locks ONLY if incoming has not progressed and lock has not expired
+        const now = Date.now();
         data.shipments = mergedList.map((s: Shipment) => {
           const id = s.id || s.trackingNumber;
           const lock = this.localStatusLocks.get(id);
-          if (lock && Date.now() - lock.timestamp < THIRTY_DAYS_MS) {
+          if (lock) {
+            const sRank = STATUS_RANK[s.status] || 0;
+            const lockRank = STATUS_RANK[lock.status] || 0;
+            const isExpired = (now - lock.timestamp) >= LOCK_EXPIRY_MS;
+
+            // If incoming has progressed to equal or higher rank (e.g. delivered, out_for_delivery), or lock expired:
+            if (isExpired || sRank >= lockRank || isServerAuthoritative) {
+              this.localStatusLocks.delete(id);
+              if (s.id) this.localStatusLocks.delete(s.id);
+              if (s.trackingNumber) this.localStatusLocks.delete(s.trackingNumber);
+              return s;
+            }
+
             if (s.status !== lock.status) {
               return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
             }
           }
           return s;
         });
+        this.saveLocks();
       }
     }
     if (data.users) data.users = sanitizeUsers(data.users);
@@ -670,7 +693,7 @@ class SyncEngine {
         payloadShipments = sanitizeShipments(payloadShipments).map((s: Shipment) => {
           const id = s.id || s.trackingNumber;
           const lock = this.localStatusLocks.get(id);
-          if (lock && Date.now() - lock.timestamp < THIRTY_DAYS_MS) {
+          if (lock && Date.now() - lock.timestamp < LOCK_EXPIRY_MS) {
             return lock.fullShipment ? { ...s, ...lock.fullShipment, status: lock.status } : { ...s, status: lock.status as any };
           }
           return s;

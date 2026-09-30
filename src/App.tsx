@@ -478,41 +478,58 @@ export default function App() {
 
   // Real-time synchronization across all devices, browser windows, and registered accounts
   useEffect(() => {
-    // Immediate hydration from authoritative server state
-    fetch('/api/sync/state')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.state) {
-          isIncomingSyncRef.current = true;
-          const s = data.state;
-          if (Array.isArray(s.shipments) && s.shipments.length > 0) {
-            setShipments((prev) => {
-              const merged = mergeShipmentsLists(prev, s.shipments);
-              try { localStorage.setItem('bosta_shipments', JSON.stringify(merged)); } catch (e) {}
-              return merged;
-            });
+    // Function to hydrate from authoritative server state
+    const refreshFromServer = () => {
+      fetch('/api/sync/state')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.state) {
+            isIncomingSyncRef.current = true;
+            const s = data.state;
+            if (Array.isArray(s.shipments) && s.shipments.length > 0) {
+              setShipments((prev) => {
+                const merged = mergeShipmentsLists(prev, s.shipments);
+                try { localStorage.setItem('bosta_shipments', JSON.stringify(merged)); } catch (e) {}
+                return merged;
+              });
+            }
+            if (Array.isArray(s.companyTransactions) && s.companyTransactions.length > 0) {
+              setCompanyTransactions(s.companyTransactions);
+              try { localStorage.setItem('bosta_company_transactions', JSON.stringify(s.companyTransactions)); } catch (e) {}
+            }
+            if (s.wallet && (s.wallet.availableBalance > 0 || s.wallet.pendingCod > 0)) {
+              setWallet(s.wallet);
+              try { localStorage.setItem('bosta_wallet', JSON.stringify(s.wallet)); } catch (e) {}
+            }
+            if (Array.isArray(s.users) && s.users.length > 0) {
+              setUsers((prev) => {
+                const merged = sanitizeUsers([...prev, ...s.users]);
+                try { localStorage.setItem('bosta_users', JSON.stringify(merged)); } catch (e) {}
+                return merged;
+              });
+            }
+            if (Array.isArray(s.couriers)) {
+              setCouriers((prev) => {
+                const cleaned = sanitizeCouriers(s.couriers, s.users || prev as any);
+                try { localStorage.setItem('bosta_couriers', JSON.stringify(cleaned)); } catch (e) {}
+                return cleaned;
+              });
+            }
           }
-          if (s.wallet && (s.wallet.availableBalance > 0 || s.wallet.pendingCod > 0)) {
-            setWallet(s.wallet);
-            try { localStorage.setItem('bosta_wallet', JSON.stringify(s.wallet)); } catch (e) {}
-          }
-          if (Array.isArray(s.users) && s.users.length > 0) {
-            setUsers((prev) => {
-              const merged = sanitizeUsers([...prev, ...s.users]);
-              try { localStorage.setItem('bosta_users', JSON.stringify(merged)); } catch (e) {}
-              return merged;
-            });
-          }
-          if (Array.isArray(s.couriers)) {
-            setCouriers((prev) => {
-              const cleaned = sanitizeCouriers(s.couriers, s.users || prev as any);
-              try { localStorage.setItem('bosta_couriers', JSON.stringify(cleaned)); } catch (e) {}
-              return cleaned;
-            });
-          }
-        }
-      })
-      .catch(() => {});
+        })
+        .catch(() => {});
+    };
+
+    // Immediate hydration on mount
+    refreshFromServer();
+
+    // Re-hydrate whenever merchant returns to tab or window gains focus
+    window.addEventListener('focus', refreshFromServer);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshFromServer();
+      }
+    });
 
     // Initial fetch of authoritative users from server and Supabase
     fetch('/api/users')
@@ -632,6 +649,7 @@ export default function App() {
 
     return () => {
       unsubscribe();
+      window.removeEventListener('focus', refreshFromServer);
     };
   }, []);
 
@@ -1287,14 +1305,17 @@ export default function App() {
       if (newStatus === 'returned' || newStatus === 'refused') {
         const currentFinancials = effectiveExtra.financials || s.financials;
         const refusedDetails = effectiveExtra.refusedDetails || s.refusedDetails;
+        const originalCod = s.refusedDetails?.originalCodAmount || s.partialDetails?.originalCodAmount || currentFinancials.codAmount;
+        const totalShippingFee = currentFinancials.shippingFee;
+        const originalGoodsValue = s.refusedDetails?.originalGoodsValue || Math.max(0, originalCod - totalShippingFee);
 
         if (refusedDetails?.isCustomerCancellationWithoutFee) {
           effectiveExtra = {
             ...effectiveExtra,
             financials: {
               ...currentFinancials,
-              codAmount: 0,
-              shippingFee: 0,
+              codAmount: originalCod,
+              shippingFee: totalShippingFee,
               netPayout: 0,
             },
             refusedDetails: {
@@ -1303,6 +1324,8 @@ export default function App() {
               amountCollected: 0,
               merchantDeductedAmount: 0,
               isCustomerCancellationWithoutFee: true,
+              originalCodAmount: originalCod,
+              originalGoodsValue,
               reason: refusedDetails?.reason || 'العميل طلب إلغاء الأوردر (إعفاء من مصاريف الشحن)',
             },
           };
@@ -1311,12 +1334,11 @@ export default function App() {
           if (refusedDetails?.amountCollected !== undefined) {
             collectedShipping = Number(refusedDetails.amountCollected) || 0;
           } else if (refusedDetails?.shippingFeePaid === true) {
-            collectedShipping = currentFinancials.shippingFee;
+            collectedShipping = totalShippingFee;
           } else {
             collectedShipping = 0;
           }
 
-          const totalShippingFee = currentFinancials.shippingFee;
           const merchantDeduction = Math.max(0, totalShippingFee - collectedShipping);
           const calculatedNetPayout = -merchantDeduction;
 
@@ -1324,7 +1346,8 @@ export default function App() {
             ...effectiveExtra,
             financials: {
               ...currentFinancials,
-              codAmount: collectedShipping,
+              codAmount: originalCod,
+              shippingFee: totalShippingFee,
               netPayout: calculatedNetPayout,
             },
             refusedDetails: {
@@ -1332,7 +1355,10 @@ export default function App() {
               partialShippingFeePaid: collectedShipping > 0 && collectedShipping < totalShippingFee,
               amountCollected: collectedShipping,
               merchantDeductedAmount: merchantDeduction,
-              reason: refusedDetails?.reason || 'رفض الاستلام / مرتجع',
+              isCustomerCancellationWithoutFee: false,
+              originalCodAmount: originalCod,
+              originalGoodsValue,
+              reason: refusedDetails?.reason || (collectedShipping > 0 && collectedShipping < totalShippingFee ? `دفع جزء من الشحن (${collectedShipping} ج.م)` : 'رفض الاستلام / مرتجع'),
             },
           };
         }
@@ -3038,6 +3064,10 @@ export default function App() {
                     couriers={couriers}
                     systemUsers={users}
                     highlightedShipmentId={highlightedShipmentId}
+                    companyTransactions={companyTransactions}
+                    wallet={userWallet}
+                    currentUser={currentUser}
+                    onNavigateTab={(tab) => setActiveTab(tab as any)}
                   />
                 )}
 
@@ -3049,6 +3079,8 @@ export default function App() {
                     couriers={couriers}
                     systemUsers={users}
                     currentUser={currentUser}
+                    companyTransactions={companyTransactions}
+                    onAddTransaction={handleAddCompanyTransaction}
                     onSettleCourierCustody={handleSettleCourierCustody}
                     onUpdateWallet={handleUpdateWallet}
                     onToggleMerchantSettlement={handleToggleMerchantSettlement}
@@ -3127,6 +3159,10 @@ export default function App() {
                     couriers={couriers}
                     systemUsers={users}
                     highlightedShipmentId={highlightedShipmentId}
+                    companyTransactions={companyTransactions}
+                    wallet={wallet}
+                    currentUser={currentUser}
+                    onNavigateTab={(tab) => setActiveTab(tab as any)}
                   />
                 )}
 
@@ -3186,6 +3222,8 @@ export default function App() {
                     couriers={couriers}
                     systemUsers={users}
                     currentUser={currentUser}
+                    companyTransactions={companyTransactions}
+                    onAddTransaction={handleAddCompanyTransaction}
                     onSettleCourierCustody={handleSettleCourierCustody}
                     onUpdateWallet={handleUpdateWallet}
                     onToggleMerchantSettlement={handleToggleMerchantSettlement}

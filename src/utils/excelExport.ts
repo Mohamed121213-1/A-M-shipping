@@ -138,13 +138,25 @@ export const exportReturnsToExcel = (
     let statusAr = 'مرتجع بالكامل';
     if (isPartial) {
       statusAr = `استلام جزئي (تسليم ${acceptedItems} قطعة وارتجاع ${returnedItems} قطعة)`;
-    } else if (s.status === 'refused') {
-      statusAr = s.refusedDetails?.shippingFeePaid ? 'مرفوض (دفع الشحن)' : 'مرفوض (لم يدفع الشحن)';
+    } else if (s.status === 'refused' || s.status === 'returned') {
+      const collected = s.refusedDetails?.amountCollected || 0;
+      if (s.refusedDetails?.isCustomerCancellationWithoutFee) {
+        statusAr = 'إلغاء بطلب العميل (معفى من الشحن)';
+      } else if (s.refusedDetails?.partialShippingFeePaid || (collected > 0 && collected < s.financials.shippingFee)) {
+        statusAr = `مرتجع - دفع جزء من الشحن (${collected} ج.م)`;
+      } else if (s.refusedDetails?.shippingFeePaid) {
+        statusAr = `مرتجع (دفع كامل الشحن ${collected || s.financials.shippingFee} ج.م)`;
+      } else {
+        statusAr = 'مرتجع (لم يدفع شحن - خصم من التاجر)';
+      }
     } else if (s.status === 'failed_attempt') {
       statusAr = 'محاولة تسليم فاشلة';
     }
 
-    const productValue = isPartial ? remainingCod : s.financials.codAmount;
+    const totalOrig = s.refusedDetails?.originalCodAmount || totalOrigCod;
+    const fee = s.financials.shippingFee || 0;
+    const goodsValue = s.refusedDetails?.originalGoodsValue ?? (totalOrig > fee ? totalOrig - fee : totalOrig);
+    const productValue = isPartial ? remainingCod : goodsValue;
     const shippingFeeExcluded = 0; // Excluded from merchant calculations
     const netReturnVal = productValue;
 

@@ -302,14 +302,21 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
       statusNote = `مرتجع بواسطة ${activeCourier.name} (لم يدفع شحن - خصم كامل الشحن ${totalShippingFee} ج.م من التاجر): ${refuseReason}`;
     }
 
+    const originalCod = selectedShipment.refusedDetails?.originalCodAmount || selectedShipment.financials.codAmount;
+    const originalGoodsValue = selectedShipment.refusedDetails?.originalGoodsValue || Math.max(0, originalCod - totalShippingFee);
+
     const extraUpdates: Partial<Shipment> = {
       financials: {
         ...selectedShipment.financials,
-        codAmount: isCustomerCancellation ? 0 : amountCollected,
-        shippingFee: isCustomerCancellation ? 0 : totalShippingFee,
+        codAmount: originalCod,
+        shippingFee: totalShippingFee,
         netPayout: calculatedNetPayout,
       },
-      refusedDetails,
+      refusedDetails: {
+        ...refusedDetails,
+        originalCodAmount: originalCod,
+        originalGoodsValue,
+      },
       assignedCourier: selectedShipment.assignedCourier || activeCourier,
     };
 

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Shipment, MerchantWallet, UserSession, CompanyTransaction, GovernorateRate } from '../types';
 import { EGYPT_GOVERNORATES } from '../data/mockData';
+import { isAdvanceTransaction, matchesMerchant } from '../utils/merchantFinancials';
 import droplineLogoImg from '../assets/images/dropline_official_logo_1787442134000.jpg';
 import {
   Users,
@@ -36,6 +37,8 @@ import {
   ArrowUpDown,
   Sparkles,
   Sliders,
+  HandCoins,
+  Truck,
 } from 'lucide-react';
 
 interface MerchantAccountsViewProps {
@@ -77,6 +80,10 @@ interface MerchantSummary {
   returnedCount: number;
   refusedCount: number;
   pendingDeliveryCount: number;
+  // In-transit amounts (قيد التوصيل)
+  inTransitCount: number;
+  inTransitCod: number;
+  inTransitNet: number;
   // Goods and shipping amounts
   totalCodCollected: number; // إجمالي التحصيل الفعلي
   totalShippingFees: number; // مصاريف الشحن
@@ -85,8 +92,11 @@ interface MerchantSummary {
   returnsCount: number;      // عدد المرتجعات الإجمالي
   returnsShippingDeducted: number; // مصاريف شحن المرتجعات المخصومة من التاجر
   returnsGoodsValue: number; // قيمة البضائع المرتجعة
-  // Payouts
-  totalPaidOut: number;      // التاجر خد فلوس كام
+  // Payouts & Advances
+  totalAdvancePaid: number;  // سلف ودفعات مقدمة أخذها التاجر
+  totalRegularPaidOut: number; // صرف مستحقات عادي
+  totalPaidOut: number;      // إجمالي المنصرف (مقدمات + سحوبات)
+  advanceTransactions: CompanyTransaction[]; // قائمة السلف والدفعات المقدمة
   // Balance
   netEarned: number;         // إجمالي المستحق للتاجر (صافي البضاعة - خصم شحن المرتجع)
   dueBalance: number;        // التاجر باقي له كام (ليه كام) = netEarned - totalPaidOut
@@ -124,6 +134,49 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
     date: new Date().toISOString().split('T')[0],
     autoSettleShipments: true,
   });
+
+  // Modal for Recording Advance Payment / Prepayment (تسجيل سلفة أو دفعة مقدمة للتاجر)
+  const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+  const [advanceModalMerchant, setAdvanceModalMerchant] = useState<MerchantSummary | null>(null);
+  const [advanceForm, setAdvanceForm] = useState({
+    amount: 0,
+    paymentMethod: 'cash' as 'cash' | 'vodafone_cash' | 'instapay' | 'bank_transfer' | 'other',
+    notes: '',
+    receiptNo: '',
+    date: new Date().toISOString().split('T')[0],
+  });
+
+  const handleOpenAdvanceModal = (merch: MerchantSummary) => {
+    setAdvanceModalMerchant(merch);
+    setAdvanceForm({
+      amount: 0,
+      paymentMethod: 'cash',
+      notes: `سلفة نقدية / دفعة مقدمة تحت الحساب للتاجر (${merch.storeName})`,
+      receiptNo: `ADV-${Date.now().toString().slice(-6)}`,
+      date: new Date().toISOString().split('T')[0],
+    });
+    setIsAdvanceModalOpen(true);
+  };
+
+  const handleConfirmAdvance = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!advanceModalMerchant || advanceForm.amount <= 0) return;
+
+    const advTxn: Omit<CompanyTransaction, 'id' | 'createdAt'> = {
+      type: 'expense',
+      category: 'دفعة مقدمة / سلفة تاجر',
+      title: `سلفة نقدية / دفعة مقدمة للتاجر (${advanceModalMerchant.storeName})`,
+      amount: Number(advanceForm.amount),
+      date: advanceForm.date,
+      paymentMethod: advanceForm.paymentMethod,
+      relatedMerchant: advanceModalMerchant.storeName,
+      createdBy: currentUser?.name || 'أدمن النظام',
+      notes: `${advanceForm.notes || 'سلفة مقدمة مخصومة من المستحقات'} ${advanceForm.receiptNo ? `(رقم الإيصال: ${advanceForm.receiptNo})` : ''}`,
+    };
+
+    onAddTransaction(advTxn);
+    setIsAdvanceModalOpen(false);
+  };
 
   // Modal for Custom Merchant Shipping Rate
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
@@ -247,13 +300,19 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
           returnedCount: 0,
           refusedCount: 0,
           pendingDeliveryCount: 0,
+          inTransitCount: 0,
+          inTransitCod: 0,
+          inTransitNet: 0,
           totalCodCollected: 0,
           totalShippingFees: 0,
           netGoodsAmount: 0,
           returnsCount: 0,
           returnsShippingDeducted: 0,
           returnsGoodsValue: 0,
+          totalAdvancePaid: 0,
+          totalRegularPaidOut: 0,
           totalPaidOut: 0,
+          advanceTransactions: [],
           netEarned: 0,
           dueBalance: 0,
           unsettledShipmentsCount: 0,
@@ -295,13 +354,19 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
           returnedCount: 0,
           refusedCount: 0,
           pendingDeliveryCount: 0,
+          inTransitCount: 0,
+          inTransitCod: 0,
+          inTransitNet: 0,
           totalCodCollected: 0,
           totalShippingFees: 0,
           netGoodsAmount: 0,
           returnsCount: 0,
           returnsShippingDeducted: 0,
           returnsGoodsValue: 0,
+          totalAdvancePaid: 0,
+          totalRegularPaidOut: 0,
           totalPaidOut: 0,
+          advanceTransactions: [],
           netEarned: 0,
           dueBalance: 0,
           unsettledShipmentsCount: 0,
@@ -351,26 +416,41 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
           collectedShipping = totalShippingFee;
         }
 
-        const merchantDeduction = Math.max(0, totalShippingFee - collectedShipping);
+        const isCancelExempt = s.refusedDetails?.isCustomerCancellationWithoutFee === true;
+        const merchantDeduction = isCancelExempt ? 0 : Math.max(0, totalShippingFee - collectedShipping);
         merch.returnsShippingDeducted += merchantDeduction;
-        merch.returnsGoodsValue += Number(s.financials.codAmount) || 0;
+
+        const orderCod = s.refusedDetails?.originalCodAmount || Number(s.financials.codAmount) || 0;
+        const goodsVal = s.refusedDetails?.originalGoodsValue ?? (orderCod > totalShippingFee ? orderCod - totalShippingFee : orderCod);
+        merch.returnsGoodsValue += (goodsVal > 0 ? goodsVal : orderCod);
       } else {
+        // In transit with couriers / in hub / created / pending
         merch.pendingDeliveryCount += 1;
+        merch.inTransitCount += 1;
+        const cod = Number(s.financials.codAmount) || 0;
+        const fee = Number(s.financials.shippingFee) || 0;
+        merch.inTransitCod += cod;
+        merch.inTransitNet += Math.max(0, cod - fee);
       }
     });
 
-    // 3. Incorporate payouts & disbursements from companyTransactions
+    // 3. Incorporate payouts & advance payments from companyTransactions
     companyTransactions.forEach((txn) => {
-      if (txn.type === 'expense' && (txn.category === 'تسليم مستحقات تجار' || txn.category === 'صرف أرباح/تجار' || txn.title.includes('التاجر'))) {
+      if (txn.type === 'expense') {
         for (const [, merch] of merchantMap) {
-          const matchName = txn.relatedMerchant && (
-            merch.storeName.includes(txn.relatedMerchant) ||
-            txn.relatedMerchant.includes(merch.storeName) ||
-            merch.name.includes(txn.relatedMerchant) ||
-            txn.relatedMerchant.includes(merch.name)
-          );
-          if (matchName) {
-            merch.totalPaidOut += Number(txn.amount) || 0;
+          if (matchesMerchant(txn, { id: merch.id, storeName: merch.storeName, name: merch.name, phone: merch.phone })) {
+            const amt = Number(txn.amount) || 0;
+            if (isAdvanceTransaction(txn)) {
+              merch.totalAdvancePaid += amt;
+              merch.advanceTransactions.push(txn);
+            } else if (
+              txn.category === 'تسليم مستحقات تجار' ||
+              txn.category === 'صرف أرباح/تجار' ||
+              (txn.title && txn.title.includes('التاجر'))
+            ) {
+              merch.totalRegularPaidOut += amt;
+            }
+            merch.totalPaidOut = merch.totalAdvancePaid + merch.totalRegularPaidOut;
             break;
           }
         }
@@ -1102,6 +1182,16 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                     <span>تحديد / تعديل سعر الشحن للتاجر</span>
                   </button>
                 )}
+                {isAdmin && (
+                  <button
+                    onClick={() => handleOpenAdvanceModal(selectedMerchant)}
+                    className="bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-extrabold text-sm px-4 py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 flex-1 lg:flex-none cursor-pointer"
+                    title="تسجيل سلفة نقدية أو دفعة مقدمة تخصم من المستحقات"
+                  >
+                    <HandCoins className="w-4 h-4 text-amber-200" />
+                    <span>تسجيل سلفة / دفعة مقدمة</span>
+                  </button>
+                )}
                 <button
                   onClick={() => handleOpenPayoutModal(selectedMerchant)}
                   className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-sm px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 flex-1 lg:flex-none cursor-pointer"
@@ -1112,14 +1202,14 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
               </div>
             </div>
 
-            {/* 4 Financial Breakdown Boxes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
+            {/* 5 Financial Breakdown Boxes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mt-6 pt-6 border-t border-slate-100">
               {/* Box 1: Goods Amount (Without Shipping) */}
               <div className="bg-blue-50/60 border border-blue-200/80 p-4 rounded-xl">
                 <div className="flex items-center justify-between text-blue-900 mb-1">
                   <span className="text-xs font-bold flex items-center gap-1.5">
                     <PackageCheck className="w-4 h-4 text-blue-600" />
-                    حساب البضائع (بدون الشحن)
+                    شغله المسلم (البضائع)
                   </span>
                   <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded font-bold">
                     صافي الأوردرات
@@ -1129,11 +1219,30 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                   {selectedMerchant.netGoodsAmount.toLocaleString()} <span className="text-xs font-bold text-blue-700">ج.م</span>
                 </p>
                 <p className="text-[11px] text-blue-700 mt-1 font-medium">
-                  إجمالي COD: {selectedMerchant.totalCodCollected.toLocaleString()} ج.م - شحن: {selectedMerchant.totalShippingFees.toLocaleString()} ج.م
+                  COD: {selectedMerchant.totalCodCollected.toLocaleString()} ج.م - شحن: {selectedMerchant.totalShippingFees.toLocaleString()} ج.م
                 </p>
               </div>
 
-              {/* Box 2: Returns Deductions */}
+              {/* Box 2: In-Transit (قيد التوصيل) */}
+              <div className="bg-teal-50/60 border border-teal-200/80 p-4 rounded-xl">
+                <div className="flex items-center justify-between text-teal-900 mb-1">
+                  <span className="text-xs font-bold flex items-center gap-1.5">
+                    <Truck className="w-4 h-4 text-teal-600" />
+                    قيد التوصيل (في الطريق)
+                  </span>
+                  <span className="text-[10px] bg-teal-200 text-teal-900 px-1.5 py-0.5 rounded font-bold">
+                    مع المناديب
+                  </span>
+                </div>
+                <p className="text-xl font-black text-teal-900 font-mono">
+                  {selectedMerchant.inTransitCod.toLocaleString()} <span className="text-xs font-bold text-teal-700">ج.م</span>
+                </p>
+                <p className="text-[11px] text-teal-700 mt-1 font-medium">
+                  صافي متوقع: {selectedMerchant.inTransitNet.toLocaleString()} ج.م ({selectedMerchant.inTransitCount} أوردر)
+                </p>
+              </div>
+
+              {/* Box 3: Returns Deductions */}
               <div className="bg-red-50/60 border border-red-200/80 p-4 rounded-xl">
                 <div className="flex items-center justify-between text-red-900 mb-1">
                   <span className="text-xs font-bold flex items-center gap-1.5">
@@ -1148,45 +1257,57 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                   {selectedMerchant.returnsShippingDeducted.toLocaleString()} <span className="text-xs font-bold text-red-600">ج.م</span>
                 </p>
                 <p className="text-[11px] text-red-700 mt-1 font-medium">
-                  {selectedMerchant.returnsCount} أوردر مرتجع (شحن مخصوم من التاجر)
+                  بضاعة: {selectedMerchant.returnsGoodsValue.toLocaleString()} ج.م ({selectedMerchant.returnsCount} أوردر)
                 </p>
               </div>
 
-              {/* Box 3: Paid Out */}
-              <div className="bg-amber-50/60 border border-amber-200/80 p-4 rounded-xl">
+              {/* Box 4: Advances & Paid Out */}
+              <div className="bg-amber-50/60 border border-amber-300 p-4 rounded-xl">
                 <div className="flex items-center justify-between text-amber-900 mb-1">
                   <span className="text-xs font-bold flex items-center gap-1.5">
-                    <ArrowUpRight className="w-4 h-4 text-amber-600" />
-                    التاجر خد كام (المسحوبات)
+                    <HandCoins className="w-4 h-4 text-amber-600" />
+                    سلف ومقدمات (مخصومة)
                   </span>
-                  <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-bold">
-                    المبالغ المصروفة
+                  <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-bold">
+                    تتخصم من الصافي
                   </span>
                 </div>
                 <p className="text-xl font-black text-amber-800 font-mono">
-                  {selectedMerchant.totalPaidOut.toLocaleString()} <span className="text-xs font-bold text-amber-700">ج.م</span>
+                  {selectedMerchant.totalAdvancePaid.toLocaleString()} <span className="text-xs font-bold text-amber-700">ج.م</span>
                 </p>
                 <p className="text-[11px] text-amber-700 mt-1 font-medium">
-                  إجمالي دفعات المستحقات المسلمة للتاجر
+                  مسحوبات أخرى: {selectedMerchant.totalRegularPaidOut.toLocaleString()} ج.م (الإجمالي: {selectedMerchant.totalPaidOut.toLocaleString()} ج.م)
                 </p>
               </div>
 
-              {/* Box 4: Due Balance */}
-              <div className="bg-emerald-50/70 border border-emerald-300 p-4 rounded-xl shadow-2xs">
-                <div className="flex items-center justify-between text-emerald-900 mb-1">
+              {/* Box 5: Due Balance */}
+              <div className={`p-4 rounded-xl shadow-2xs border ${
+                selectedMerchant.dueBalance > 0
+                  ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
+                  : selectedMerchant.dueBalance < 0
+                  ? 'bg-rose-50/80 border-rose-300 text-rose-950'
+                  : 'bg-slate-100 border-slate-300 text-slate-900'
+              }`}>
+                <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold flex items-center gap-1.5">
                     <Wallet className="w-4 h-4 text-emerald-600" />
-                    التاجر ليه كام (الرصيد المتبقي)
+                    الصافي اللي ليه (المتبقي)
                   </span>
-                  <span className="text-[10px] bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded font-extrabold">
-                    جاهز للصرف
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-extrabold ${
+                    selectedMerchant.dueBalance > 0
+                      ? 'bg-emerald-200 text-emerald-900'
+                      : selectedMerchant.dueBalance < 0
+                      ? 'bg-rose-200 text-rose-900'
+                      : 'bg-slate-200 text-slate-800'
+                  }`}>
+                    {selectedMerchant.dueBalance > 0 ? 'جاهز للصرف' : selectedMerchant.dueBalance < 0 ? 'مديونية عليه' : 'خالص'}
                   </span>
                 </div>
-                <p className="text-xl font-black text-emerald-700 font-mono">
-                  {selectedMerchant.dueBalance.toLocaleString()} <span className="text-xs font-bold text-emerald-700">ج.م</span>
+                <p className="text-xl font-black font-mono">
+                  {selectedMerchant.dueBalance.toLocaleString()} <span className="text-xs font-bold">ج.م</span>
                 </p>
-                <p className="text-[11px] text-emerald-800 mt-1 font-medium">
-                  {selectedMerchant.unsettledShipmentsCount} شحنة بانتظار تصفية الحساب
+                <p className="text-[11px] mt-1 font-medium opacity-80">
+                  (شغله المسلم - شحن المرتجع - السلف)
                 </p>
               </div>
             </div>
@@ -1403,8 +1524,13 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                             {isPartial
                               ? (s.partialDetails?.partialCodAmount ?? s.financials.codAmount).toLocaleString()
                               : isReturned
-                              ? (s.refusedDetails?.amountCollected ?? 0).toLocaleString()
+                              ? (s.refusedDetails?.originalCodAmount ?? s.financials.codAmount).toLocaleString()
                               : s.financials.codAmount.toLocaleString()} ج.م
+                            {isReturned && (
+                              <span className="block text-[10px] text-amber-800 font-bold">
+                                بضاعة: {(s.refusedDetails?.originalGoodsValue ?? Math.max(0, (s.refusedDetails?.originalCodAmount ?? s.financials.codAmount) - s.financials.shippingFee)).toLocaleString()} ج.م
+                              </span>
+                            )}
                           </td>
 
                           <td className="py-3 px-3 text-center font-mono font-medium text-slate-600">
@@ -1425,13 +1551,21 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
 
                           <td className="py-3 px-3 text-center">
                             {isReturned ? (
-                              s.refusedDetails?.shippingFeePaid ? (
+                              s.refusedDetails?.isCustomerCancellationWithoutFee ? (
+                                <span className="text-sky-800 bg-sky-50 px-2 py-0.5 rounded text-[10px] font-bold border border-sky-200">
+                                  إلغاء عميل (معفى 0 ج.م) 🚫
+                                </span>
+                              ) : s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) > 0 && (s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee) ? (
+                                <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold border border-amber-300">
+                                  دفع جزء ({s.refusedDetails?.amountCollected} ج.م) - خصم {s.refusedDetails?.merchantDeductedAmount ?? Math.max(0, s.financials.shippingFee - (s.refusedDetails?.amountCollected || 0))} ج.م 🚚
+                                </span>
+                              ) : s.refusedDetails?.shippingFeePaid ? (
                                 <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-200">
-                                  دفع العميل الشحن ✅
+                                  دفع العميل الشحن ({s.refusedDetails?.amountCollected || s.financials.shippingFee} ج.م) ✅
                                 </span>
                               ) : (
                                 <span className="text-red-700 bg-red-50 px-2 py-0.5 rounded text-[10px] font-bold border border-red-200">
-                                  خصم {s.refusedDetails?.merchantDeductedAmount || s.financials.shippingFee} ج.م ❌
+                                  خصم {s.refusedDetails?.merchantDeductedAmount ?? s.financials.shippingFee} ج.م ❌
                                 </span>
                               )
                             ) : (

@@ -37,7 +37,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   const [statusNote, setStatusNote] = useState('');
   const [selectedCourierId, setSelectedCourierId] = useState(shipment.assignedCourier?.id || '');
   const [selectedStatus, setSelectedStatus] = useState<ShipmentStatus>(shipment.status);
-  const [refusePaidOption, setRefusePaidOption] = useState<'paid' | 'partial' | 'unpaid'>('paid');
+  const [refusePaidOption, setRefusePaidOption] = useState<'paid' | 'partial' | 'unpaid' | 'customer_cancellation'>('paid');
   const [refusePartialShippingAmount, setRefusePartialShippingAmount] = useState<number>(
     shipment.refusedDetails?.amountCollected || Math.round(shipment.financials.shippingFee / 2)
   );
@@ -60,30 +60,48 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
     let extraUpdates: Partial<Shipment> = {};
     
     if (selectedStatus === 'returned' || selectedStatus === 'refused') {
+      const originalCod = shipment.refusedDetails?.originalCodAmount || shipment.partialDetails?.originalCodAmount || shipment.financials.codAmount;
+      const totalShippingFee = shipment.financials.shippingFee;
+      const originalGoodsValue = shipment.refusedDetails?.originalGoodsValue || Math.max(0, originalCod - totalShippingFee);
+
+      const isCustomerCancellation = refusePaidOption === 'customer_cancellation';
       let amountCollected = 0;
-      if (refusePaidOption === 'paid') {
-        amountCollected = shipment.financials.shippingFee;
+      if (isCustomerCancellation) {
+        amountCollected = 0;
+      } else if (refusePaidOption === 'paid') {
+        amountCollected = totalShippingFee;
       } else if (refusePaidOption === 'partial') {
-        amountCollected = Math.min(shipment.financials.shippingFee, Math.max(0, refusePartialShippingAmount));
+        amountCollected = Math.min(totalShippingFee, Math.max(0, refusePartialShippingAmount));
       } else {
         amountCollected = 0;
       }
 
-      const merchantDeduction = Math.max(0, shipment.financials.shippingFee - amountCollected);
-      const netPayout = -merchantDeduction;
+      const merchantDeduction = isCustomerCancellation ? 0 : Math.max(0, totalShippingFee - amountCollected);
+      const netPayout = isCustomerCancellation ? 0 : -merchantDeduction;
 
       extraUpdates = {
         financials: {
           ...shipment.financials,
-          codAmount: amountCollected,
+          codAmount: originalCod, // Preserve original order value!
           netPayout,
         },
         refusedDetails: {
-          shippingFeePaid: amountCollected >= shipment.financials.shippingFee,
-          partialShippingFeePaid: amountCollected > 0 && amountCollected < shipment.financials.shippingFee,
+          shippingFeePaid: !isCustomerCancellation && amountCollected >= totalShippingFee,
+          partialShippingFeePaid: !isCustomerCancellation && amountCollected > 0 && amountCollected < totalShippingFee,
           amountCollected,
           merchantDeductedAmount: merchantDeduction,
-          reason: statusNote || (amountCollected >= shipment.financials.shippingFee ? 'دفع كامل الشحن ورجع' : (amountCollected > 0 ? `دفع جزء من الشحن (${amountCollected} ج.م)` : 'لم يدفع شحن')),
+          isCustomerCancellationWithoutFee: isCustomerCancellation,
+          originalCodAmount: originalCod,
+          originalGoodsValue,
+          reason: statusNote || (
+            isCustomerCancellation
+              ? 'العميل طلب إلغاء الأوردر (إعفاء من مصاريف الشحن)'
+              : amountCollected >= totalShippingFee
+              ? 'دفع كامل الشحن ورجع'
+              : amountCollected > 0
+              ? `دفع جزء من الشحن (${amountCollected} ج.م)`
+              : 'لم يدفع شحن'
+          ),
         },
       };
     } else if (selectedStatus === 'partial_delivery') {
@@ -628,19 +646,20 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                       </label>
                       <select
                         value={refusePaidOption}
-                        onChange={(e) => setRefusePaidOption(e.target.value as 'paid' | 'partial' | 'unpaid')}
+                        onChange={(e) => setRefusePaidOption(e.target.value as 'paid' | 'partial' | 'unpaid' | 'customer_cancellation')}
                         className="w-full text-xs p-2 bg-slate-900 border border-slate-700 rounded-lg text-amber-200 font-extrabold"
                       >
-                        <option value="paid">دفع كامل الشحن ({shipment.financials.shippingFee} ج.م)</option>
-                        <option value="partial">دفع جزء من الشحن (تحديد المبلغ)</option>
-                        <option value="unpaid">لم يدفع شحن (خصم {shipment.financials.shippingFee} ج.م من التاجر)</option>
+                        <option value="customer_cancellation">🚫 إلغاء بطلب العميل (إعفاء من الشحن - 0 خصم)</option>
+                        <option value="partial">🚚 دفع جزء من الشحن (تحديد المبلغ)</option>
+                        <option value="paid">✅ دفع كامل الشحن ({shipment.financials.shippingFee} ج.م)</option>
+                        <option value="unpaid">❌ لم يدفع شحن (خصم {shipment.financials.shippingFee} ج.م من التاجر)</option>
                       </select>
                     </div>
 
                     {refusePaidOption === 'partial' && (
                       <div>
                         <label className="block text-[11px] font-bold text-amber-300 mb-1">
-                          المبلغ المحصل من العميل (ج.م):
+                          المبلغ المحصل من العميل كـ جزء من الشحن (ج.م):
                         </label>
                         <input
                           type="number"
@@ -649,17 +668,23 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                           value={refusePartialShippingAmount}
                           onChange={(e) => setRefusePartialShippingAmount(Number(e.target.value) || 0)}
                           className="w-full text-xs p-2 bg-slate-900 border border-amber-500 rounded-lg text-emerald-400 font-extrabold"
+                          placeholder="أدخل المبلغ المحصل..."
                         />
                       </div>
                     )}
                   </div>
 
                   <div className="text-[11px] font-bold text-amber-200 flex flex-wrap items-center justify-between pt-1 border-t border-slate-700">
-                    {refusePaidOption === 'paid' && <span>المحصل: {shipment.financials.shippingFee} ج.م | خصم التاجر: 0 ج.م</span>}
+                    {refusePaidOption === 'customer_cancellation' && (
+                      <span className="text-sky-300 font-bold">
+                        🚫 إلغاء بطلب العميل: معفى من مصاريف الشحن (الخصم 0 ج.م) وقيمة بضاعة الأوردر ({shipment.financials.codAmount} ج.م) تظهر بالمرتجع.
+                      </span>
+                    )}
+                    {refusePaidOption === 'paid' && <span>المحصل: {shipment.financials.shippingFee} ج.م | خصم التاجر: 0 ج.م (دفع العميل كامل الشحن)</span>}
                     {refusePaidOption === 'partial' && (
                       <span>
-                        المحصل: {Math.min(shipment.financials.shippingFee, Math.max(0, refusePartialShippingAmount))} ج.م |
-                        خصم التاجر: {Math.max(0, shipment.financials.shippingFee - Math.min(shipment.financials.shippingFee, Math.max(0, refusePartialShippingAmount)))} ج.م
+                        المحصل من العميل: {Math.min(shipment.financials.shippingFee, Math.max(0, refusePartialShippingAmount))} ج.م |
+                        خصم باقي الشحن من التاجر: {Math.max(0, shipment.financials.shippingFee - Math.min(shipment.financials.shippingFee, Math.max(0, refusePartialShippingAmount)))} ج.م
                       </span>
                     )}
                     {refusePaidOption === 'unpaid' && <span>المحصل: 0 ج.م | خصم التاجر: {shipment.financials.shippingFee} ج.م (كامل الشحن)</span>}
