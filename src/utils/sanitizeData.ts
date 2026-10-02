@@ -1,4 +1,5 @@
 import { UserSession, CourierInfo, CompanyTransaction, Shipment, MerchantWallet, FinancialDetails, PaidStatus, AppUserRole } from '../types';
+import { INITIAL_SHIPMENTS } from '../data/mockData';
 
 export const PRIMARY_ADMIN_USER: UserSession = {
   id: 'admin_root',
@@ -259,9 +260,82 @@ export function sanitizeShipments(shipments?: Shipment[]): Shipment[] {
           ? `عميل (${recipient.city})` 
           : `عميل (${recipient.phone || s.trackingNumber})`;
       }
+      // Heal and restore original COD amount if it was zeroed or overwritten by partial shipping fee
+      let financials = s.financials ? { ...s.financials } : ({} as any);
+      let refusedDetails = s.refusedDetails ? { ...s.refusedDetails } : undefined;
+
+      const isRefusedOrReturned = s.status === 'refused' || s.status === 'returned';
+      const initialMatch = INITIAL_SHIPMENTS.find(
+        (init) => init.id === s.id || init.trackingNumber === s.trackingNumber
+      );
+
+      if (isRefusedOrReturned) {
+        const collectedAmt = Number(refusedDetails?.amountCollected || 0);
+        const currentCod = Number(financials.codAmount || 0);
+        const initialCod = Number(initialMatch?.financials?.codAmount || 0);
+        const storedOriginalCod = Number(refusedDetails?.originalCodAmount || 0);
+
+        // If COD was zeroed (customer cancellation) or overwritten by the collected shipping fee:
+        let trueCod = storedOriginalCod > 0 ? storedOriginalCod : 0;
+        if (initialCod > 0 && (trueCod <= 0 || trueCod === collectedAmt || currentCod <= 0 || currentCod === collectedAmt)) {
+          trueCod = initialCod;
+        } else if (trueCod <= 0) {
+          trueCod = currentCod > 0 && currentCod !== collectedAmt ? currentCod : initialCod;
+        }
+
+        const trueFee =
+          Number(financials.shippingFee) > 0
+            ? Number(financials.shippingFee)
+            : Number(initialMatch?.financials?.shippingFee || 80);
+
+        const isCancelExempt = Boolean(
+          refusedDetails?.isCustomerCancellationWithoutFee ||
+          refusedDetails?.reason?.includes('إلغاء') ||
+          refusedDetails?.reason?.includes('إعفاء') ||
+          s.timeline?.some((t: any) => t?.description?.includes('إعفاء') || t?.description?.includes('طلب إلغاء'))
+        );
+
+        if (trueCod > 0) {
+          financials.codAmount = trueCod;
+          financials.shippingFee = trueFee;
+          if (!refusedDetails) {
+            refusedDetails = {
+              shippingFeePaid: false,
+              amountCollected: 0,
+              reason: isCancelExempt ? 'العميل طلب إلغاء الأوردر (إعفاء من مصاريف الشحن)' : 'مرتجع للتاجر',
+            };
+          }
+          refusedDetails.originalCodAmount = trueCod;
+          refusedDetails.originalGoodsValue = Math.max(0, trueCod - trueFee);
+
+          if (isCancelExempt) {
+            refusedDetails.isCustomerCancellationWithoutFee = true;
+            refusedDetails.amountCollected = 0;
+            refusedDetails.merchantDeductedAmount = 0;
+            refusedDetails.shippingFeePaid = false;
+            refusedDetails.partialShippingFeePaid = false;
+            financials.netPayout = 0;
+          } else if (refusedDetails.amountCollected > 0 && refusedDetails.amountCollected < trueFee) {
+            refusedDetails.partialShippingFeePaid = true;
+            refusedDetails.merchantDeductedAmount = Math.max(0, trueFee - refusedDetails.amountCollected);
+            financials.netPayout = -refusedDetails.merchantDeductedAmount;
+          } else if (refusedDetails.amountCollected >= trueFee && trueFee > 0) {
+            refusedDetails.shippingFeePaid = true;
+            refusedDetails.merchantDeductedAmount = 0;
+            financials.netPayout = 0;
+          } else {
+            refusedDetails.shippingFeePaid = false;
+            refusedDetails.merchantDeductedAmount = trueFee;
+            financials.netPayout = -trueFee;
+          }
+        }
+      }
+
       return {
         ...s,
         recipient,
+        financials,
+        refusedDetails,
       };
     });
 }
@@ -340,8 +414,33 @@ export function mergeSingleShipment(current: Shipment, incoming: Shipment): Ship
     else if (hasPartialInTimeline) effectiveStatus = 'partial_delivery';
   }
 
+  let mergedRefused = winningObj.refusedDetails || current.refusedDetails || incoming.refusedDetails;
+  const mergedPartial = winningObj.partialDetails || current.partialDetails || incoming.partialDetails;
+  const mergedCourier = winningObj.assignedCourier || current.assignedCourier || incoming.assignedCourier;
+
+  let trueCod = Number(winningObj.financials?.codAmount ?? incoming.financials?.codAmount ?? current.financials?.codAmount ?? 0);
+  if (effectiveStatus === 'returned' || effectiveStatus === 'refused') {
+    const origCodCandidate = mergedRefused?.originalCodAmount || current.refusedDetails?.originalCodAmount || incoming.refusedDetails?.originalCodAmount;
+    const initialMatch = INITIAL_SHIPMENTS.find((init) => init.id === current.id || init.trackingNumber === current.trackingNumber);
+    const initialCod = Number(initialMatch?.financials?.codAmount || 0);
+
+    if (origCodCandidate && origCodCandidate > 0) {
+      trueCod = origCodCandidate;
+    } else if (initialCod > 0 && (trueCod <= 0 || trueCod === (mergedRefused?.amountCollected || 0))) {
+      trueCod = initialCod;
+    }
+
+    if (trueCod > 0 && mergedRefused) {
+      mergedRefused = {
+        ...mergedRefused,
+        originalCodAmount: trueCod,
+        originalGoodsValue: mergedRefused.originalGoodsValue || Math.max(0, trueCod - (winningObj.financials?.shippingFee || 80)),
+      };
+    }
+  }
+
   const mergedFinancials: FinancialDetails = {
-    codAmount: Number(winningObj.financials?.codAmount ?? incoming.financials?.codAmount ?? current.financials?.codAmount ?? 0),
+    codAmount: trueCod,
     shippingFee: Number(winningObj.financials?.shippingFee ?? incoming.financials?.shippingFee ?? current.financials?.shippingFee ?? 0),
     codFee: Number(winningObj.financials?.codFee ?? incoming.financials?.codFee ?? current.financials?.codFee ?? 0),
     insuranceFee: Number(winningObj.financials?.insuranceFee ?? incoming.financials?.insuranceFee ?? current.financials?.insuranceFee ?? 0),
@@ -351,9 +450,6 @@ export function mergeSingleShipment(current: Shipment, incoming: Shipment): Ship
   };
 
   const mergedProof = winningObj.proofOfDelivery || current.proofOfDelivery || incoming.proofOfDelivery;
-  const mergedRefused = winningObj.refusedDetails || current.refusedDetails || incoming.refusedDetails;
-  const mergedPartial = winningObj.partialDetails || current.partialDetails || incoming.partialDetails;
-  const mergedCourier = winningObj.assignedCourier || current.assignedCourier || incoming.assignedCourier;
 
   return {
     ...current,

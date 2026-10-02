@@ -40,6 +40,7 @@ import { CourierWaybillModal } from './CourierWaybillModal';
 import { EnableNotifications } from './EnableNotifications';
 import { playNotificationSound, requestNotificationPermission, sendDeviceNotification } from '../utils/deviceNotifications';
 import { generateWaybillMessage, generateWhatsAppLink, formatFullAddress, formatProductDetails } from '../utils/whatsapp';
+import { INITIAL_SHIPMENTS } from '../data/mockData';
 
 interface CourierAppViewProps {
   shipments: Shipment[];
@@ -302,7 +303,9 @@ export const CourierAppView: React.FC<CourierAppViewProps> = ({
       statusNote = `مرتجع بواسطة ${activeCourier.name} (لم يدفع شحن - خصم كامل الشحن ${totalShippingFee} ج.م من التاجر): ${refuseReason}`;
     }
 
-    const originalCod = selectedShipment.refusedDetails?.originalCodAmount || selectedShipment.financials.codAmount;
+    const fallbackInit = INITIAL_SHIPMENTS.find((x) => x.id === selectedShipment.id || x.trackingNumber === selectedShipment.trackingNumber);
+    const originalCod = selectedShipment.refusedDetails?.originalCodAmount ||
+      (selectedShipment.financials.codAmount > 0 ? selectedShipment.financials.codAmount : (fallbackInit?.financials?.codAmount || selectedShipment.financials.codAmount));
     const originalGoodsValue = selectedShipment.refusedDetails?.originalGoodsValue || Math.max(0, originalCod - totalShippingFee);
 
     const extraUpdates: Partial<Shipment> = {

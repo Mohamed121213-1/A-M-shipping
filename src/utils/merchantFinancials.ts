@@ -1,22 +1,50 @@
 import { Shipment, CompanyTransaction } from '../types';
 
 export interface MerchantFinancialStats {
-  // 1. شغل المتجر المسلم
+  // 0. حساب الشغل كامل (بدون الشحن) لكل أوردرات التاجر
+  totalAllShipmentsCount: number;
+  totalAllWorkCod: number;           // إجمالي COD لكل شحنات التاجر بلا استثناء
+  totalAllWorkShippingFees: number;  // إجمالي مصاريف الشحن الكلية
+  totalAllWorkNetGoods: number;      // إجمالي حساب الشغل كامل بدون الشحن (صافي البضائع الكلي)
+
+  // 1. شغل المتجر المسلم الإجمالي
   deliveredCount: number;
   deliveredCod: number;           // إجمالي التحصيل الفعلي كاش من العملاء
   deliveredShippingFees: number;  // مصاريف الشحن للشحنات المسلمة
-  deliveredNetGoods: number;      // صافي قيمة البضاعة المسلمة للتاجر
+  deliveredNetGoods: number;      // صافي قيمة البضاعة المسلمة للتاجر (شغله المسلم بدون الشحن)
 
-  // 2. قيد التوصيل
+  // 1.أ. تفاصيل الشحنات الكاملة (Delivered)
+  fullDeliveredCount: number;
+  fullDeliveredCod: number;
+  fullDeliveredShippingFees: number;
+  fullDeliveredNetGoods: number;  // صافي الشحنات الكاملة بتاعت التاجر
+
+  // 1.ب. تفاصيل الاستلام الجزئي (Partial Delivery)
+  partialDeliveredCount: number;
+  partialDeliveredCod: number;
+  partialDeliveredShippingFees: number;
+  partialDeliveredNetGoods: number;
+
+  // 2. قيد التوصيل (قيد التسليم مع المناديب)
   inTransitCount: number;
   inTransitCod: number;           // إجمالي مبالغ COD قيد التوصيل مع المناديب والمستودع
   inTransitShippingFees: number;  // مصاريف الشحن المتوقعة
-  inTransitNetExpected: number;   // الصافي المتوقع للتاجر عند التسليم
+  inTransitNetExpected: number;   // الصافي المتوقع للتاجر عند التسليم (حساب قيد التسليم بدون الشحن)
 
   // 3. المرتجعات
   returnsCount: number;
-  returnsGoodsValue: number;      // إجمالي قيمة بضائع المرتجعات
-  returnsShippingDeducted: number;// مصاريف شحن المرتجعات المخصومة من التاجر
+  returnsGoodsValue: number;      // إجمالي قيمة بضائع المرتجعات بحساب عادي (من غير الشحن)
+  returnsTotalCod: number;        // إجمالي مبالغ المرتجعات بحساب عادي
+  returnsShippingDeducted: number;// مصاريف شحن المرتجعات المخصومة من التاجر (تتخصم من الفلوس اللي ليه)
+
+  // 3.أ. دفع جزء من الشحن
+  partialShippingPaidCount: number;
+  partialShippingCollected: number;
+  partialShippingMerchantDeducted: number;
+
+  // 3.ب. إلغاء بطلب العميل (معفى من الشحن)
+  customerCancellationCount: number;
+  customerCancellationGoodsValue: number;
 
   // 4. السلف والدفعات المقدمة والمسحوبات
   totalAdvancePaid: number;       // دفعات مقدمة / سلف نقدية أخذها التاجر تحت الحساب
@@ -25,8 +53,8 @@ export interface MerchantFinancialStats {
   advanceTransactions: CompanyTransaction[];
   payoutTransactions: CompanyTransaction[];
 
-  // 5. الصافي اللي ليه
-  totalEarnedNet: number;         // إجمالي المستحق عن الشغل المنجز (صافي البضاعة - خصم شحن المرتجع)
+  // 5. الصافي اللي ليه (حساب التاجر النهائي)
+  totalEarnedNet: number;         // إجمالي المستحق عن الشغل المنجز (صافي البضاعة المسلمة - خصم شحن المرتجع)
   netDueBalance: number;          // الصافي اللي ليه المتبقي بعد خصم السلف والدفعات المقدمة
   hasDebt: boolean;               // هل التاجر عليه مديونية (سحب أكثر مما تم تسليمه)
 }
@@ -37,13 +65,11 @@ export function isAdvanceTransaction(txn: CompanyTransaction): boolean {
   const title = (txn.title || '').toLowerCase();
   const notes = (txn.notes || '').toLowerCase();
   return (
-    cat.includes('سلفة') ||
+    cat.includes('سلف') ||
     cat.includes('مقدم') ||
-    cat.includes('دفعة مقدمة') ||
-    title.includes('سلفة') ||
+    title.includes('سلف') ||
     title.includes('مقدم') ||
-    title.includes('دفعة مقدمة') ||
-    notes.includes('سلفة') ||
+    notes.includes('سلف') ||
     notes.includes('مقدم')
   );
 }
@@ -76,10 +102,25 @@ export function calculateMerchantFinancials(
   companyTransactions: CompanyTransaction[] = [],
   merchantIdentifier?: { id?: string; storeName?: string; name?: string; phone?: string }
 ): MerchantFinancialStats {
+  let totalAllShipmentsCount = 0;
+  let totalAllWorkCod = 0;
+  let totalAllWorkShippingFees = 0;
+  let totalAllWorkNetGoods = 0;
+
   let deliveredCount = 0;
   let deliveredCod = 0;
   let deliveredShippingFees = 0;
   let deliveredNetGoods = 0;
+
+  let fullDeliveredCount = 0;
+  let fullDeliveredCod = 0;
+  let fullDeliveredShippingFees = 0;
+  let fullDeliveredNetGoods = 0;
+
+  let partialDeliveredCount = 0;
+  let partialDeliveredCod = 0;
+  let partialDeliveredShippingFees = 0;
+  let partialDeliveredNetGoods = 0;
 
   let inTransitCount = 0;
   let inTransitCod = 0;
@@ -88,32 +129,57 @@ export function calculateMerchantFinancials(
 
   let returnsCount = 0;
   let returnsGoodsValue = 0;
+  let returnsTotalCod = 0;
   let returnsShippingDeducted = 0;
+
+  let partialShippingPaidCount = 0;
+  let partialShippingCollected = 0;
+  let partialShippingMerchantDeducted = 0;
+
+  let customerCancellationCount = 0;
+  let customerCancellationGoodsValue = 0;
 
   for (const s of shipments) {
     if (!s) continue;
     const cod = Number(s.financials?.codAmount) || 0;
     const fee = Number(s.financials?.shippingFee) || 0;
 
+    totalAllShipmentsCount += 1;
+    totalAllWorkCod += cod;
+    totalAllWorkShippingFees += fee;
+    totalAllWorkNetGoods += Math.max(0, cod - fee);
+
     if (s.status === 'delivered') {
       deliveredCount += 1;
+      fullDeliveredCount += 1;
       const net = Number(s.financials?.netPayout) ?? Math.max(0, cod - fee);
       deliveredCod += cod;
       deliveredShippingFees += fee;
       deliveredNetGoods += net;
+
+      fullDeliveredCod += cod;
+      fullDeliveredShippingFees += fee;
+      fullDeliveredNetGoods += net;
     } else if (s.status === 'partial_delivery') {
       deliveredCount += 1;
+      partialDeliveredCount += 1;
       const partialCod = Number(s.partialDetails?.partialCodAmount ?? cod) || 0;
       const net = Math.max(0, partialCod - fee);
       deliveredCod += partialCod;
       deliveredShippingFees += fee;
       deliveredNetGoods += net;
+
+      partialDeliveredCod += partialCod;
+      partialDeliveredShippingFees += fee;
+      partialDeliveredNetGoods += net;
     } else if (s.status === 'returned' || s.status === 'refused') {
       returnsCount += 1;
       const orderCod = s.refusedDetails?.originalCodAmount || cod;
-      // قيمة بضاعة المرتجع (من غير الشحن طبعاً كما طلب التاجر)
+      returnsTotalCod += orderCod;
+      // قيمة بضاعة المرتجع (من غير الشحن بحساب عادي)
       const goodsVal = s.refusedDetails?.originalGoodsValue ?? (orderCod > fee ? orderCod - fee : orderCod);
-      returnsGoodsValue += (goodsVal > 0 ? goodsVal : orderCod);
+      const effectiveGoodsVal = (goodsVal > 0 ? goodsVal : orderCod);
+      returnsGoodsValue += effectiveGoodsVal;
 
       let collectedShipping = 0;
       if (s.refusedDetails?.amountCollected !== undefined) {
@@ -122,9 +188,26 @@ export function calculateMerchantFinancials(
         collectedShipping = fee;
       }
 
-      const isCancellationExempt = s.refusedDetails?.isCustomerCancellationWithoutFee === true;
-      const deduction = isCancellationExempt ? 0 : Math.max(0, fee - collectedShipping);
-      returnsShippingDeducted += deduction;
+      const isCancellationExempt = s.refusedDetails?.isCustomerCancellationWithoutFee === true ||
+        s.refusedDetails?.reason?.includes('إلغاء') ||
+        s.refusedDetails?.reason?.includes('إعفاء');
+
+      if (isCancellationExempt) {
+        customerCancellationCount += 1;
+        customerCancellationGoodsValue += effectiveGoodsVal;
+      } else if (s.refusedDetails?.partialShippingFeePaid || (collectedShipping > 0 && collectedShipping < fee)) {
+        const deduction = Math.max(0, fee - collectedShipping);
+        partialShippingPaidCount += 1;
+        partialShippingCollected += collectedShipping;
+        partialShippingMerchantDeducted += deduction;
+        returnsShippingDeducted += deduction;
+      } else if (collectedShipping >= fee && fee > 0) {
+        // دفع كامل الشحن -> خصم 0
+      } else {
+        // لم يدفع شحن -> خصم كامل الشحن
+        const deduction = fee;
+        returnsShippingDeducted += deduction;
+      }
     } else {
       // Out for delivery, in hub, picked up, created, failed attempt
       inTransitCount += 1;
@@ -164,17 +247,35 @@ export function calculateMerchantFinancials(
   const hasDebt = netDueBalance < 0;
 
   return {
+    totalAllShipmentsCount,
+    totalAllWorkCod,
+    totalAllWorkShippingFees,
+    totalAllWorkNetGoods,
     deliveredCount,
     deliveredCod,
     deliveredShippingFees,
     deliveredNetGoods,
+    fullDeliveredCount,
+    fullDeliveredCod,
+    fullDeliveredShippingFees,
+    fullDeliveredNetGoods,
+    partialDeliveredCount,
+    partialDeliveredCod,
+    partialDeliveredShippingFees,
+    partialDeliveredNetGoods,
     inTransitCount,
     inTransitCod,
     inTransitShippingFees,
     inTransitNetExpected,
     returnsCount,
     returnsGoodsValue,
+    returnsTotalCod,
     returnsShippingDeducted,
+    partialShippingPaidCount,
+    partialShippingCollected,
+    partialShippingMerchantDeducted,
+    customerCancellationCount,
+    customerCancellationGoodsValue,
     totalAdvancePaid,
     totalRegularPaidOut,
     totalPaidOut,

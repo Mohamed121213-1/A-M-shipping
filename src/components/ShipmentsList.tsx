@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Shipment, ShipmentStatus, CourierInfo, AppUserRole, UserSession, CompanyTransaction, MerchantWallet } from '../types';
-import { EGYPT_GOVERNORATES } from '../data/mockData';
+import { EGYPT_GOVERNORATES, INITIAL_SHIPMENTS } from '../data/mockData';
 import { exportShipmentsToExcel } from '../utils/excelExport';
 import { calculateMerchantFinancials } from '../utils/merchantFinancials';
 import { 
@@ -182,9 +182,25 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
       } else if (statusFilter === 'delivered') {
         matchesStatus = s.status === 'delivered' || s.status === 'partial_delivery';
       } else if (statusFilter === 'paid_returns') {
-        matchesStatus = (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && s.refusedDetails?.shippingFeePaid === true;
+        const isCancel = s.refusedDetails?.isCustomerCancellationWithoutFee || s.refusedDetails?.reason?.includes('إلغاء') || s.refusedDetails?.reason?.includes('إعفاء');
+        const collected = s.refusedDetails?.amountCollected || 0;
+        const fee = s.financials?.shippingFee || 0;
+        matchesStatus = (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && !isCancel && (s.refusedDetails?.shippingFeePaid === true || (collected >= fee && fee > 0));
+      } else if (statusFilter === 'partial_shipping_returns') {
+        const isCancel = s.refusedDetails?.isCustomerCancellationWithoutFee || s.refusedDetails?.reason?.includes('إلغاء') || s.refusedDetails?.reason?.includes('إعفاء');
+        const collected = s.refusedDetails?.amountCollected || 0;
+        const fee = s.financials?.shippingFee || 0;
+        matchesStatus = (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && !isCancel && (s.refusedDetails?.partialShippingFeePaid === true || (collected > 0 && collected < fee));
+      } else if (statusFilter === 'customer_cancellation_returns') {
+        const isCancel = s.refusedDetails?.isCustomerCancellationWithoutFee || s.refusedDetails?.reason?.includes('إلغاء') || s.refusedDetails?.reason?.includes('إعفاء');
+        matchesStatus = (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && Boolean(isCancel);
       } else if (statusFilter === 'unpaid_returns') {
-        matchesStatus = (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && s.refusedDetails?.shippingFeePaid === false;
+        const isCancel = s.refusedDetails?.isCustomerCancellationWithoutFee || s.refusedDetails?.reason?.includes('إلغاء') || s.refusedDetails?.reason?.includes('إعفاء');
+        const collected = s.refusedDetails?.amountCollected || 0;
+        const fee = s.financials?.shippingFee || 0;
+        const isPartial = s.refusedDetails?.partialShippingFeePaid === true || (collected > 0 && collected < fee);
+        const isPaid = s.refusedDetails?.shippingFeePaid === true || (collected >= fee && fee > 0);
+        matchesStatus = (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && !isCancel && !isPartial && !isPaid;
       } else if (statusFilter === 'refused') {
         matchesStatus = (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant;
       } else if (statusFilter === 'failed') {
@@ -228,8 +244,45 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
   const pendingCount = activeShipmentsPool.filter((s) => s.status === 'pending_approval').length;
   const activeMainCount = activeShipmentsPool.filter((s) => !['delivered', 'partial_delivery', 'refused', 'returned'].includes(s.status)).length;
   const deliveredCount = activeShipmentsPool.filter((s) => s.status === 'delivered' || s.status === 'partial_delivery').length;
-  const paidReturnsCount = activeShipmentsPool.filter((s) => (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && s.refusedDetails?.shippingFeePaid === true).length;
-  const unpaidReturnsCount = activeShipmentsPool.filter((s) => (s.status === 'refused' || s.status === 'returned') && !s.isReturnedToMerchant && s.refusedDetails?.shippingFeePaid === false).length;
+  const paidReturnsCount = activeShipmentsPool.filter((s) => {
+    if (s.status !== 'refused' && s.status !== 'returned') return false;
+    if (s.isReturnedToMerchant) return false;
+    const isCancel = s.refusedDetails?.isCustomerCancellationWithoutFee || s.refusedDetails?.reason?.includes('إلغاء') || s.refusedDetails?.reason?.includes('إعفاء');
+    if (isCancel) return false;
+    const fee = s.financials?.shippingFee || 0;
+    const collected = s.refusedDetails?.amountCollected || 0;
+    return s.refusedDetails?.shippingFeePaid === true || (collected >= fee && fee > 0);
+  }).length;
+
+  const partialShippingReturnsCount = activeShipmentsPool.filter((s) => {
+    if (s.status !== 'refused' && s.status !== 'returned') return false;
+    if (s.isReturnedToMerchant) return false;
+    const isCancel = s.refusedDetails?.isCustomerCancellationWithoutFee || s.refusedDetails?.reason?.includes('إلغاء') || s.refusedDetails?.reason?.includes('إعفاء');
+    if (isCancel) return false;
+    const fee = s.financials?.shippingFee || 0;
+    const collected = s.refusedDetails?.amountCollected || 0;
+    return s.refusedDetails?.partialShippingFeePaid === true || (collected > 0 && collected < fee);
+  }).length;
+
+  const customerCancellationReturnsCount = activeShipmentsPool.filter((s) => {
+    if (s.status !== 'refused' && s.status !== 'returned') return false;
+    if (s.isReturnedToMerchant) return false;
+    return Boolean(s.refusedDetails?.isCustomerCancellationWithoutFee || s.refusedDetails?.reason?.includes('إلغاء') || s.refusedDetails?.reason?.includes('إعفاء'));
+  }).length;
+
+  const unpaidReturnsCount = activeShipmentsPool.filter((s) => {
+    if (s.status !== 'refused' && s.status !== 'returned') return false;
+    if (s.isReturnedToMerchant) return false;
+    const isCancel = s.refusedDetails?.isCustomerCancellationWithoutFee || s.refusedDetails?.reason?.includes('إلغاء') || s.refusedDetails?.reason?.includes('إعفاء');
+    if (isCancel) return false;
+    const fee = s.financials?.shippingFee || 0;
+    const collected = s.refusedDetails?.amountCollected || 0;
+    const isPartial = s.refusedDetails?.partialShippingFeePaid === true || (collected > 0 && collected < fee);
+    const isPaid = s.refusedDetails?.shippingFeePaid === true || (collected >= fee && fee > 0);
+    return !isPartial && !isPaid;
+  }).length;
+
+  const failedCount = activeShipmentsPool.filter((s) => s.status === 'failed_attempt').length;
   const activeCount = activeShipmentsPool.filter((s) =>
     ['created', 'pickup_requested', 'picked_up', 'in_hub', 'out_for_delivery'].includes(s.status)
   ).length;
@@ -337,19 +390,25 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
         );
       case 'refused':
       case 'returned':
-        if (s.refusedDetails?.isCustomerCancellationWithoutFee) {
-          return (
-            <div className="space-y-1">
-              <span className="bg-sky-100 text-sky-950 border border-sky-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
-                <RotateCcw className="w-3.5 h-3.5 text-sky-700 shrink-0" />
-                <span>🚫 إلغاء بطلب العميل (معفى من الشحن)</span>
-              </span>
-              <span className="block text-[10px] text-sky-900 font-bold">
-                بدون أي خصم شحن على التاجر
-              </span>
-            </div>
+        {
+          const isCancel = Boolean(
+            s.refusedDetails?.isCustomerCancellationWithoutFee ||
+            s.refusedDetails?.reason?.includes('إلغاء') ||
+            s.refusedDetails?.reason?.includes('إعفاء')
           );
-        } else if (s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) > 0 && (s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee)) {
+          if (isCancel) {
+            return (
+              <div className="space-y-1">
+                <span className="bg-sky-100 text-sky-950 border border-sky-300 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 w-fit shadow-2xs">
+                  <RotateCcw className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+                  <span>🚫 إلغاء بطلب العميل (معفى من الشحن)</span>
+                </span>
+                <span className="block text-[10px] text-sky-900 font-bold">
+                  بدون أي خصم شحن على التاجر
+                </span>
+              </div>
+            );
+          } else if (s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) > 0 && (s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee)) {
           const collected = s.refusedDetails?.amountCollected || 0;
           const deducted = s.refusedDetails?.merchantDeductedAmount ?? Math.max(0, s.financials.shippingFee - collected);
           return (
@@ -396,6 +455,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             </span>
           </div>
         );
+      }
       case 'failed_attempt':
         return (
           <div className="space-y-1">
@@ -486,10 +546,13 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                 {merchantStats.deliveredCod.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
               </p>
               <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[11px]">
-                <span className="text-slate-600 font-bold">
-                  الصافي بعد الشحن: <strong className="text-emerald-700 font-black">{merchantStats.deliveredNetGoods.toLocaleString()} ج.م</strong>
+                <span className="text-slate-700 font-bold">
+                  إجمالي الصافي: <strong className="text-emerald-700 font-black">{merchantStats.deliveredNetGoods.toLocaleString()} ج.م</strong>
                 </span>
-                <span className="text-slate-400">
+                <span className="text-blue-800 font-extrabold text-[10px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 w-fit">
+                  صافي الكاملة: {merchantStats.fullDeliveredNetGoods.toLocaleString()} ج.م ({merchantStats.fullDeliveredCount} شحنة)
+                </span>
+                <span className="text-slate-400 text-[10px]">
                   عدد: {merchantStats.deliveredCount} شحنة تم تحصيلها
                 </span>
               </div>
@@ -542,7 +605,17 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                     <span className="text-slate-500">شحن المرتجع: 0 ج.م (لم يخصم)</span>
                   )}
                 </span>
-                <span className="text-slate-400">
+                {merchantStats.partialShippingPaidCount > 0 && (
+                  <span className="text-amber-800 font-extrabold text-[10px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 w-fit">
+                    دفع جزء من الشحن: {merchantStats.partialShippingPaidCount} أوردر ({merchantStats.partialShippingCollected.toLocaleString()} ج.م)
+                  </span>
+                )}
+                {merchantStats.customerCancellationCount > 0 && (
+                  <span className="text-sky-800 font-extrabold text-[10px] bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 w-fit">
+                    إلغاء بطلب العميل: {merchantStats.customerCancellationCount} معفى
+                  </span>
+                )}
+                <span className="text-slate-400 text-[10px]">
                   عدد: {merchantStats.returnsCount} شحنة مرتجعة
                 </span>
               </div>
@@ -770,11 +843,33 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
               onClick={() => setStatusFilter('paid_returns')}
               className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
                 statusFilter === 'paid_returns'
-                  ? 'bg-amber-600 text-white shadow-xs'
+                  ? 'bg-emerald-700 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              🚚 دفع الشحن ورجع ({paidReturnsCount})
+              ✅ دفع كامل الشحن ورجع ({paidReturnsCount})
+            </button>
+
+            <button
+              onClick={() => setStatusFilter('partial_shipping_returns')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                statusFilter === 'partial_shipping_returns'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+              }`}
+            >
+              🚚 دفع جزء من الشحن ({partialShippingReturnsCount})
+            </button>
+
+            <button
+              onClick={() => setStatusFilter('customer_cancellation_returns')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                statusFilter === 'customer_cancellation_returns'
+                  ? 'bg-sky-700 text-white shadow-xs'
+                  : 'bg-sky-50 text-sky-900 border border-sky-300 hover:bg-sky-100'
+              }`}
+            >
+              🚫 إلغاء بطلب العميل ({customerCancellationReturnsCount})
             </button>
 
             <button
@@ -796,7 +891,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              📞 مؤجل / لا يرد
+              📞 مؤجل / لا يرد ({failedCount})
             </button>
 
             <button
@@ -1099,35 +1194,64 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
 
                     {/* Financials */}
                     <div className="grid grid-cols-2 gap-2 text-center text-xs">
-                      <div className="bg-red-50/60 border border-red-200/70 p-2 rounded-xl text-right">
-                        <span className="text-[10px] text-red-900 font-bold block">
-                          {s.status === 'partial_delivery' ? 'المحصل من المستلم:' : (s.status === 'refused' || s.status === 'returned') ? 'قيمة الأوردر (بضاعة):' : 'مبلغ التحصيل (COD):'}
-                        </span>
-                        <span className="font-black text-sm text-red-600 font-mono block mt-0.5">
-                          {(s.status === 'partial_delivery' 
-                            ? (s.partialDetails?.partialCodAmount ?? s.financials.codAmount) 
-                            : (s.refusedDetails?.originalCodAmount ?? s.financials.codAmount)
-                          ).toLocaleString()} ج.م
-                        </span>
-                        {(s.status === 'refused' || s.status === 'returned') && (
-                          <span className="text-[10px] text-amber-800 font-bold block">
-                            صافي البضاعة: {(s.refusedDetails?.originalGoodsValue ?? Math.max(0, (s.refusedDetails?.originalCodAmount ?? s.financials.codAmount) - s.financials.shippingFee)).toLocaleString()} ج.م
-                          </span>
-                        )}
-                      </div>
+                      {(() => {
+                        const fallbackInit = INITIAL_SHIPMENTS.find((x) => x.id === s.id || x.trackingNumber === s.trackingNumber);
+                        const isCancelExempt = Boolean(
+                          s.refusedDetails?.isCustomerCancellationWithoutFee ||
+                          s.refusedDetails?.reason?.includes('إلغاء') ||
+                          s.refusedDetails?.reason?.includes('إعفاء')
+                        );
+                        const effectiveCod = s.refusedDetails?.originalCodAmount ||
+                          (s.financials.codAmount > 0 && s.financials.codAmount !== s.refusedDetails?.amountCollected ? s.financials.codAmount : 0) ||
+                          fallbackInit?.financials?.codAmount ||
+                          s.financials.codAmount;
+                        const effectiveFee = s.financials.shippingFee || fallbackInit?.financials?.shippingFee || 80;
+                        const effectiveGoods = s.refusedDetails?.originalGoodsValue || Math.max(0, effectiveCod - effectiveFee);
+                        const collected = s.refusedDetails?.amountCollected || 0;
+                        const deducted = isCancelExempt ? 0 : (s.refusedDetails?.merchantDeductedAmount ?? Math.max(0, effectiveFee - collected));
 
-                      <div className="bg-slate-50 border border-slate-200 p-2 rounded-xl text-right">
-                        <span className="text-[10px] text-slate-500 font-bold block">صافي التاجر:</span>
-                        <span className={`font-black text-sm font-mono block mt-0.5 ${s.financials.netPayout < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                          {s.status === 'partial_delivery'
-                            ? `+${Math.max(0, (s.partialDetails?.partialCodAmount ?? s.financials.codAmount) - s.financials.shippingFee).toLocaleString()} ج.م`
-                            : (s.status === 'refused' || s.status === 'returned') && s.refusedDetails?.isCustomerCancellationWithoutFee
-                            ? '0 ج.م (معفى من الشحن)'
-                            : (s.status === 'refused' || s.status === 'returned') && s.financials.netPayout === 0
-                            ? '0 ج.م (سدد الشحن)'
-                            : s.financials.netPayout < 0 ? `${s.financials.netPayout.toLocaleString()} ج.م` : `+${s.financials.netPayout.toLocaleString()} ج.م`}
-                        </span>
-                      </div>
+                        return (
+                          <>
+                            <div className="bg-red-50/60 border border-red-200/70 p-2 rounded-xl text-right">
+                              <span className="text-[10px] text-red-900 font-bold block">
+                                {s.status === 'partial_delivery'
+                                  ? 'المحصل من المستلم:'
+                                  : (s.status === 'refused' || s.status === 'returned')
+                                  ? 'قيمة الأوردر (بضاعة):'
+                                  : 'مبلغ التحصيل (COD):'}
+                              </span>
+                              <span className="font-black text-sm text-red-600 font-mono block mt-0.5">
+                                {(s.status === 'partial_delivery' 
+                                  ? (s.partialDetails?.partialCodAmount ?? s.financials.codAmount) 
+                                  : effectiveCod
+                                ).toLocaleString()} ج.م
+                              </span>
+                              {(s.status === 'refused' || s.status === 'returned') && (
+                                <span className="text-[10px] text-amber-800 font-bold block">
+                                  صافي البضاعة: {effectiveGoods.toLocaleString()} ج.م
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="bg-slate-50 border border-slate-200 p-2 rounded-xl text-right">
+                              <span className="text-[10px] text-slate-500 font-bold block">صافي التاجر:</span>
+                              <span className={`font-black text-sm font-mono block mt-0.5 ${deducted > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                {s.status === 'partial_delivery'
+                                  ? `+${Math.max(0, (s.partialDetails?.partialCodAmount ?? s.financials.codAmount) - s.financials.shippingFee).toLocaleString()} ج.م`
+                                  : (s.status === 'refused' || s.status === 'returned') && isCancelExempt
+                                  ? '0 ج.م (معفى من الشحن)'
+                                  : (s.status === 'refused' || s.status === 'returned') && (s.refusedDetails?.partialShippingFeePaid || (collected > 0 && collected < effectiveFee))
+                                  ? `خصم متبقي: -${deducted.toLocaleString()} ج.م`
+                                  : (s.status === 'refused' || s.status === 'returned') && (s.refusedDetails?.shippingFeePaid || (collected >= effectiveFee && effectiveFee > 0))
+                                  ? '0 ج.م (سدد الشحن)'
+                                  : (s.status === 'refused' || s.status === 'returned')
+                                  ? `خصم شحن: -${deducted.toLocaleString()} ج.م`
+                                  : s.financials.netPayout < 0 ? `${s.financials.netPayout.toLocaleString()} ج.م` : `+${s.financials.netPayout.toLocaleString()} ج.م`}
+                              </span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* Return Handover Status Banner (if viewing returns) */}
@@ -1379,21 +1503,42 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                         </td>
                         <td className="p-3">
                           {s.status === 'refused' || s.status === 'returned' ? (
-                            <div>
-                              <span className="font-extrabold text-slate-900 block text-sm">
-                                {(s.refusedDetails?.originalCodAmount ?? s.financials.codAmount).toLocaleString()} ج.م
-                              </span>
-                              <span className="text-[10px] font-bold text-amber-800 block">
-                                صافي البضاعة: {(s.refusedDetails?.originalGoodsValue ?? Math.max(0, (s.refusedDetails?.originalCodAmount ?? s.financials.codAmount) - s.financials.shippingFee)).toLocaleString()} ج.م
-                              </span>
-                              <span className={`text-[10px] font-extrabold block mt-0.5 ${s.financials.netPayout < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
-                                {s.refusedDetails?.isCustomerCancellationWithoutFee
-                                  ? 'معفى من خصم الشحن (0 ج.م)'
-                                  : s.financials.netPayout < 0
-                                  ? `خصم شحن: ${Math.abs(s.financials.netPayout).toLocaleString()} ج.م`
-                                  : 'تم سداد الشحن بالكامل'}
-                              </span>
-                            </div>
+                            (() => {
+                              const fallbackInit = INITIAL_SHIPMENTS.find((x) => x.id === s.id || x.trackingNumber === s.trackingNumber);
+                              const isCancelExempt = Boolean(
+                                s.refusedDetails?.isCustomerCancellationWithoutFee ||
+                                s.refusedDetails?.reason?.includes('إلغاء') ||
+                                s.refusedDetails?.reason?.includes('إعفاء')
+                              );
+                              const effectiveCod = s.refusedDetails?.originalCodAmount ||
+                                (s.financials.codAmount > 0 && s.financials.codAmount !== s.refusedDetails?.amountCollected ? s.financials.codAmount : 0) ||
+                                fallbackInit?.financials?.codAmount ||
+                                s.financials.codAmount;
+                              const effectiveFee = s.financials.shippingFee || fallbackInit?.financials?.shippingFee || 80;
+                              const effectiveGoods = s.refusedDetails?.originalGoodsValue || Math.max(0, effectiveCod - effectiveFee);
+                              const collected = s.refusedDetails?.amountCollected || 0;
+                              const deducted = isCancelExempt ? 0 : (s.refusedDetails?.merchantDeductedAmount ?? Math.max(0, effectiveFee - collected));
+
+                              return (
+                                <div>
+                                  <span className="font-extrabold text-slate-900 block text-sm">
+                                    {effectiveCod.toLocaleString()} ج.م
+                                  </span>
+                                  <span className="text-[10px] font-bold text-amber-800 block">
+                                    صافي البضاعة: {effectiveGoods.toLocaleString()} ج.م
+                                  </span>
+                                  <span className={`text-[10px] font-extrabold block mt-0.5 ${deducted > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                                    {isCancelExempt
+                                      ? 'معفى من خصم الشحن (0 ج.م)'
+                                      : (s.refusedDetails?.partialShippingFeePaid || (collected > 0 && collected < effectiveFee))
+                                      ? `خصم متبقي: ${deducted.toLocaleString()} ج.م (تحصيل ${collected} ج.م)`
+                                      : deducted > 0
+                                      ? `خصم شحن: ${deducted.toLocaleString()} ج.م`
+                                      : 'تم سداد الشحن بالكامل'}
+                                  </span>
+                                </div>
+                              );
+                            })()
                           ) : (
                             <div>
                               <span className="font-extrabold text-red-600 block text-sm">

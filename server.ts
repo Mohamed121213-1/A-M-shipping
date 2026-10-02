@@ -7,7 +7,7 @@ import helmet from "helmet";
 import cors from "cors";
 import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
-import { EGYPT_GOVERNORATES } from "./src/data/mockData";
+import { EGYPT_GOVERNORATES, INITIAL_SHIPMENTS } from "./src/data/mockData";
 
 const app = express();
 const PORT = 3000;
@@ -629,12 +629,60 @@ function sanitizeServerState(rawState: any) {
   }
 
   if (Array.isArray(rawState.shipments)) {
-    rawState.shipments = rawState.shipments.filter((s: any) => {
-      if (!s || typeof s !== 'object' || (!s.id && !s.trackingNumber)) return false;
-      if (serverDeletedShipments.has(String(s.id)) || serverDeletedShipments.has(String(s.trackingNumber))) return false;
-      if (s.sender && isDeprecatedDummyUser(s.sender)) return false;
-      return true;
-    });
+    rawState.shipments = rawState.shipments
+      .filter((s: any) => {
+        if (!s || typeof s !== 'object' || (!s.id && !s.trackingNumber)) return false;
+        if (serverDeletedShipments.has(String(s.id)) || serverDeletedShipments.has(String(s.trackingNumber))) return false;
+        if (s.sender && isDeprecatedDummyUser(s.sender)) return false;
+        return true;
+      })
+      .map((s: any) => {
+        const isRefusedOrReturned = s.status === 'refused' || s.status === 'returned';
+        let financials = s.financials ? { ...s.financials } : {};
+        let refusedDetails = s.refusedDetails ? { ...s.refusedDetails } : undefined;
+
+        if (isRefusedOrReturned) {
+          const initialMatch = INITIAL_SHIPMENTS.find(
+            (init: any) => init.id === s.id || init.trackingNumber === s.trackingNumber
+          );
+          const collectedAmt = Number(refusedDetails?.amountCollected || 0);
+          const currentCod = Number(financials.codAmount || 0);
+          const initialCod = Number(initialMatch?.financials?.codAmount || 0);
+          const storedOriginalCod = Number(refusedDetails?.originalCodAmount || 0);
+
+          let trueCod = storedOriginalCod > 0 ? storedOriginalCod : 0;
+          if (initialCod > 0 && (trueCod <= 0 || trueCod === collectedAmt || currentCod <= 0 || currentCod === collectedAmt)) {
+            trueCod = initialCod;
+          } else if (trueCod <= 0) {
+            trueCod = currentCod > 0 ? currentCod : initialCod;
+          }
+
+          const trueFee =
+            Number(financials.shippingFee) > 0
+              ? Number(financials.shippingFee)
+              : Number(initialMatch?.financials?.shippingFee || 80);
+
+          if (trueCod > 0) {
+            financials.codAmount = trueCod;
+            financials.shippingFee = trueFee;
+            if (!refusedDetails) {
+              refusedDetails = {
+                shippingFeePaid: false,
+                amountCollected: 0,
+                reason: 'إلغاء بطلب العميل / مرتجع',
+              };
+            }
+            refusedDetails.originalCodAmount = trueCod;
+            refusedDetails.originalGoodsValue = Math.max(0, trueCod - trueFee);
+          }
+        }
+
+        return {
+          ...s,
+          financials,
+          refusedDetails,
+        };
+      });
   }
 
   if (Array.isArray(rawState.governorates) && rawState.governorates.length > 0) {

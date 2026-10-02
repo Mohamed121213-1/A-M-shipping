@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shipment, ShipmentStatus, CourierInfo, AppUserRole } from '../types';
+import { INITIAL_SHIPMENTS } from '../data/mockData';
 import { X, CheckCircle2, Clock, MapPin, Truck, AlertTriangle, ShieldCheck, Sparkles, Printer, User, Phone, Package, DollarSign, ArrowRight, KeyRound, MessageSquare, Trash2, RotateCcw, Edit } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
@@ -60,8 +61,11 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
     let extraUpdates: Partial<Shipment> = {};
     
     if (selectedStatus === 'returned' || selectedStatus === 'refused') {
-      const originalCod = shipment.refusedDetails?.originalCodAmount || shipment.partialDetails?.originalCodAmount || shipment.financials.codAmount;
-      const totalShippingFee = shipment.financials.shippingFee;
+      const fallbackInit = INITIAL_SHIPMENTS.find((x) => x.id === shipment.id || x.trackingNumber === shipment.trackingNumber);
+      const originalCod = shipment.refusedDetails?.originalCodAmount ||
+        shipment.partialDetails?.originalCodAmount ||
+        (shipment.financials.codAmount > 0 ? shipment.financials.codAmount : (fallbackInit?.financials?.codAmount || shipment.financials.codAmount));
+      const totalShippingFee = shipment.financials.shippingFee || fallbackInit?.financials?.shippingFee || 80;
       const originalGoodsValue = shipment.refusedDetails?.originalGoodsValue || Math.max(0, originalCod - totalShippingFee);
 
       const isCustomerCancellation = refusePaidOption === 'customer_cancellation';

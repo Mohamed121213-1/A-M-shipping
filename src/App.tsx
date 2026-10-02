@@ -1305,11 +1305,20 @@ export default function App() {
       if (newStatus === 'returned' || newStatus === 'refused') {
         const currentFinancials = effectiveExtra.financials || s.financials;
         const refusedDetails = effectiveExtra.refusedDetails || s.refusedDetails;
-        const originalCod = s.refusedDetails?.originalCodAmount || s.partialDetails?.originalCodAmount || currentFinancials.codAmount;
-        const totalShippingFee = currentFinancials.shippingFee;
+        const fallbackInit = INITIAL_SHIPMENTS.find((x) => x.id === s.id || x.trackingNumber === s.trackingNumber);
+        const originalCod = s.refusedDetails?.originalCodAmount ||
+          s.partialDetails?.originalCodAmount ||
+          (currentFinancials.codAmount > 0 ? currentFinancials.codAmount : (fallbackInit?.financials?.codAmount || currentFinancials.codAmount));
+        const totalShippingFee = currentFinancials.shippingFee || fallbackInit?.financials?.shippingFee || 80;
         const originalGoodsValue = s.refusedDetails?.originalGoodsValue || Math.max(0, originalCod - totalShippingFee);
 
-        if (refusedDetails?.isCustomerCancellationWithoutFee) {
+        const isCancellationExempt = Boolean(
+          refusedDetails?.isCustomerCancellationWithoutFee ||
+          refusedDetails?.reason?.includes('إلغاء') ||
+          refusedDetails?.reason?.includes('إعفاء')
+        );
+
+        if (isCancellationExempt) {
           effectiveExtra = {
             ...effectiveExtra,
             financials: {
