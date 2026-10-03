@@ -109,6 +109,8 @@ interface MerchantSummary {
   pendingReturnsGoodsValue: number; // حساب المرتجعات المعلقة (يصبح 0 عند استلام التاجر لكافة المرتجعات)
   deliveredToMerchantReturnsCount: number; // عدد المرتجعات المستلمة للتاجر
   deliveredToMerchantReturnsGoodsValue: number; // قيمة المرتجعات المستلمة للتاجر
+  deliveredToMerchantReturnsShippingDeducted: number; // خصم شحن المرتجعات المستلمة للتاجر (المخصومة فعلياً من حسابه لما يستلمها)
+  pendingReturnsShippingDeducted: number; // مصاريف شحن المرتجعات المعلقة بالمستودع (ستُخصم فور استلام التاجر لها)
   partialShippingCount: number; // عدد شحنات دفع جزء من الشحن
   partialShippingCollected: number; // إجمالي المحصل كـ جزء من الشحن
   customerCancellationCount: number; // عدد شحنات إلغاء بطلب العميل
@@ -362,8 +364,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
           returnsTotalCod: 0,
           pendingReturnsCount: 0,
           pendingReturnsGoodsValue: 0,
+          pendingReturnsShippingDeducted: 0,
           deliveredToMerchantReturnsCount: 0,
           deliveredToMerchantReturnsGoodsValue: 0,
+          deliveredToMerchantReturnsShippingDeducted: 0,
           partialShippingCount: 0,
           partialShippingCollected: 0,
           customerCancellationCount: 0,
@@ -432,8 +436,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
           returnsTotalCod: 0,
           pendingReturnsCount: 0,
           pendingReturnsGoodsValue: 0,
+          pendingReturnsShippingDeducted: 0,
           deliveredToMerchantReturnsCount: 0,
           deliveredToMerchantReturnsGoodsValue: 0,
+          deliveredToMerchantReturnsShippingDeducted: 0,
           partialShippingCount: 0,
           partialShippingCollected: 0,
           customerCancellationCount: 0,
@@ -525,20 +531,32 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
           merch.pendingReturnsGoodsValue += effectiveGoods;
         }
 
+        let returnDeduction = 0;
         if (isCancelExempt) {
           merch.customerCancellationCount += 1;
           merch.customerCancellationGoodsValue += effectiveGoods;
-          // الخصم 0 للعميل التاجر معفى
+          returnDeduction = 0;
+        } else if (s.refusedDetails?.merchantDeductedAmount !== undefined) {
+          returnDeduction = Number(s.refusedDetails.merchantDeductedAmount) || 0;
         } else if (s.refusedDetails?.partialShippingFeePaid || (collectedShipping > 0 && collectedShipping < totalShippingFee)) {
           const deduction = Math.max(0, totalShippingFee - collectedShipping);
           merch.partialShippingCount += 1;
           merch.partialShippingCollected += collectedShipping;
-          merch.returnsShippingDeducted += deduction;
+          returnDeduction = deduction;
         } else if (collectedShipping >= totalShippingFee && totalShippingFee > 0) {
           // دفع كامل الشحن -> خصم 0
+          returnDeduction = 0;
         } else {
           // لم يدفع شحن -> خصم كامل الشحن
-          merch.returnsShippingDeducted += totalShippingFee;
+          returnDeduction = totalShippingFee;
+        }
+
+        merch.returnsShippingDeducted += returnDeduction;
+
+        if (isReceivedByMerchant) {
+          merch.deliveredToMerchantReturnsShippingDeducted += returnDeduction;
+        } else {
+          merch.pendingReturnsShippingDeducted += returnDeduction;
         }
       } else {
         // In transit with couriers / in hub / created / pending
@@ -577,8 +595,9 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
 
     // 4. Calculate Final Balances
     merchantMap.forEach((merch) => {
-      // Net Earned for merchant = (Net Goods delivered) - (Returns shipping fees deducted)
-      merch.netEarned = merch.netGoodsAmount - merch.returnsShippingDeducted;
+      // Net Earned for merchant = (Net Goods delivered) - (Returns shipping fees deducted for returns received by merchant)
+      // لما التاجر يستلم المرتجع يتخصم من حساب التاجر يعني يتخصم من الفلوس اللي ليه
+      merch.netEarned = merch.netGoodsAmount - merch.deliveredToMerchantReturnsShippingDeducted;
       // Due Balance = Net Earned - Total Paid Out
       merch.dueBalance = merch.netEarned - merch.totalPaidOut;
     });
@@ -1274,9 +1293,14 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                           <p className="text-[10px] text-rose-800 font-bold">
                             معلق لم يستلم ({merch.pendingReturnsCount} أوردر)
                           </p>
-                          <p className={`text-[10px] font-bold ${merch.returnsShippingDeducted > 0 ? 'text-red-700 font-mono' : 'text-slate-500'}`}>
-                            خصم شحن: -{merch.returnsShippingDeducted.toLocaleString()} ج.م
+                          <p className={`text-[10px] font-bold ${merch.deliveredToMerchantReturnsShippingDeducted > 0 ? 'text-red-700 font-mono' : 'text-slate-500'}`}>
+                            مخصوم من حسابه (مستلم): -{merch.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
                           </p>
+                          {merch.pendingReturnsShippingDeducted > 0 && (
+                            <p className="text-[9px] text-amber-700 font-medium font-mono">
+                              معلق لم يستلم: {merch.pendingReturnsShippingDeducted.toLocaleString()} ج.م (يُخصم عند الاستلام)
+                            </p>
+                          )}
                           <p className="text-[9px] text-slate-500">
                             بضائع المرتجع: {merch.returnsGoodsValue.toLocaleString()} ج.م
                           </p>
@@ -1506,8 +1530,8 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                   شغله المسلم: +{selectedMerchant.netGoodsAmount.toLocaleString()} ج.م
                 </span>
                 <span className="text-slate-400 font-sans text-base">-</span>
-                <span className="text-red-300 bg-red-950/70 px-2.5 py-1 rounded-lg border border-red-800" title="مصاريف شحن المرتجعات المخصومة من مستحقات التاجر">
-                  خصم شحن المرتجع: -{selectedMerchant.returnsShippingDeducted.toLocaleString()} ج.م
+                <span className="text-red-300 bg-red-950/70 px-2.5 py-1 rounded-lg border border-red-800" title="مصاريف شحن المرتجعات التي استلمها التاجر (مخصومة فورياً من الفلوس اللي ليه)">
+                  شحن المرتجع المستلم: -{selectedMerchant.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
                 </span>
                 <span className="text-slate-400 font-sans text-base">-</span>
                 <span className="text-amber-300 bg-amber-950/70 px-2.5 py-1 rounded-lg border border-amber-800" title="السلف النقدية والدفعات المقدمة والمصروفات المسحوبة">
@@ -1521,6 +1545,11 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                 }`}>
                   الصافي اللي ليه: {selectedMerchant.dueBalance.toLocaleString()} ج.م
                 </span>
+                {selectedMerchant.pendingReturnsShippingDeducted > 0 && (
+                  <span className="text-[10px] text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/60 font-sans font-medium" title="شحنات مرتجعة لم يستلمها التاجر بعد، وتُخصم فور استلامه لها">
+                    ⏳ معلق لم يستلم: {selectedMerchant.pendingReturnsShippingDeducted.toLocaleString()} ج.م (يُخصم فور الاستلام)
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1612,9 +1641,14 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                   <p className="text-rose-900 font-bold">
                     معلق لم يستلم: <strong>{selectedMerchant.pendingReturnsCount}</strong> أوردر
                   </p>
-                  <p className="text-[9px] text-red-700">
-                    يخصم شحن: <strong className="text-red-900 font-mono">-{selectedMerchant.returnsShippingDeducted.toLocaleString()} ج.م</strong>
+                  <p className="text-[10px] text-red-800 font-bold">
+                    مخصوم من حسابه (مستلم): <strong className="text-red-900 font-mono">-{selectedMerchant.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م</strong>
                   </p>
+                  {selectedMerchant.pendingReturnsShippingDeducted > 0 && (
+                    <p className="text-[9px] text-amber-800 font-semibold font-mono">
+                      معلق يُخصم عند الاستلام: {selectedMerchant.pendingReturnsShippingDeducted.toLocaleString()} ج.م
+                    </p>
+                  )}
                   <p className="text-[9px] text-slate-500">
                     مستلم للتاجر: {selectedMerchant.deliveredToMerchantReturnsCount} ({selectedMerchant.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م)
                   </p>
@@ -1627,10 +1661,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                           .map((s) => s.id);
                         if (pendingIds.length > 0) onMarkAllMerchantReturns(pendingIds);
                       }}
-                      className="w-full mt-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] py-1 px-1.5 rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      className="w-full mt-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer shadow-xs"
                     >
                       <PackageCheck className="w-3 h-3" />
-                      <span>استلام كافة المرتجعات</span>
+                      <span>استلام كافة المرتجعات وخصمها من حسابه</span>
                     </button>
                   )}
                 </div>
@@ -2093,23 +2127,64 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                             {/* Return Status & Deduction */}
                             <td className="py-3 px-3 text-center">
                               {isReturned ? (
-                                s.refusedDetails?.isCustomerCancellationWithoutFee ? (
-                                  <span className="text-sky-800 bg-sky-50 px-2 py-0.5 rounded text-[10px] font-bold border border-sky-200">
-                                    إلغاء عميل (معفى 0 ج.م) 🚫
-                                  </span>
-                                ) : s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) > 0 && (s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee) ? (
-                                  <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold border border-amber-300">
-                                    دفع جزء ({s.refusedDetails?.amountCollected} ج.م) - خصم {s.refusedDetails?.merchantDeductedAmount ?? Math.max(0, s.financials.shippingFee - (s.refusedDetails?.amountCollected || 0))} ج.م 🚚
-                                  </span>
-                                ) : s.refusedDetails?.shippingFeePaid ? (
-                                  <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-200">
-                                    دفع العميل الشحن ({s.refusedDetails?.amountCollected || s.financials.shippingFee} ج.م) ✅
-                                  </span>
-                                ) : (
-                                  <span className="text-red-700 bg-red-50 px-2 py-0.5 rounded text-[10px] font-bold border border-red-200">
-                                    خصم {s.refusedDetails?.merchantDeductedAmount ?? s.financials.shippingFee} ج.م ❌
-                                  </span>
-                                )
+                                (() => {
+                                  const isCancelExempt = s.refusedDetails?.isCustomerCancellationWithoutFee === true ||
+                                    s.refusedDetails?.reason?.includes('إلغاء') ||
+                                    s.refusedDetails?.reason?.includes('إعفاء');
+                                  let deductedFee = 0;
+                                  if (isCancelExempt) {
+                                    deductedFee = 0;
+                                  } else if (s.refusedDetails?.merchantDeductedAmount !== undefined) {
+                                    deductedFee = Number(s.refusedDetails.merchantDeductedAmount) || 0;
+                                  } else if (s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) > 0 && (s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee)) {
+                                    const col = Number(s.refusedDetails?.amountCollected) || 0;
+                                    deductedFee = Math.max(0, s.financials.shippingFee - col);
+                                  } else if ((s.refusedDetails?.amountCollected || 0) >= s.financials.shippingFee && s.financials.shippingFee > 0) {
+                                    deductedFee = 0;
+                                  } else {
+                                    deductedFee = s.financials.shippingFee;
+                                  }
+
+                                  if (isCancelExempt) {
+                                    return (
+                                      <span className="text-sky-800 bg-sky-50 px-2 py-0.5 rounded text-[10px] font-bold border border-sky-200">
+                                        إلغاء عميل (معفى 0 ج.م) 🚫
+                                      </span>
+                                    );
+                                  }
+
+                                  if (deductedFee === 0) {
+                                    return (
+                                      <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-200">
+                                        دفع العميل الشحن (معفى 0 ج.م) ✅
+                                      </span>
+                                    );
+                                  }
+
+                                  if (s.isReturnedToMerchant) {
+                                    return (
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span className="text-red-700 bg-red-50 px-2 py-0.5 rounded text-[10px] font-black border border-red-200">
+                                          مخصوم من حسابه: -{deductedFee} ج.م ❌
+                                        </span>
+                                        <span className="text-[9px] text-emerald-700 font-bold">
+                                          (تم استلامه وخُصم من الفلوس اللي ليه)
+                                        </span>
+                                      </div>
+                                    );
+                                  }
+
+                                  return (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold border border-amber-300">
+                                        معلق بالمستودع ({deductedFee} ج.م) ⏳
+                                      </span>
+                                      <span className="text-[9px] text-amber-700 font-semibold">
+                                        يُخصم فور استلام التاجر له
+                                      </span>
+                                    </div>
+                                  );
+                                })()
                               ) : (
                                 <span className="text-slate-400">-</span>
                               )}
@@ -2122,14 +2197,14 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                                   <div className="flex flex-col items-center gap-1">
                                     <span className="text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-[11px] font-extrabold border border-emerald-300 flex items-center gap-1">
                                       <Check className="w-3 h-3 text-emerald-600" />
-                                      <span>تم استلام التاجر</span>
+                                      <span>تم استلام التاجر (مخصوم)</span>
                                     </span>
                                     {onMarkReturnedToMerchant && (
                                       <button
                                         type="button"
                                         onClick={() => onMarkReturnedToMerchant(s.id, true)}
                                         className="text-[10px] text-slate-500 hover:text-red-600 underline font-medium cursor-pointer"
-                                        title="إلغاء استلام التاجر وإعادته للمرتجعات المعلقة"
+                                        title="إلغاء استلام التاجر وإلغاء الخصم من حسابه"
                                       >
                                         إلغاء الاستلام
                                       </button>
@@ -2146,10 +2221,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                                         type="button"
                                         onClick={() => onMarkReturnedToMerchant(s.id, false)}
                                         className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-[10px] px-2.5 py-1 rounded-md shadow-xs transition-all flex items-center gap-1 cursor-pointer"
-                                        title="تأكيد استلام التاجر لهذه البضاعة المرتجعة وتنزيلها من مبلغ المرتجعات"
+                                        title="تأكيد استلام التاجر لهذه البضاعة المرتجعة وخصم مصاريف شحنها فوراً من الفلوس اللي ليه"
                                       >
                                         <PackageCheck className="w-3 h-3" />
-                                        <span>تأكيد استلام التاجر</span>
+                                        <span>تأكيد استلام التاجر (خصم من حسابه)</span>
                                       </button>
                                     )}
                                   </div>

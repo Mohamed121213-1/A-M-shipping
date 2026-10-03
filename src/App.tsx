@@ -1714,9 +1714,11 @@ export default function App() {
   // Mark Shipment Returned to Merchant Handler
   const handleMarkReturnedToMerchant = (shipmentId: string, revert: boolean = false) => {
     let nextShipments: Shipment[] = [];
+    let targetShipment: Shipment | undefined;
     setShipments((prev) => {
       nextShipments = prev.map((s) => {
         if (s.id === shipmentId) {
+          targetShipment = s;
           return {
             ...s,
             isReturnedToMerchant: !revert,
@@ -1737,13 +1739,21 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         status: 'returned',
-        note: revert ? 'إلغاء استلام المرتجع للتاجر' : 'تم تأكيد تسليم المرتجع للتاجر',
+        note: revert ? 'إلغاء استلام المرتجع للتاجر' : 'تم تأكيد تسليم المرتجع للتاجر وخصمه من حسابه',
         extraUpdates: { isReturnedToMerchant: !revert, returnedToMerchantAt: revert ? null : new Date().toISOString() },
         senderId: syncEngine.getInstanceId(),
       }),
     }).catch((err) => console.warn('Mark returned API error:', err));
 
-    showToast(revert ? 'تم إلغاء استلام المرتجع وإعادته لحساب المرتجعات المعلقة' : 'تم تأكيد تسليم المرتجع للتاجر وخصمه من حساب المرتجعات بنجاح');
+    const deductionAmount = targetShipment
+      ? (targetShipment.refusedDetails?.merchantDeductedAmount ?? targetShipment.financials?.shippingFee ?? 0)
+      : 0;
+
+    if (revert) {
+      showToast('تم إلغاء استلام المرتجع وإعادته لحساب المرتجعات المعلقة (وإلغاء الخصم من حساب التاجر) ↩️');
+    } else {
+      showToast(`تم تأكيد استلام التاجر للمرتجع وخصم مصاريف الشحن (${deductionAmount} ج.م) من حساب التاجر (الفلوس اللي ليه) فوراً بنجاح ✅`);
+    }
   };
 
   // Mark all pending merchant returns as received by merchant
@@ -1751,9 +1761,12 @@ export default function App() {
     if (!shipmentIds || shipmentIds.length === 0) return;
     const idsSet = new Set(shipmentIds);
     let nextShipments: Shipment[] = [];
+    let totalDeductions = 0;
     setShipments((prev) => {
       nextShipments = prev.map((s) => {
         if (idsSet.has(s.id)) {
+          const fee = s.refusedDetails?.merchantDeductedAmount ?? s.financials?.shippingFee ?? 0;
+          totalDeductions += fee;
           return {
             ...s,
             isReturnedToMerchant: true,
@@ -1769,7 +1782,7 @@ export default function App() {
       broadcastDataChange({ shipments: nextShipments });
     }, 20);
 
-    showToast(`تم تأكيد استلام التاجر لجميع المرتجعات (${shipmentIds.length} شحنة) وتصفية حساب المرتجع بنجاح`);
+    showToast(`تم تأكيد استلام التاجر لجميع المرتجعات (${shipmentIds.length} شحنة) وخصم إجمالي شحنها (${totalDeductions} ج.م) من حساب التاجر (الفلوس اللي ليه) بنجاح ✅`);
   };
 
   // Delete Multiple Shipments Handler

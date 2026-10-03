@@ -443,8 +443,8 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                         </span>
                         <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">
                           {shipment.isReturnedToMerchant
-                            ? (shipment.returnedToMerchantAt ? `تاريخ استلام التاجر: ${new Date(shipment.returnedToMerchantAt).toLocaleDateString('ar-EG')}` : 'تم استلام التاجر للمرتجع بالكامل')
-                            : 'عند الضغط على تسليم المرتجع سيتم إخفاء الشحنة من قائمة الشحنات العامة وحفظها بسجل المرتجعات'}
+                            ? (shipment.returnedToMerchantAt ? `تاريخ استلام التاجر: ${new Date(shipment.returnedToMerchantAt).toLocaleDateString('ar-EG')} (تم الخصم من الفلوس اللي ليه)` : 'تم استلام التاجر للمرتجع وخُصم من حسابه بالكامل')
+                            : 'عند تأكيد تسليم المرتجع سيتم خصم مصاريف شحنه من حساب التاجر (من الفلوس اللي ليه) فوراً'}
                         </span>
                       </div>
                     </div>
@@ -455,7 +455,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                         onClick={() => onMarkReturnedToMerchant(shipment.id)}
                         className="px-3 py-1.5 rounded-lg text-[11px] font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer whitespace-nowrap"
                       >
-                        تسليم المرتجع للتاجر ↩️
+                        تسليم المرتجع للتاجر (خصم من حسابه) ↩️
                       </button>
                     )}
                   </div>

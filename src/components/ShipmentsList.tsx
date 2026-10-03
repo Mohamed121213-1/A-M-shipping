@@ -635,8 +635,13 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                   )}
                 </span>
                 <span className="text-red-700 font-bold">
-                  يخصم شحن: -{merchantStats.returnsShippingDeducted.toLocaleString()} ج.م
+                  مخصوم من حسابك (مستلم): -{merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
                 </span>
+                {merchantStats.pendingReturnsShippingDeducted > 0 && (
+                  <span className="text-amber-800 font-medium">
+                    معلق يُخصم عند الاستلام: {merchantStats.pendingReturnsShippingDeducted.toLocaleString()} ج.م
+                  </span>
+                )}
               </div>
             </motion.div>
 
@@ -703,7 +708,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                   </span>
                 )}
                 <span className="text-slate-400 text-[9px]">
-                  (شغلك المسلم - شحن المرتجع - السلف)
+                  (شغلك المسلم - شحن المرتجع المستلم - السلف)
                 </span>
               </div>
             </motion.div>

@@ -601,21 +601,22 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                             <button
                               onClick={() => onMarkReturnedToMerchant && onMarkReturnedToMerchant(s.id)}
                               className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                              title="تأكيد تسليم المرتجع للتاجر وخصم مصاريف شحنه من حسابه (الفلوس اللي ليه) فوراً"
                             >
                               <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                              <span>تم الارتجاع للتاجر</span>
+                              <span>تسليم للتاجر (خصم من حسابه)</span>
                             </button>
                           ) : (
                             <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1">
                               <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                              <span>تم التسليم للتاجر</span>
+                              <span>تم التسليم للتاجر (مخصوم)</span>
                             </span>
                           )
                         ) : (
                           s.isReturnedToMerchant ? (
                             <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1">
                               <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                              <span>تم تسليم المرتجع إليك</span>
+                              <span>تم استلام المرتجع وخُصم من حسابك</span>
                             </span>
                           ) : (
                             <span className="bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1">
@@ -777,16 +778,16 @@ export const ReturnsAccountingView: React.FC<ReturnsAccountingViewProps> = ({
                               <button
                                 onClick={() => onMarkReturnedToMerchant && onMarkReturnedToMerchant(s.id)}
                                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                                title="تأكيد تسليم المرتجع للتاجر وإخفائه فورياً من المرتجعات النشطة"
+                                title="تأكيد تسليم المرتجع للتاجر وخصم مصاريف شحنه من حسابه (الفلوس اللي ليه) فوراً"
                               >
                                 <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                                <span>تم الارتجاع للتاجر</span>
+                                <span>تسليم للتاجر (خصم من حسابه)</span>
                               </button>
                             ) : (
                               <div className="flex flex-col items-start gap-1">
                                 <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 px-2.5 py-1 rounded-lg text-[10px] font-black flex items-center gap-1">
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                                  <span>تم التسليم للتاجر</span>
+                                  <span>تم التسليم للتاجر (مخصوم)</span>
                                 </span>
                                 {s.returnedToMerchantAt && (
                                   <span className="text-[9px] text-slate-500 font-medium">

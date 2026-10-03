@@ -499,8 +499,8 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     شغلك المسلم: +{merchantFinancials.deliveredNetGoods.toLocaleString()} ج.م
                   </span>
                   <span className="text-slate-400 font-sans">-</span>
-                  <span className="text-red-300 bg-red-950/70 px-2 py-0.5 rounded border border-red-800">
-                    خصم شحن المرتجع: -{merchantFinancials.returnsShippingDeducted.toLocaleString()} ج.م
+                  <span className="text-red-300 bg-red-950/70 px-2 py-0.5 rounded border border-red-800" title="مصاريف شحن المرتجعات التي استلمتها والمخصومة فورياً من مستحقاتك">
+                    شحن المرتجع المستلم: -{merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
                   </span>
                   <span className="text-slate-400 font-sans">-</span>
                   <span className="text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-800">
@@ -514,6 +514,11 @@ export const WalletView: React.FC<WalletViewProps> = ({
                   }`}>
                     الصافي اللي ليك: {merchantFinancials.netDueBalance.toLocaleString()} ج.م
                   </span>
+                  {merchantFinancials.pendingReturnsShippingDeducted > 0 && (
+                    <span className="text-[10px] text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/60 font-sans font-medium" title="شحنات مرتجعة لم تستلمها بعد، وتُخصم فور استلامك لها">
+                      ⏳ معلق لم تستلمه: {merchantFinancials.pendingReturnsShippingDeducted.toLocaleString()} ج.م (يُخصم عند الاستلام)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -604,8 +609,13 @@ export const WalletView: React.FC<WalletViewProps> = ({
                       )}
                     </span>
                     <span className="text-red-700 font-bold">
-                      خصم شحن: -{merchantFinancials.returnsShippingDeducted.toLocaleString()} ج.م
+                      مخصوم من حسابك (مستلم): -{merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
                     </span>
+                    {merchantFinancials.pendingReturnsShippingDeducted > 0 && (
+                      <span className="text-amber-800 font-medium">
+                        معلق يُخصم عند الاستلام: {merchantFinancials.pendingReturnsShippingDeducted.toLocaleString()} ج.م
+                      </span>
+                    )}
                   </div>
                 </div>
 

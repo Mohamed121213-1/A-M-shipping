@@ -38,8 +38,10 @@ export interface MerchantFinancialStats {
   returnsShippingDeducted: number;// مصاريف شحن المرتجعات المخصومة من التاجر (تتخصم من الفلوس اللي ليه)
   pendingReturnsCount: number;    // عدد المرتجعات المعلقة لدى الشركة التي لم يستلمها التاجر بعد
   pendingReturnsGoodsValue: number;// حساب المرتجعات المعلقة (يصبح صفر عند استلام التاجر لكامل المرتجع)
+  pendingReturnsShippingDeducted: number; // مصاريف شحن المرتجعات المعلقة (ستُخصم من الفلوس اللي ليه فور استلامه لها)
   deliveredToMerchantReturnsCount: number; // عدد المرتجعات التي استلمها التاجر
   deliveredToMerchantReturnsGoodsValue: number; // قيمة المرتجعات التي استلمها التاجر
+  deliveredToMerchantReturnsShippingDeducted: number; // خصم شحن المرتجعات المستلمة للتاجر (المخصومة فعلياً من حسابه)
 
   // 3.أ. دفع جزء من الشحن
   partialShippingPaidCount: number;
@@ -137,8 +139,10 @@ export function calculateMerchantFinancials(
   let returnsShippingDeducted = 0;
   let pendingReturnsCount = 0;
   let pendingReturnsGoodsValue = 0;
+  let pendingReturnsShippingDeducted = 0;
   let deliveredToMerchantReturnsCount = 0;
   let deliveredToMerchantReturnsGoodsValue = 0;
+  let deliveredToMerchantReturnsShippingDeducted = 0;
 
   let partialShippingPaidCount = 0;
   let partialShippingCollected = 0;
@@ -209,21 +213,33 @@ export function calculateMerchantFinancials(
         s.refusedDetails?.reason?.includes('إلغاء') ||
         s.refusedDetails?.reason?.includes('إعفاء');
 
+      let returnDeduction = 0;
       if (isCancellationExempt) {
         customerCancellationCount += 1;
         customerCancellationGoodsValue += effectiveGoodsVal;
+        returnDeduction = 0;
+      } else if (s.refusedDetails?.merchantDeductedAmount !== undefined) {
+        returnDeduction = Number(s.refusedDetails.merchantDeductedAmount) || 0;
       } else if (s.refusedDetails?.partialShippingFeePaid || (collectedShipping > 0 && collectedShipping < fee)) {
         const deduction = Math.max(0, fee - collectedShipping);
         partialShippingPaidCount += 1;
         partialShippingCollected += collectedShipping;
         partialShippingMerchantDeducted += deduction;
-        returnsShippingDeducted += deduction;
+        returnDeduction = deduction;
       } else if (collectedShipping >= fee && fee > 0) {
         // دفع كامل الشحن -> خصم 0
+        returnDeduction = 0;
       } else {
         // لم يدفع شحن -> خصم كامل الشحن
-        const deduction = fee;
-        returnsShippingDeducted += deduction;
+        returnDeduction = fee;
+      }
+
+      returnsShippingDeducted += returnDeduction;
+
+      if (isReceivedByMerchant) {
+        deliveredToMerchantReturnsShippingDeducted += returnDeduction;
+      } else {
+        pendingReturnsShippingDeducted += returnDeduction;
       }
     } else {
       // Out for delivery, in hub, picked up, created, failed attempt
@@ -259,7 +275,8 @@ export function calculateMerchantFinancials(
   }
 
   const totalPaidOut = totalAdvancePaid + totalRegularPaidOut;
-  const totalEarnedNet = Math.max(0, deliveredNetGoods - returnsShippingDeducted);
+  // خصم المرتجع يتخصم من حساب التاجر (من الفلوس اللي ليه) فور استلام التاجر للمرتجع
+  const totalEarnedNet = deliveredNetGoods - deliveredToMerchantReturnsShippingDeducted;
   const netDueBalance = totalEarnedNet - totalPaidOut;
   const hasDebt = netDueBalance < 0;
 
@@ -290,8 +307,10 @@ export function calculateMerchantFinancials(
     returnsShippingDeducted,
     pendingReturnsCount,
     pendingReturnsGoodsValue,
+    pendingReturnsShippingDeducted,
     deliveredToMerchantReturnsCount,
     deliveredToMerchantReturnsGoodsValue,
+    deliveredToMerchantReturnsShippingDeducted,
     partialShippingPaidCount,
     partialShippingCollected,
     partialShippingMerchantDeducted,
