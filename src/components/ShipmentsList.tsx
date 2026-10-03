@@ -36,6 +36,7 @@ import {
   ArrowDownLeft,
   Receipt,
   Sparkles,
+  PackageCheck,
 } from 'lucide-react';
 import { WhatsAppModal } from './WhatsAppModal';
 
@@ -529,31 +530,56 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             </div>
           </div>
 
-          {/* 5 Specific Cards requested by user */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+          {/* 6 Specific Merchant Financial Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            {/* 0. حساب الشغل كامل بدون الشحن */}
+            <motion.div 
+              whileHover={{ y: -2 }}
+              className="bg-white border-2 border-blue-200/90 rounded-2xl p-3.5 shadow-xs relative overflow-hidden group hover:border-blue-400 transition-all flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-blue-900">صافي الشغل كامل</span>
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <PackageCheck className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <p className="text-xl font-black text-blue-950 mt-1.5 font-mono">
+                  {merchantStats.totalAllWorkNetGoods.toLocaleString()} <span className="text-[11px] font-bold text-blue-600">ج.م</span>
+                </p>
+              </div>
+              <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-col gap-0.5 text-[10px]">
+                <span className="text-blue-950 font-bold">
+                  بدون الشحن (لكل الأوردرات)
+                </span>
+                <span className="text-slate-400 font-mono text-[9px]">
+                  COD: {merchantStats.totalAllWorkCod.toLocaleString()} - {merchantStats.totalAllWorkShippingFees.toLocaleString()}
+                </span>
+              </div>
+            </motion.div>
+
             {/* 1. شغله بكام (المسلم) */}
             <motion.div 
               whileHover={{ y: -2 }}
-              className="bg-white border-2 border-emerald-200/80 rounded-2xl p-4 shadow-xs relative overflow-hidden group hover:border-emerald-300 transition-all"
+              className="bg-white border-2 border-emerald-200/80 rounded-2xl p-3.5 shadow-xs relative overflow-hidden group hover:border-emerald-300 transition-all flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-600">شغلك المسلم (المكتمل)</span>
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <CheckCircle2 className="w-4 h-4" />
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-slate-700">شغلك المسلم</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </div>
                 </div>
+                <p className="text-xl font-black text-emerald-700 mt-1.5 font-mono">
+                  {merchantStats.deliveredCod.toLocaleString()} <span className="text-[11px] font-bold text-slate-500">ج.م</span>
+                </p>
               </div>
-              <p className="text-2xl font-black text-emerald-700 mt-2">
-                {merchantStats.deliveredCod.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
-              </p>
-              <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[11px]">
+              <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-col gap-0.5 text-[10px]">
                 <span className="text-slate-700 font-bold">
-                  إجمالي الصافي: <strong className="text-emerald-700 font-black">{merchantStats.deliveredNetGoods.toLocaleString()} ج.م</strong>
+                  صافي البضاعة: <strong className="text-emerald-700 font-black">{merchantStats.deliveredNetGoods.toLocaleString()} ج.م</strong>
                 </span>
-                <span className="text-blue-800 font-extrabold text-[10px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 w-fit">
-                  صافي الكاملة: {merchantStats.fullDeliveredNetGoods.toLocaleString()} ج.م ({merchantStats.fullDeliveredCount} شحنة)
-                </span>
-                <span className="text-slate-400 text-[10px]">
-                  عدد: {merchantStats.deliveredCount} شحنة تم تحصيلها
+                <span className="text-slate-400">
+                  عدد: {merchantStats.deliveredCount} شحنة مسلمة
                 </span>
               </div>
             </motion.div>
@@ -561,24 +587,25 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             {/* 2. قيد التوصيل يحسبه بكام */}
             <motion.div 
               whileHover={{ y: -2 }}
-              className="bg-white border border-teal-200/90 rounded-2xl p-4 shadow-xs relative overflow-hidden group hover:border-teal-300 transition-all"
+              className="bg-white border border-teal-200/90 rounded-2xl p-3.5 shadow-xs relative overflow-hidden group hover:border-teal-300 transition-all flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-teal-800">قيد التوصيل (في الطريق)</span>
-                <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
-                  <Truck className="w-4 h-4 animate-bounce" />
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-teal-800">قيد التوصيل</span>
+                  <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+                    <Truck className="w-3.5 h-3.5 animate-bounce" />
+                  </div>
                 </div>
+                <p className="text-xl font-black text-teal-700 mt-1.5 font-mono">
+                  {merchantStats.inTransitCod.toLocaleString()} <span className="text-[11px] font-bold text-slate-500">ج.م</span>
+                </p>
               </div>
-              <p className="text-2xl font-black text-teal-700 mt-2">
-                {merchantStats.inTransitCod.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
-              </p>
-              <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[11px]">
+              <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-col gap-0.5 text-[10px]">
                 <span className="text-teal-900 font-bold">
                   صافي متوقع: <strong className="text-teal-700 font-black">{merchantStats.inTransitNetExpected.toLocaleString()} ج.م</strong>
                 </span>
-                <span className="text-slate-400 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-ping"></span>
-                  عدد: {merchantStats.inTransitCount} شحنة مع المندوب/المستودع
+                <span className="text-slate-400">
+                  عدد: {merchantStats.inTransitCount} شحنة في الطريق
                 </span>
               </div>
             </motion.div>
@@ -586,37 +613,29 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             {/* 3. مرتجع بكام */}
             <motion.div 
               whileHover={{ y: -2 }}
-              className="bg-white border border-rose-200/80 rounded-2xl p-4 shadow-xs relative overflow-hidden group hover:border-rose-300 transition-all"
+              className="bg-white border border-rose-200/80 rounded-2xl p-3.5 shadow-xs relative overflow-hidden group hover:border-rose-300 transition-all flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-rose-800">المرتجعات</span>
-                <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
-                  <RotateCcw className="w-4 h-4" />
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-rose-800">حساب المرتجع</span>
+                  <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </div>
                 </div>
+                <p className="text-xl font-black text-rose-700 mt-1.5 font-mono">
+                  {merchantStats.pendingReturnsGoodsValue.toLocaleString()} <span className="text-[11px] font-bold text-slate-500">ج.م</span>
+                </p>
               </div>
-              <p className="text-2xl font-black text-rose-700 mt-2">
-                {merchantStats.returnsGoodsValue.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
-              </p>
-              <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[11px]">
-                <span className="text-rose-900 font-bold">
-                  {merchantStats.returnsShippingDeducted > 0 ? (
-                    <>خصم شحن مرتجع: <strong className="text-rose-600 font-black">-{merchantStats.returnsShippingDeducted.toLocaleString()} ج.م</strong></>
+              <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-col gap-0.5 text-[10px]">
+                <span className="text-rose-950 font-bold">
+                  {merchantStats.pendingReturnsCount === 0 ? (
+                    <span className="text-emerald-700 font-bold">✅ استلمت كافة المرتجعات (0 ج.م)</span>
                   ) : (
-                    <span className="text-slate-500">شحن المرتجع: 0 ج.م (لم يخصم)</span>
+                    <span>معلق بالمستودع: {merchantStats.pendingReturnsCount} أوردر</span>
                   )}
                 </span>
-                {merchantStats.partialShippingPaidCount > 0 && (
-                  <span className="text-amber-800 font-extrabold text-[10px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 w-fit">
-                    دفع جزء من الشحن: {merchantStats.partialShippingPaidCount} أوردر ({merchantStats.partialShippingCollected.toLocaleString()} ج.م)
-                  </span>
-                )}
-                {merchantStats.customerCancellationCount > 0 && (
-                  <span className="text-sky-800 font-extrabold text-[10px] bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 w-fit">
-                    إلغاء بطلب العميل: {merchantStats.customerCancellationCount} معفى
-                  </span>
-                )}
-                <span className="text-slate-400 text-[10px]">
-                  عدد: {merchantStats.returnsCount} شحنة مرتجعة
+                <span className="text-red-700 font-bold">
+                  يخصم شحن: -{merchantStats.returnsShippingDeducted.toLocaleString()} ج.م
                 </span>
               </div>
             </motion.div>
@@ -624,24 +643,26 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             {/* 4. لو خد فلوس مقدم تظهر برده وتتخصم */}
             <motion.div 
               whileHover={{ y: -2 }}
-              className="bg-white border-2 border-amber-300 rounded-2xl p-4 shadow-xs relative overflow-hidden group hover:border-amber-400 transition-all"
+              className="bg-white border-2 border-amber-300 rounded-2xl p-3.5 shadow-xs relative overflow-hidden group hover:border-amber-400 transition-all flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-amber-900">سلف ومقدمات (مخصومة)</span>
-                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
-                  <HandCoins className="w-4 h-4" />
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-amber-900">سلف ومقدمات</span>
+                  <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                    <HandCoins className="w-3.5 h-3.5" />
+                  </div>
                 </div>
+                <p className="text-xl font-black text-amber-700 mt-1.5 font-mono">
+                  {merchantStats.totalAdvancePaid.toLocaleString()} <span className="text-[11px] font-bold text-slate-500">ج.م</span>
+                </p>
               </div>
-              <p className="text-2xl font-black text-amber-700 mt-2">
-                {merchantStats.totalAdvancePaid.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
-              </p>
-              <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[11px]">
+              <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-col gap-0.5 text-[10px]">
                 <span className="text-amber-950 font-bold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                  مخصومة من صافي المستحق
+                  مخصومة من المستحق
                 </span>
                 <span className="text-slate-400">
-                  {merchantStats.advanceTransactions.length > 0 ? `${merchantStats.advanceTransactions.length} دفعة مقدمة مسجلة` : 'لا توجد سلف مخصومة حالياً'}
+                  {merchantStats.advanceTransactions.length > 0 ? `${merchantStats.advanceTransactions.length} دفعة مسجلة` : 'لا توجد سلف حالياً'}
                 </span>
               </div>
             </motion.div>
@@ -649,25 +670,27 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             {/* 5. الصافي اللي ليه */}
             <motion.div 
               whileHover={{ y: -2 }}
-              className={`rounded-2xl p-4 shadow-md relative overflow-hidden group transition-all border-2 ${
+              className={`rounded-2xl p-3.5 shadow-md relative overflow-hidden group transition-all border-2 flex flex-col justify-between ${
                 merchantStats.hasDebt
                   ? 'bg-gradient-to-br from-rose-900 to-slate-900 text-white border-rose-500'
                   : 'bg-gradient-to-br from-emerald-900 via-slate-900 to-slate-950 text-white border-emerald-500/80 shadow-emerald-950/20'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-emerald-300">الصافي اللي ليك</span>
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center justify-center">
-                  <Wallet className="w-4 h-4" />
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-emerald-300">الصافي اللي ليك</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center justify-center">
+                    <Wallet className="w-3.5 h-3.5" />
+                  </div>
                 </div>
+                <p className="text-xl font-black mt-1.5 text-white font-mono">
+                  {merchantStats.netDueBalance.toLocaleString()} <span className="text-xs font-bold text-emerald-300">ج.م</span>
+                </p>
               </div>
-              <p className="text-2xl font-black mt-2 text-white">
-                {merchantStats.netDueBalance.toLocaleString()} <span className="text-xs font-bold text-emerald-300">ج.م</span>
-              </p>
-              <div className="mt-2 pt-2 border-t border-white/10 flex flex-col gap-0.5 text-[11px]">
+              <div className="mt-2 pt-1.5 border-t border-white/10 flex flex-col gap-0.5 text-[10px]">
                 {merchantStats.hasDebt ? (
                   <span className="text-rose-300 font-black">
-                    ⚠️ مطلوب سداد عجز سلف: {Math.abs(merchantStats.netDueBalance).toLocaleString()} ج.م
+                    ⚠️ مطلوب سداد عجز: {Math.abs(merchantStats.netDueBalance).toLocaleString()} ج.م
                   </span>
                 ) : merchantStats.netDueBalance > 0 ? (
                   <span className="text-emerald-300 font-black flex items-center gap-1">
@@ -679,7 +702,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                     ✅ الحساب خالص ومسدد بالكامل
                   </span>
                 )}
-                <span className="text-slate-400 text-[10px]">
+                <span className="text-slate-400 text-[9px]">
                   (شغلك المسلم - شحن المرتجع - السلف)
                 </span>
               </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Shipment, MerchantWallet, UserSession, CompanyTransaction, GovernorateRate } from '../types';
 import { EGYPT_GOVERNORATES, INITIAL_SHIPMENTS } from '../data/mockData';
 import { isAdvanceTransaction, matchesMerchant } from '../utils/merchantFinancials';
@@ -55,6 +55,8 @@ interface MerchantAccountsViewProps {
   onRequestPayout: (amount: number, method: string, selectedShipmentIds?: string[]) => void;
   onUpdateUser?: (updatedUser: UserSession) => void;
   governorates?: GovernorateRate[];
+  onMarkReturnedToMerchant?: (shipmentId: string, revert?: boolean) => void;
+  onMarkAllMerchantReturns?: (shipmentIds: string[]) => void;
 }
 
 interface MerchantSummary {
@@ -103,6 +105,10 @@ interface MerchantSummary {
   returnsGoodsValue: number; // قيمة البضائع المرتجعة بحساب عادي
   returnsTotalCod: number;   // إجمالي مبالغ المرتجعات العادية (COD كامل)
   returnsShippingDeducted: number; // مصاريف شحن المرتجعات المخصومة من التاجر (تتخصم من الفلوس اللي ليه)
+  pendingReturnsCount: number; // عدد المرتجعات المعلقة لدى الشركة (لم يستلمها التاجر بعد)
+  pendingReturnsGoodsValue: number; // حساب المرتجعات المعلقة (يصبح 0 عند استلام التاجر لكافة المرتجعات)
+  deliveredToMerchantReturnsCount: number; // عدد المرتجعات المستلمة للتاجر
+  deliveredToMerchantReturnsGoodsValue: number; // قيمة المرتجعات المستلمة للتاجر
   partialShippingCount: number; // عدد شحنات دفع جزء من الشحن
   partialShippingCollected: number; // إجمالي المحصل كـ جزء من الشحن
   customerCancellationCount: number; // عدد شحنات إلغاء بطلب العميل
@@ -132,12 +138,14 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
   onRequestPayout,
   onUpdateUser,
   governorates = EGYPT_GOVERNORATES,
+  onMarkReturnedToMerchant,
+  onMarkAllMerchantReturns,
 }) => {
   const isAdmin = currentUser?.role === 'admin' || !currentUser;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMerchantId, setSelectedMerchantId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'has_balance' | 'settled' | 'has_debt'>('all');
-  const [shipmentsFilter, setShipmentsFilter] = useState<'all' | 'delivered' | 'full_delivered' | 'partial_delivery' | 'partial_shipping' | 'customer_cancellation' | 'returned' | 'unsettled' | 'settled' | 'advances'>('all');
+  const [shipmentsFilter, setShipmentsFilter] = useState<'all' | 'delivered' | 'full_delivered' | 'partial_delivery' | 'in_transit' | 'returned' | 'pending_returns' | 'received_returns' | 'partial_shipping' | 'customer_cancellation' | 'unsettled' | 'settled' | 'advances'>('all');
   
   // Modal for Recording Payout
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
@@ -153,6 +161,7 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
   // Modal for Recording Advance Payment / Prepayment (تسجيل سلفة أو دفعة مقدمة للتاجر)
   const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
   const [advanceModalMerchant, setAdvanceModalMerchant] = useState<MerchantSummary | null>(null);
+  const [advanceSuccessBanner, setAdvanceSuccessBanner] = useState<{ message: string; merchantId?: string; storeName?: string } | null>(null);
   const [advanceForm, setAdvanceForm] = useState({
     amount: 0,
     paymentMethod: 'cash' as 'cash' | 'vodafone_cash' | 'instapay' | 'bank_transfer' | 'other',
@@ -160,6 +169,13 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
     receiptNo: '',
     date: new Date().toISOString().split('T')[0],
   });
+
+  useEffect(() => {
+    if (advanceSuccessBanner) {
+      const timer = setTimeout(() => setAdvanceSuccessBanner(null), 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [advanceSuccessBanner]);
 
   const handleOpenAdvanceModal = (merch?: MerchantSummary | null) => {
     const target = merch || selectedMerchant || (merchantsList.length > 0 ? merchantsList[0] : null);
@@ -176,21 +192,32 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
 
   const handleConfirmAdvance = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!advanceModalMerchant || advanceForm.amount <= 0) return;
+    const target = advanceModalMerchant || selectedMerchant || (merchantsList.length > 0 ? merchantsList[0] : null);
+    if (!target || advanceForm.amount <= 0) return;
 
     const advTxn: Omit<CompanyTransaction, 'id' | 'createdAt'> = {
       type: 'expense',
       category: 'دفعة مقدمة / سلفة تاجر',
-      title: `سلفة نقدية / دفعة مقدمة للتاجر (${advanceModalMerchant.storeName})`,
+      title: `سلفة نقدية / دفعة مقدمة للتاجر (${target.storeName})`,
       amount: Number(advanceForm.amount),
       date: advanceForm.date,
       paymentMethod: advanceForm.paymentMethod,
-      relatedMerchant: advanceModalMerchant.storeName,
+      relatedMerchant: target.storeName,
       createdBy: currentUser?.name || 'أدمن النظام',
-      notes: `${advanceForm.notes || 'سلفة نقدية مقدمة مخصومة من المستحقات'} ${advanceForm.receiptNo ? `(رقم الإيصال: ${advanceForm.receiptNo})` : ''} [تاجر: ${advanceModalMerchant.storeName} - ${advanceModalMerchant.phone || ''} - id:${advanceModalMerchant.id}]`,
+      notes: `${advanceForm.notes || 'سلفة نقدية مقدمة مخصومة من المستحقات'} ${advanceForm.receiptNo ? `(رقم الإيصال: ${advanceForm.receiptNo})` : ''} [تاجر: ${target.storeName} - ${target.phone || ''} - id:${target.id}]`,
     };
 
     onAddTransaction(advTxn);
+    setAdvanceSuccessBanner({
+      message: `تم تسجيل سلفة نقدية بمبلغ ${Number(advanceForm.amount).toLocaleString()} ج.م للتاجر (${target.storeName}) بنجاح وخصمها من حسابه ومستحقاته فوراً!`,
+      merchantId: target.id,
+      storeName: target.storeName,
+    });
+
+    if (selectedMerchantId === target.id) {
+      setShipmentsFilter('advances');
+    }
+
     setIsAdvanceModalOpen(false);
   };
 
@@ -333,6 +360,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
           returnsShippingDeducted: 0,
           returnsGoodsValue: 0,
           returnsTotalCod: 0,
+          pendingReturnsCount: 0,
+          pendingReturnsGoodsValue: 0,
+          deliveredToMerchantReturnsCount: 0,
+          deliveredToMerchantReturnsGoodsValue: 0,
           partialShippingCount: 0,
           partialShippingCollected: 0,
           customerCancellationCount: 0,
@@ -399,6 +430,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
           returnsShippingDeducted: 0,
           returnsGoodsValue: 0,
           returnsTotalCod: 0,
+          pendingReturnsCount: 0,
+          pendingReturnsGoodsValue: 0,
+          deliveredToMerchantReturnsCount: 0,
+          deliveredToMerchantReturnsGoodsValue: 0,
           partialShippingCount: 0,
           partialShippingCollected: 0,
           customerCancellationCount: 0,
@@ -480,6 +515,15 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
         const goodsVal = s.refusedDetails?.originalGoodsValue ?? (orderCod > totalShippingFee ? orderCod - totalShippingFee : orderCod);
         const effectiveGoods = (goodsVal > 0 ? goodsVal : orderCod);
         merch.returnsGoodsValue += effectiveGoods;
+
+        const isReceivedByMerchant = Boolean(s.isReturnedToMerchant);
+        if (isReceivedByMerchant) {
+          merch.deliveredToMerchantReturnsCount += 1;
+          merch.deliveredToMerchantReturnsGoodsValue += effectiveGoods;
+        } else {
+          merch.pendingReturnsCount += 1;
+          merch.pendingReturnsGoodsValue += effectiveGoods;
+        }
 
         if (isCancelExempt) {
           merch.customerCancellationCount += 1;
@@ -588,6 +632,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
         acc.totalReturnsDeducted += m.returnsShippingDeducted;
         acc.totalReturnsGoodsValue += m.returnsGoodsValue;
         acc.totalReturnsTotalCod += m.returnsTotalCod;
+        acc.totalPendingReturnsCount += m.pendingReturnsCount;
+        acc.totalPendingReturnsGoodsValue += m.pendingReturnsGoodsValue;
+        acc.totalDeliveredToMerchantReturnsCount += m.deliveredToMerchantReturnsCount;
+        acc.totalDeliveredToMerchantReturnsGoodsValue += m.deliveredToMerchantReturnsGoodsValue;
         acc.totalPartialShippingCount += m.partialShippingCount;
         acc.totalPartialShippingCollected += m.partialShippingCollected;
         acc.totalCustomerCancellationCount += m.customerCancellationCount;
@@ -615,6 +663,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
         totalReturnsDeducted: 0,
         totalReturnsGoodsValue: 0,
         totalReturnsTotalCod: 0,
+        totalPendingReturnsCount: 0,
+        totalPendingReturnsGoodsValue: 0,
+        totalDeliveredToMerchantReturnsCount: 0,
+        totalDeliveredToMerchantReturnsGoodsValue: 0,
         totalPartialShippingCount: 0,
         totalPartialShippingCollected: 0,
         totalCustomerCancellationCount: 0,
@@ -677,6 +729,15 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
       }
       if (shipmentsFilter === 'customer_cancellation') {
         return (s.status === 'returned' || s.status === 'refused') && (s.refusedDetails?.isCustomerCancellationWithoutFee || s.refusedDetails?.reason?.includes('إلغاء') || s.refusedDetails?.reason?.includes('إعفاء'));
+      }
+      if (shipmentsFilter === 'in_transit') {
+        return s.status !== 'delivered' && s.status !== 'partial_delivery' && s.status !== 'returned' && s.status !== 'refused';
+      }
+      if (shipmentsFilter === 'pending_returns') {
+        return (s.status === 'returned' || s.status === 'refused') && !s.isReturnedToMerchant;
+      }
+      if (shipmentsFilter === 'received_returns') {
+        return (s.status === 'returned' || s.status === 'refused') && Boolean(s.isReturnedToMerchant);
       }
       if (shipmentsFilter === 'returned') return s.status === 'returned' || s.status === 'refused';
       if (shipmentsFilter === 'unsettled') return !s.isMerchantSettled && s.financials.paidStatus !== 'settled';
@@ -868,6 +929,44 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Advance Success Notification Banner */}
+      {advanceSuccessBanner && (
+        <div className="bg-emerald-900 text-white border-2 border-emerald-500 p-4 rounded-2xl shadow-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-800/80 border border-emerald-400 flex items-center justify-center text-emerald-300 shrink-0">
+              <Check className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="font-black text-sm text-emerald-100">{advanceSuccessBanner.message}</p>
+              <p className="text-xs text-emerald-300 mt-0.5">
+                تم تحديث حساب التاجر تلقائياً وخصم المبلغ من "الصافي اللي ليه" وتسجيله في كشف الحساب والسلف.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {advanceSuccessBanner.merchantId && !selectedMerchant && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMerchantId(advanceSuccessBanner.merchantId!);
+                  setShipmentsFilter('advances');
+                }}
+                className="bg-white hover:bg-emerald-50 text-emerald-950 font-black text-xs px-3.5 py-2 rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer"
+              >
+                عرض كشف حساب التاجر والسلف
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setAdvanceSuccessBanner(null)}
+              className="text-emerald-300 hover:text-white p-1 rounded-lg hover:bg-emerald-800/60"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Global Financial Metrics Cards */}
       {!selectedMerchant ? (
@@ -1142,49 +1241,45 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                       <td className="py-3.5 px-3">
                         <div>
                           <span className="font-black text-slate-900 font-mono text-sm">
-                            {merch.netGoodsAmount.toLocaleString()} ج.م
+                            {merch.totalAllWorkNetGoods.toLocaleString()} ج.م
                           </span>
                           <p className="text-[10px] text-blue-700 font-bold">
-                            الكاملة المسلّمة: {merch.fullDeliveredNetGoods.toLocaleString()} ج.م ({merch.fullDeliveredCount} شحنة)
+                            المسلم: {merch.netGoodsAmount.toLocaleString()} ج.م ({merch.deliveredCount + merch.partialCount} شحنة)
                           </p>
-                          <p className="text-[10px] text-slate-500">
-                            من إجمالي COD: {merch.totalCodCollected.toLocaleString()} ج.م
-                          </p>
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-3">
-                        <div>
-                          <span className="font-bold font-mono text-teal-800">
-                            {merch.inTransitCod.toLocaleString()} ج.م
-                          </span>
-                          <p className="text-[10px] text-teal-700 font-medium">
-                            صافي متوقع: {merch.inTransitNet.toLocaleString()} ج.م
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            ({merch.inTransitCount} شحنة)
+                          <p className="text-[9px] text-slate-500 font-mono">
+                            COD: {merch.totalAllWorkCod.toLocaleString()} - شحن: {merch.totalAllWorkShippingFees.toLocaleString()}
                           </p>
                         </div>
                       </td>
 
                       <td className="py-3.5 px-3">
                         <div>
-                          <span className={`font-bold font-mono ${merch.returnsShippingDeducted > 0 ? 'text-red-600' : 'text-slate-600'}`}>
-                            {merch.returnsShippingDeducted.toLocaleString()} ج.م
+                          <span className="font-black font-mono text-teal-800 text-sm">
+                            {merch.inTransitNet.toLocaleString()} ج.م
                           </span>
-                          <p className="text-[10px] text-slate-500">
-                            ({merch.returnsCount} أوردر مرتجع)
+                          <p className="text-[10px] text-teal-700 font-bold">
+                            صافي متوقع بدون الشحن
                           </p>
-                          {merch.partialShippingCount > 0 && (
-                            <span className="block text-[9px] text-amber-800 font-bold">
-                              دفع جزء: {merch.partialShippingCount} أوردر
-                            </span>
-                          )}
-                          {merch.customerCancellationCount > 0 && (
-                            <span className="block text-[9px] text-sky-800 font-bold">
-                              إلغاء معفى: {merch.customerCancellationCount} أوردر
-                            </span>
-                          )}
+                          <p className="text-[9px] text-slate-500 font-mono">
+                            ({merch.inTransitCount} شحنة | تحصيل: {merch.inTransitCod.toLocaleString()} ج.م)
+                          </p>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-3">
+                        <div>
+                          <span className="font-black font-mono text-rose-700 text-sm">
+                            {merch.pendingReturnsGoodsValue.toLocaleString()} ج.م
+                          </span>
+                          <p className="text-[10px] text-rose-800 font-bold">
+                            معلق لم يستلم ({merch.pendingReturnsCount} أوردر)
+                          </p>
+                          <p className={`text-[10px] font-bold ${merch.returnsShippingDeducted > 0 ? 'text-red-700 font-mono' : 'text-slate-500'}`}>
+                            خصم شحن: -{merch.returnsShippingDeducted.toLocaleString()} ج.م
+                          </p>
+                          <p className="text-[9px] text-slate-500">
+                            بضائع المرتجع: {merch.returnsGoodsValue.toLocaleString()} ج.م
+                          </p>
                         </div>
                       </td>
 
@@ -1404,18 +1499,18 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
             <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs mt-6">
               <div className="flex items-center gap-2">
                 <Calculator className="w-4 h-4 text-emerald-400" />
-                <span className="font-extrabold text-slate-100">معادلة حساب التاجر (ليه كام):</span>
+                <span className="font-extrabold text-slate-100">معادلة حساب التاجر (الصافي اللي ليه بعد الخصم):</span>
               </div>
               <div className="flex items-center gap-2 flex-wrap font-mono font-bold text-slate-300">
-                <span className="text-blue-300 bg-blue-950/70 px-2.5 py-1 rounded-lg border border-blue-800">
+                <span className="text-blue-300 bg-blue-950/70 px-2.5 py-1 rounded-lg border border-blue-800" title="قيمة البضائع المسلمة كاش للتاجر بدون الشحن">
                   شغله المسلم: +{selectedMerchant.netGoodsAmount.toLocaleString()} ج.م
                 </span>
                 <span className="text-slate-400 font-sans text-base">-</span>
-                <span className="text-red-300 bg-red-950/70 px-2.5 py-1 rounded-lg border border-red-800">
-                  شحن المرتجع: -{selectedMerchant.returnsShippingDeducted.toLocaleString()} ج.م
+                <span className="text-red-300 bg-red-950/70 px-2.5 py-1 rounded-lg border border-red-800" title="مصاريف شحن المرتجعات المخصومة من مستحقات التاجر">
+                  خصم شحن المرتجع: -{selectedMerchant.returnsShippingDeducted.toLocaleString()} ج.م
                 </span>
                 <span className="text-slate-400 font-sans text-base">-</span>
-                <span className="text-amber-300 bg-amber-950/70 px-2.5 py-1 rounded-lg border border-amber-800">
+                <span className="text-amber-300 bg-amber-950/70 px-2.5 py-1 rounded-lg border border-amber-800" title="السلف النقدية والدفعات المقدمة والمصروفات المسحوبة">
                   سلف ومسحوبات: -{selectedMerchant.totalPaidOut.toLocaleString()} ج.م
                 </span>
                 <span className="text-slate-400 font-sans text-base">=</span>
@@ -1429,114 +1524,175 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
               </div>
             </div>
 
-            {/* 5 Financial Breakdown Boxes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mt-4 pt-4 border-t border-slate-100">
-              {/* Box 1: Goods Amount (Without Shipping) */}
-              <div className="bg-blue-50/60 border border-blue-200/80 p-4 rounded-xl">
-                <div className="flex items-center justify-between text-blue-900 mb-1">
-                  <span className="text-xs font-bold flex items-center gap-1.5">
-                    <PackageCheck className="w-4 h-4 text-blue-600" />
-                    شغله المسلم (البضائع)
-                  </span>
-                  <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded font-bold">
-                    صافي الأوردرات
-                  </span>
+            {/* 6 Financial Breakdown Boxes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mt-4 pt-4 border-t border-slate-100">
+              {/* Box 1: All Work Net (الشغل كامل بدون الشحن) */}
+              <div className="bg-blue-50/70 border border-blue-200/90 p-3.5 rounded-xl flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between text-blue-900 mb-1">
+                    <span className="text-[11px] font-black flex items-center gap-1">
+                      <PackageCheck className="w-3.5 h-3.5 text-blue-600" />
+                      صافي الشغل كامل
+                    </span>
+                    <span className="text-[9px] bg-blue-200 text-blue-900 px-1.5 py-0.5 rounded font-black">
+                      بدون الشحن
+                    </span>
+                  </div>
+                  <p className="text-lg font-black text-blue-950 font-mono">
+                    {selectedMerchant.totalAllWorkNetGoods.toLocaleString()} <span className="text-xs font-bold text-blue-700">ج.م</span>
+                  </p>
                 </div>
-                <p className="text-xl font-black text-blue-950 font-mono">
-                  {selectedMerchant.netGoodsAmount.toLocaleString()} <span className="text-xs font-bold text-blue-700">ج.م</span>
-                </p>
-                <div className="text-[11px] text-blue-700 mt-1 space-y-0.5 font-medium">
-                  <p>الكاملة المسلّمة: <strong>{selectedMerchant.fullDeliveredNetGoods.toLocaleString()} ج.م</strong> ({selectedMerchant.fullDeliveredCount} شحنة)</p>
-                  <p className="text-[10px] text-blue-600">COD: {selectedMerchant.totalCodCollected.toLocaleString()} ج.م - شحن: {selectedMerchant.totalShippingFees.toLocaleString()} ج.م</p>
-                </div>
-              </div>
-
-              {/* Box 2: In-Transit (قيد التوصيل) */}
-              <div className="bg-teal-50/60 border border-teal-200/80 p-4 rounded-xl">
-                <div className="flex items-center justify-between text-teal-900 mb-1">
-                  <span className="text-xs font-bold flex items-center gap-1.5">
-                    <Truck className="w-4 h-4 text-teal-600" />
-                    قيد التوصيل (في الطريق)
-                  </span>
-                  <span className="text-[10px] bg-teal-200 text-teal-900 px-1.5 py-0.5 rounded font-bold">
-                    مع المناديب
-                  </span>
-                </div>
-                <p className="text-xl font-black text-teal-900 font-mono">
-                  {selectedMerchant.inTransitCod.toLocaleString()} <span className="text-xs font-bold text-teal-700">ج.م</span>
-                </p>
-                <p className="text-[11px] text-teal-700 mt-1 font-medium">
-                  صافي متوقع: {selectedMerchant.inTransitNet.toLocaleString()} ج.م ({selectedMerchant.inTransitCount} أوردر)
-                </p>
-              </div>
-
-              {/* Box 3: Returns Deductions */}
-              <div className="bg-red-50/60 border border-red-200/80 p-4 rounded-xl">
-                <div className="flex items-center justify-between text-red-900 mb-1">
-                  <span className="text-xs font-bold flex items-center gap-1.5">
-                    <RotateCcw className="w-4 h-4 text-red-600" />
-                    حساب المرتجعات
-                  </span>
-                  <span className="text-[10px] bg-red-200 text-red-800 px-1.5 py-0.5 rounded font-bold">
-                    خصم شحن
-                  </span>
-                </div>
-                <p className="text-xl font-black text-red-700 font-mono">
-                  {selectedMerchant.returnsShippingDeducted.toLocaleString()} <span className="text-xs font-bold text-red-600">ج.م</span>
-                </p>
-                <div className="text-[11px] text-red-700 mt-1 space-y-0.5 font-medium">
-                  <p>بضاعة مرتجعة: {selectedMerchant.returnsGoodsValue.toLocaleString()} ج.م ({selectedMerchant.returnsCount} أوردر)</p>
-                  <p className="text-[10px] text-amber-800 font-bold">دفع جزء: {selectedMerchant.partialShippingCount} أوردر ({selectedMerchant.partialShippingCollected.toLocaleString()} ج.م) | إلغاء معفى: {selectedMerchant.customerCancellationCount}</p>
+                <div className="text-[10px] text-blue-700 mt-2 pt-1.5 border-t border-blue-200/60 space-y-0.5 font-medium">
+                  <p>كل الأوردرات: <strong>{selectedMerchant.totalShipmentsCount}</strong> شحنة</p>
+                  <p className="text-blue-600 font-mono text-[9px]">COD: {selectedMerchant.totalAllWorkCod.toLocaleString()} - شحن: {selectedMerchant.totalAllWorkShippingFees.toLocaleString()}</p>
                 </div>
               </div>
 
-              {/* Box 4: Advances & Paid Out */}
-              <div className="bg-amber-50/60 border border-amber-300 p-4 rounded-xl">
-                <div className="flex items-center justify-between text-amber-900 mb-1">
-                  <span className="text-xs font-bold flex items-center gap-1.5">
-                    <HandCoins className="w-4 h-4 text-amber-600" />
-                    سلف ومقدمات (مخصومة)
-                  </span>
-                  <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-bold">
-                    تتخصم من الصافي
-                  </span>
+              {/* Box 2: Delivered Work (تم التسليم) */}
+              <div className="bg-emerald-50/60 border border-emerald-200/90 p-3.5 rounded-xl flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between text-emerald-900 mb-1">
+                    <span className="text-[11px] font-black flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      تم التسليم (المسلم)
+                    </span>
+                    <span className="text-[9px] bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded font-black">
+                      شغله المسلم
+                    </span>
+                  </div>
+                  <p className="text-lg font-black text-emerald-900 font-mono">
+                    {selectedMerchant.netGoodsAmount.toLocaleString()} <span className="text-xs font-bold text-emerald-700">ج.م</span>
+                  </p>
                 </div>
-                <p className="text-xl font-black text-amber-800 font-mono">
-                  {selectedMerchant.totalAdvancePaid.toLocaleString()} <span className="text-xs font-bold text-amber-700">ج.م</span>
-                </p>
-                <p className="text-[11px] text-amber-700 mt-1 font-medium">
-                  مسحوبات أخرى: {selectedMerchant.totalRegularPaidOut.toLocaleString()} ج.م (الإجمالي: {selectedMerchant.totalPaidOut.toLocaleString()} ج.م)
-                </p>
+                <div className="text-[10px] text-emerald-800 mt-2 pt-1.5 border-t border-emerald-200/60 space-y-0.5 font-medium">
+                  <p>الناجحة: <strong>{selectedMerchant.deliveredCount + selectedMerchant.partialCount}</strong> أوردر</p>
+                  <p className="text-[9px] text-emerald-700 font-mono">تحصيل كاش: {selectedMerchant.totalCodCollected.toLocaleString()} ج.م</p>
+                </div>
               </div>
 
-              {/* Box 5: Due Balance */}
-              <div className={`p-4 rounded-xl shadow-2xs border ${
+              {/* Box 3: In-Transit (قيد التوصيل) */}
+              <div className="bg-teal-50/60 border border-teal-200/90 p-3.5 rounded-xl flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between text-teal-900 mb-1">
+                    <span className="text-[11px] font-black flex items-center gap-1">
+                      <Truck className="w-3.5 h-3.5 text-teal-600" />
+                      قيد التوصيل
+                    </span>
+                    <span className="text-[9px] bg-teal-200 text-teal-900 px-1.5 py-0.5 rounded font-black">
+                      في الطريق
+                    </span>
+                  </div>
+                  <p className="text-lg font-black text-teal-900 font-mono">
+                    {selectedMerchant.inTransitNet.toLocaleString()} <span className="text-xs font-bold text-teal-700">ج.م</span>
+                  </p>
+                </div>
+                <div className="text-[10px] text-teal-800 mt-2 pt-1.5 border-t border-teal-200/60 space-y-0.5 font-medium">
+                  <p>العدد: <strong>{selectedMerchant.inTransitCount}</strong> أوردر</p>
+                  <p className="text-[9px] text-teal-700 font-mono">COD متوقع: {selectedMerchant.inTransitCod.toLocaleString()} ج.م</p>
+                </div>
+              </div>
+
+              {/* Box 4: Returns (حساب المرتجعات) */}
+              <div className="bg-red-50/60 border border-red-200/90 p-3.5 rounded-xl flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between text-red-900 mb-1">
+                    <span className="text-[11px] font-black flex items-center gap-1">
+                      <RotateCcw className="w-3.5 h-3.5 text-red-600" />
+                      حساب المرتجع
+                    </span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${selectedMerchant.pendingReturnsCount === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-200 text-red-900'}`}>
+                      {selectedMerchant.pendingReturnsCount === 0 ? 'مستلم بالكامل (0)' : 'معلق بالمستودع'}
+                    </span>
+                  </div>
+                  <p className="text-lg font-black text-red-700 font-mono">
+                    {selectedMerchant.pendingReturnsGoodsValue.toLocaleString()} <span className="text-xs font-bold text-red-600">ج.م</span>
+                  </p>
+                </div>
+                <div className="text-[10px] text-red-800 mt-2 pt-1.5 border-t border-red-200/60 space-y-0.5 font-medium">
+                  <p className="text-rose-900 font-bold">
+                    معلق لم يستلم: <strong>{selectedMerchant.pendingReturnsCount}</strong> أوردر
+                  </p>
+                  <p className="text-[9px] text-red-700">
+                    يخصم شحن: <strong className="text-red-900 font-mono">-{selectedMerchant.returnsShippingDeducted.toLocaleString()} ج.م</strong>
+                  </p>
+                  <p className="text-[9px] text-slate-500">
+                    مستلم للتاجر: {selectedMerchant.deliveredToMerchantReturnsCount} ({selectedMerchant.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م)
+                  </p>
+                  {selectedMerchant.pendingReturnsCount > 0 && onMarkAllMerchantReturns && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const pendingIds = selectedMerchantShipments
+                          .filter((s) => (s.status === 'returned' || s.status === 'refused') && !s.isReturnedToMerchant)
+                          .map((s) => s.id);
+                        if (pendingIds.length > 0) onMarkAllMerchantReturns(pendingIds);
+                      }}
+                      className="w-full mt-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] py-1 px-1.5 rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <PackageCheck className="w-3 h-3" />
+                      <span>استلام كافة المرتجعات</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Box 5: Advances (سلف ومقدمات مخصومة) */}
+              <div className="bg-amber-50/70 border border-amber-300 p-3.5 rounded-xl flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between text-amber-900 mb-1">
+                    <span className="text-[11px] font-black flex items-center gap-1">
+                      <HandCoins className="w-3.5 h-3.5 text-amber-600" />
+                      سلف ومقدمات
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAdvanceModal(selectedMerchant)}
+                      className="text-[9px] bg-amber-600 hover:bg-amber-700 text-white px-1.5 py-0.5 rounded font-black transition-colors cursor-pointer"
+                      title="تسجيل سلفة نقدية جديدة لهذا التاجر"
+                    >
+                      + سلفة
+                    </button>
+                  </div>
+                  <p className="text-lg font-black text-amber-800 font-mono">
+                    {selectedMerchant.totalAdvancePaid.toLocaleString()} <span className="text-xs font-bold text-amber-700">ج.م</span>
+                  </p>
+                </div>
+                <div className="text-[10px] text-amber-800 mt-2 pt-1.5 border-t border-amber-200/80 space-y-0.5 font-medium">
+                  <p>عدد السلف: <strong>{selectedMerchant.advanceTransactions.length}</strong> دفعة</p>
+                  <p className="text-[9px] text-amber-900 font-mono">إجمالي المنصرف: {selectedMerchant.totalPaidOut.toLocaleString()} ج.م</p>
+                </div>
+              </div>
+
+              {/* Box 6: Due Balance (الصافي اللي ليه) */}
+              <div className={`p-3.5 rounded-xl shadow-xs border flex flex-col justify-between ${
                 selectedMerchant.dueBalance > 0
-                  ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
+                  ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
                   : selectedMerchant.dueBalance < 0
-                  ? 'bg-rose-50/80 border-rose-300 text-rose-950'
+                  ? 'bg-rose-50/90 border-rose-300 text-rose-950'
                   : 'bg-slate-100 border-slate-300 text-slate-900'
               }`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold flex items-center gap-1.5">
-                    <Wallet className="w-4 h-4 text-emerald-600" />
-                    الصافي اللي ليه (المتبقي)
-                  </span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-extrabold ${
-                    selectedMerchant.dueBalance > 0
-                      ? 'bg-emerald-200 text-emerald-900'
-                      : selectedMerchant.dueBalance < 0
-                      ? 'bg-rose-200 text-rose-900'
-                      : 'bg-slate-200 text-slate-800'
-                  }`}>
-                    {selectedMerchant.dueBalance > 0 ? 'جاهز للصرف' : selectedMerchant.dueBalance < 0 ? 'مديونية عليه' : 'خالص'}
-                  </span>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-black flex items-center gap-1">
+                      <Wallet className="w-3.5 h-3.5 text-emerald-600" />
+                      الصافي اللي ليه
+                    </span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${
+                      selectedMerchant.dueBalance > 0
+                        ? 'bg-emerald-200 text-emerald-900'
+                        : selectedMerchant.dueBalance < 0
+                        ? 'bg-rose-200 text-rose-900'
+                        : 'bg-slate-200 text-slate-800'
+                    }`}>
+                      {selectedMerchant.dueBalance > 0 ? 'مستحق له' : selectedMerchant.dueBalance < 0 ? 'مديونية' : 'خالص'}
+                    </span>
+                  </div>
+                  <p className="text-lg font-black font-mono">
+                    {selectedMerchant.dueBalance.toLocaleString()} <span className="text-xs font-bold">ج.م</span>
+                  </p>
                 </div>
-                <p className="text-xl font-black font-mono">
-                  {selectedMerchant.dueBalance.toLocaleString()} <span className="text-xs font-bold">ج.م</span>
-                </p>
-                <p className="text-[11px] mt-1 font-medium opacity-80">
-                  (شغله المسلم - شحن المرتجع - السلف)
+                <p className="text-[10px] mt-2 pt-1.5 border-t border-current/20 font-bold opacity-85">
+                  بعد خصم المرتجع والسلف
                 </p>
               </div>
             </div>
@@ -1620,8 +1776,9 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
 
               <div className="flex items-center gap-1.5 flex-wrap">
                 <button
+                  type="button"
                   onClick={() => setShipmentsFilter('all')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     shipmentsFilter === 'all'
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
@@ -1630,8 +1787,9 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                   الكل ({selectedMerchantShipments.length})
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShipmentsFilter('delivered')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     shipmentsFilter === 'delivered'
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
@@ -1640,8 +1798,20 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                   المسلم والناجح ({selectedMerchant.deliveredCount + selectedMerchant.partialCount})
                 </button>
                 <button
+                  type="button"
+                  onClick={() => setShipmentsFilter('in_transit')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    shipmentsFilter === 'in_transit'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'bg-white text-teal-700 border border-teal-200 hover:bg-teal-50'
+                  }`}
+                >
+                  قيد التوصيل ({selectedMerchant.inTransitCount})
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShipmentsFilter('returned')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     shipmentsFilter === 'returned'
                       ? 'bg-red-600 text-white shadow-xs'
                       : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'
@@ -1650,18 +1820,53 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                   المرتجعات ({selectedMerchant.returnsCount})
                 </button>
                 <button
-                  onClick={() => setShipmentsFilter('unsettled')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    shipmentsFilter === 'unsettled'
+                  type="button"
+                  onClick={() => setShipmentsFilter('pending_returns')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    shipmentsFilter === 'pending_returns'
+                      ? 'bg-rose-700 text-white shadow-xs'
+                      : 'bg-white text-rose-800 border border-rose-200 hover:bg-rose-50'
+                  }`}
+                >
+                  مرتجعات معلقة ({selectedMerchant.pendingReturnsCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShipmentsFilter('received_returns')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    shipmentsFilter === 'received_returns'
+                      ? 'bg-teal-700 text-white shadow-xs'
+                      : 'bg-white text-teal-800 border border-teal-200 hover:bg-teal-50'
+                  }`}
+                >
+                  مرتجعات استلمها التاجر ({selectedMerchant.deliveredToMerchantReturnsCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShipmentsFilter('advances')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    shipmentsFilter === 'advances'
                       ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-white text-amber-800 border border-amber-300 hover:bg-amber-50'
+                  }`}
+                >
+                  السلف والدفعات المقدمة ({selectedMerchant.advanceTransactions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShipmentsFilter('unsettled')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    shipmentsFilter === 'unsettled'
+                      ? 'bg-amber-700 text-white shadow-xs'
                       : 'bg-white text-amber-700 border border-amber-200 hover:bg-amber-50'
                   }`}
                 >
                   متبقي لم يصرف ({selectedMerchant.unsettledShipmentsCount})
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShipmentsFilter('settled')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     shipmentsFilter === 'settled'
                       ? 'bg-blue-600 text-white shadow-xs'
                       : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
@@ -1672,166 +1877,320 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
               </div>
             </div>
 
-            {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
-                <thead className="bg-slate-100/90 text-slate-700 font-extrabold border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-4">رقم البوليصة / التاريخ</th>
-                    <th className="py-3 px-3">العميل والمحافظة</th>
-                    <th className="py-3 px-3 text-center">حالة الشحنة</th>
-                    <th className="py-3 px-3 text-center">التحصيل (COD)</th>
-                    <th className="py-3 px-3 text-center">شحن الشركة</th>
-                    <th className="py-3 px-3 text-center">صافي البضاعة للتاجر</th>
-                    <th className="py-3 px-3 text-center">حالة المرتجع</th>
-                    <th className="py-3 px-4 text-center">حالة استلام الفلوس</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredSelectedShipments.length === 0 ? (
+            {/* Pending Returns Banner */}
+            {selectedMerchant.pendingReturnsCount > 0 && onMarkAllMerchantReturns && (
+              <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-amber-950 font-bold">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    حساب المرتجعات المعلقة للتاجر: <strong>{selectedMerchant.pendingReturnsGoodsValue.toLocaleString()} ج.م</strong> ({selectedMerchant.pendingReturnsCount} أوردر لم يستلمها التاجر بعد). عند تأكيد استلام التاجر، تخصم من مبلغ المرتجعات وتصبح 0 ج.م عند استلام الكل.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pendingIds = selectedMerchantShipments
+                      .filter((s) => (s.status === 'returned' || s.status === 'refused') && !s.isReturnedToMerchant)
+                      .map((s) => s.id);
+                    if (pendingIds.length > 0) onMarkAllMerchantReturns(pendingIds);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-lg shadow-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <PackageCheck className="w-4 h-4" />
+                  <span>تأكيد استلام التاجر لكافة المرتجعات (تصفير حساب المرتجع)</span>
+                </button>
+              </div>
+            )}
+
+            {/* Table: Advances List OR Shipments List */}
+            {shipmentsFilter === 'advances' ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-amber-50/90 text-amber-950 font-extrabold border-b border-amber-200">
                     <tr>
-                      <td colSpan={8} className="text-center py-8 text-slate-400">
-                        لا توجد شحنات في هذا القسم
-                      </td>
+                      <th className="py-3 px-4">تاريخ السلفة</th>
+                      <th className="py-3 px-3">مبلغ السلفة</th>
+                      <th className="py-3 px-3">طريقة الصرف</th>
+                      <th className="py-3 px-3">البيان والملاحظات</th>
+                      <th className="py-3 px-3">المسؤول عن الصرف</th>
+                      <th className="py-3 px-3 text-center">حالة الخصم</th>
+                      <th className="py-3 px-4 text-center">إلغاء / حذف</th>
                     </tr>
-                  ) : (
-                    filteredSelectedShipments.map((s) => {
-                      const isDelivered = s.status === 'delivered';
-                      const isPartial = s.status === 'partial_delivery';
-                      const isReturned = s.status === 'returned' || s.status === 'refused';
-                      const isSettled = Boolean(s.isMerchantSettled || s.financials.paidStatus === 'settled');
-
-                      let netGoods = 0;
-                      if (isDelivered) {
-                        netGoods = s.financials.netPayout ?? Math.max(0, s.financials.codAmount - s.financials.shippingFee);
-                      } else if (isPartial) {
-                        const collected = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
-                        netGoods = Math.max(0, collected - s.financials.shippingFee);
-                      }
-
-                      return (
-                        <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-3 px-4">
-                            <span className="font-mono font-extrabold text-blue-600 block text-xs">
-                              #{s.trackingNumber}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              {s.createdAt ? s.createdAt.split('T')[0] : 'اليوم'}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-3">
-                            <p className="font-bold text-slate-900">{s.recipient.name}</p>
-                            <p className="text-[10px] text-slate-500 font-medium">
-                              {s.recipient.governorate} - {s.recipient.city}
-                            </p>
-                          </td>
-
-                          <td className="py-3 px-3 text-center">
-                            <span
-                              className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
-                                isDelivered
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : isPartial
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : isReturned
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-amber-100 text-amber-800'
-                              }`}
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {selectedMerchant.advanceTransactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="text-center py-12 text-slate-400">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <HandCoins className="w-9 h-9 text-amber-300" />
+                            <p className="font-extrabold text-slate-700 text-sm">لا توجد سلف أو دفعات مقدمة مسجلة لهذا التاجر حالياً</p>
+                            <p className="text-xs text-slate-500">يمكنك تسجيل سلفة نقدية فوراً وتخصم تلقائياً من الصافي المستحق للتاجر</p>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAdvanceModal(selectedMerchant)}
+                              className="mt-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
                             >
-                              {isDelivered
-                                ? 'تم التسليم'
-                                : isPartial
-                                ? 'استلام جزئي'
-                                : isReturned
-                                ? 'مرتجع للتاجر'
-                                : 'قيد التوصيل'}
+                              <HandCoins className="w-4 h-4" />
+                              <span>+ تسجيل سلفة نقدية للتاجر الآن</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      selectedMerchant.advanceTransactions.map((txn) => (
+                        <tr key={txn.id} className="hover:bg-amber-50/30 transition-colors">
+                          <td className="py-3 px-4 font-mono font-bold text-slate-800">{txn.date}</td>
+                          <td className="py-3 px-3 font-mono font-black text-amber-800 text-sm">
+                            {txn.amount.toLocaleString()} ج.م
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded text-[11px] font-bold">
+                              {txn.paymentMethod === 'cash' ? 'كاش من الخزينة' :
+                               txn.paymentMethod === 'vodafone_cash' ? 'فودافون كاش' :
+                               txn.paymentMethod === 'instapay' ? 'إنستاباي' :
+                               txn.paymentMethod === 'bank_transfer' ? 'تحويل بنكي' : 'أخرى'}
                             </span>
                           </td>
-
-                          <td className="py-3 px-3 text-center font-mono font-bold text-slate-900">
-                            {isPartial
-                              ? (s.partialDetails?.partialCodAmount ?? s.financials.codAmount).toLocaleString()
-                              : isReturned
-                              ? (s.refusedDetails?.originalCodAmount ?? s.financials.codAmount).toLocaleString()
-                              : s.financials.codAmount.toLocaleString()} ج.م
-                            {isReturned && (
-                              <span className="block text-[10px] text-amber-800 font-bold">
-                                بضاعة: {(s.refusedDetails?.originalGoodsValue ?? Math.max(0, (s.refusedDetails?.originalCodAmount ?? s.financials.codAmount) - s.financials.shippingFee)).toLocaleString()} ج.م
-                              </span>
-                            )}
+                          <td className="py-3 px-3 text-slate-700">
+                            <span className="font-bold">{txn.title}</span>
+                            {txn.notes && <p className="text-[11px] text-slate-500 mt-0.5">{txn.notes}</p>}
                           </td>
-
-                          <td className="py-3 px-3 text-center font-mono font-medium text-slate-600">
-                            {s.financials.shippingFee.toLocaleString()} ج.م
-                          </td>
-
+                          <td className="py-3 px-3 text-slate-600 font-medium">{txn.createdBy || 'الأدمن'}</td>
                           <td className="py-3 px-3 text-center">
-                            {isDelivered || isPartial ? (
-                              <span className="font-mono font-black text-emerald-600 text-sm">
-                                {netGoods.toLocaleString()} ج.م
-                              </span>
-                            ) : isReturned ? (
-                              <span className="text-slate-400 font-mono">0 ج.م</span>
-                            ) : (
-                              <span className="text-slate-400 text-[10px]">قيد التحصيل</span>
-                            )}
+                            <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded text-[10px] font-bold">
+                              مخصومة من المستحق ✅
+                            </span>
                           </td>
-
-                          <td className="py-3 px-3 text-center">
-                            {isReturned ? (
-                              s.refusedDetails?.isCustomerCancellationWithoutFee ? (
-                                <span className="text-sky-800 bg-sky-50 px-2 py-0.5 rounded text-[10px] font-bold border border-sky-200">
-                                  إلغاء عميل (معفى 0 ج.م) 🚫
-                                </span>
-                              ) : s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) > 0 && (s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee) ? (
-                                <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold border border-amber-300">
-                                  دفع جزء ({s.refusedDetails?.amountCollected} ج.م) - خصم {s.refusedDetails?.merchantDeductedAmount ?? Math.max(0, s.financials.shippingFee - (s.refusedDetails?.amountCollected || 0))} ج.م 🚚
-                                </span>
-                              ) : s.refusedDetails?.shippingFeePaid ? (
-                                <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-200">
-                                  دفع العميل الشحن ({s.refusedDetails?.amountCollected || s.financials.shippingFee} ج.م) ✅
-                                </span>
-                              ) : (
-                                <span className="text-red-700 bg-red-50 px-2 py-0.5 rounded text-[10px] font-bold border border-red-200">
-                                  خصم {s.refusedDetails?.merchantDeductedAmount ?? s.financials.shippingFee} ج.م ❌
-                                </span>
-                              )
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </td>
-
                           <td className="py-3 px-4 text-center">
                             <button
-                              onClick={() => onToggleMerchantSettlement(s.id, !isSettled)}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1 cursor-pointer ${
-                                isSettled
-                                  ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300'
-                                  : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
-                              }`}
-                              title="اضغط لتغيير حالة صرف هذا الأوردر للتاجر"
+                              type="button"
+                              onClick={() => {
+                                if (confirm('هل أنت متأكد من إلغاء وحذف هذه السلفة وإرجاع قيمتها لمستحقات التاجر؟')) {
+                                  onDeleteTransaction(txn.id);
+                                }
+                              }}
+                              className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              title="حذف هذه السلفة"
                             >
-                              {isSettled ? (
-                                <>
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>تم الصرف</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Clock className="w-3.5 h-3.5 text-amber-600" />
-                                  <span>متبقي لم يصرف</span>
-                                </>
-                              )}
+                              <X className="w-4 h-4" />
                             </button>
                           </td>
                         </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-slate-100/90 text-slate-700 font-extrabold border-b border-slate-200">
+                    <tr>
+                      <th className="py-3 px-4">رقم البوليصة / التاريخ</th>
+                      <th className="py-3 px-3">العميل والمحافظة</th>
+                      <th className="py-3 px-3 text-center">حالة الشحنة</th>
+                      <th className="py-3 px-3 text-center">التحصيل (COD)</th>
+                      <th className="py-3 px-3 text-center">شحن الشركة</th>
+                      <th className="py-3 px-3 text-center">صافي البضاعة للتاجر</th>
+                      <th className="py-3 px-3 text-center">حالة المرتجع والخصم</th>
+                      <th className="py-3 px-3 text-center">استلام التاجر للمرتجع</th>
+                      <th className="py-3 px-4 text-center">حالة صرف الفلوس</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredSelectedShipments.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="text-center py-8 text-slate-400">
+                          لا توجد شحنات في هذا القسم
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSelectedShipments.map((s) => {
+                        const isDelivered = s.status === 'delivered';
+                        const isPartial = s.status === 'partial_delivery';
+                        const isReturned = s.status === 'returned' || s.status === 'refused';
+                        const isSettled = Boolean(s.isMerchantSettled || s.financials.paidStatus === 'settled');
+
+                        let netGoods = 0;
+                        if (isDelivered) {
+                          netGoods = s.financials.netPayout ?? Math.max(0, s.financials.codAmount - s.financials.shippingFee);
+                        } else if (isPartial) {
+                          const collected = s.partialDetails?.partialCodAmount ?? s.financials.codAmount;
+                          netGoods = Math.max(0, collected - s.financials.shippingFee);
+                        }
+
+                        return (
+                          <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-3 px-4">
+                              <span className="font-mono font-extrabold text-blue-600 block text-xs">
+                                #{s.trackingNumber}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {s.createdAt ? s.createdAt.split('T')[0] : 'اليوم'}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3">
+                              <p className="font-bold text-slate-900">{s.recipient.name}</p>
+                              <p className="text-[10px] text-slate-500 font-medium">
+                                {s.recipient.governorate} - {s.recipient.city}
+                              </p>
+                            </td>
+
+                            <td className="py-3 px-3 text-center">
+                              <span
+                                className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
+                                  isDelivered
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : isPartial
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : isReturned
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-teal-100 text-teal-800'
+                                }`}
+                              >
+                                {isDelivered
+                                  ? 'تم التسليم'
+                                  : isPartial
+                                  ? 'استلام جزئي'
+                                  : isReturned
+                                  ? 'مرتجع للتاجر'
+                                  : 'قيد التوصيل'}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3 text-center font-mono font-bold text-slate-900">
+                              {isPartial
+                                ? (s.partialDetails?.partialCodAmount ?? s.financials.codAmount).toLocaleString()
+                                : isReturned
+                                ? (s.refusedDetails?.originalCodAmount ?? s.financials.codAmount).toLocaleString()
+                                : s.financials.codAmount.toLocaleString()} ج.م
+                              {isReturned && (
+                                <span className="block text-[10px] text-amber-800 font-bold">
+                                  بضاعة: {(s.refusedDetails?.originalGoodsValue ?? Math.max(0, (s.refusedDetails?.originalCodAmount ?? s.financials.codAmount) - s.financials.shippingFee)).toLocaleString()} ج.م
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3 text-center font-mono font-medium text-slate-600">
+                              {s.financials.shippingFee.toLocaleString()} ج.م
+                            </td>
+
+                            <td className="py-3 px-3 text-center">
+                              {isDelivered || isPartial ? (
+                                <span className="font-mono font-black text-emerald-600 text-sm">
+                                  {netGoods.toLocaleString()} ج.م
+                                </span>
+                              ) : isReturned ? (
+                                <span className="text-slate-400 font-mono">0 ج.م</span>
+                              ) : (
+                                <span className="text-teal-700 font-mono font-bold text-[11px]">
+                                  {Math.max(0, s.financials.codAmount - s.financials.shippingFee).toLocaleString()} ج.م (متوقع)
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Return Status & Deduction */}
+                            <td className="py-3 px-3 text-center">
+                              {isReturned ? (
+                                s.refusedDetails?.isCustomerCancellationWithoutFee ? (
+                                  <span className="text-sky-800 bg-sky-50 px-2 py-0.5 rounded text-[10px] font-bold border border-sky-200">
+                                    إلغاء عميل (معفى 0 ج.م) 🚫
+                                  </span>
+                                ) : s.refusedDetails?.partialShippingFeePaid || ((s.refusedDetails?.amountCollected || 0) > 0 && (s.refusedDetails?.amountCollected || 0) < s.financials.shippingFee) ? (
+                                  <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold border border-amber-300">
+                                    دفع جزء ({s.refusedDetails?.amountCollected} ج.م) - خصم {s.refusedDetails?.merchantDeductedAmount ?? Math.max(0, s.financials.shippingFee - (s.refusedDetails?.amountCollected || 0))} ج.م 🚚
+                                  </span>
+                                ) : s.refusedDetails?.shippingFeePaid ? (
+                                  <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-200">
+                                    دفع العميل الشحن ({s.refusedDetails?.amountCollected || s.financials.shippingFee} ج.م) ✅
+                                  </span>
+                                ) : (
+                                  <span className="text-red-700 bg-red-50 px-2 py-0.5 rounded text-[10px] font-bold border border-red-200">
+                                    خصم {s.refusedDetails?.merchantDeductedAmount ?? s.financials.shippingFee} ج.م ❌
+                                  </span>
+                                )
+                              ) : (
+                                <span className="text-slate-400">-</span>
+                              )}
+                            </td>
+
+                            {/* Return Received by Merchant Action */}
+                            <td className="py-3 px-3 text-center">
+                              {isReturned ? (
+                                s.isReturnedToMerchant ? (
+                                  <div className="flex flex-col items-center gap-1">
+                                    <span className="text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-[11px] font-extrabold border border-emerald-300 flex items-center gap-1">
+                                      <Check className="w-3 h-3 text-emerald-600" />
+                                      <span>تم استلام التاجر</span>
+                                    </span>
+                                    {onMarkReturnedToMerchant && (
+                                      <button
+                                        type="button"
+                                        onClick={() => onMarkReturnedToMerchant(s.id, true)}
+                                        className="text-[10px] text-slate-500 hover:text-red-600 underline font-medium cursor-pointer"
+                                        title="إلغاء استلام التاجر وإعادته للمرتجعات المعلقة"
+                                      >
+                                        إلغاء الاستلام
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center gap-1">
+                                    <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold border border-amber-300 flex items-center gap-1">
+                                      <Clock className="w-3 h-3 text-amber-600" />
+                                      <span>معلق بالمستودع</span>
+                                    </span>
+                                    {onMarkReturnedToMerchant && (
+                                      <button
+                                        type="button"
+                                        onClick={() => onMarkReturnedToMerchant(s.id, false)}
+                                        className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-[10px] px-2.5 py-1 rounded-md shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                                        title="تأكيد استلام التاجر لهذه البضاعة المرتجعة وتنزيلها من مبلغ المرتجعات"
+                                      >
+                                        <PackageCheck className="w-3 h-3" />
+                                        <span>تأكيد استلام التاجر</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                )
+                              ) : (
+                                <span className="text-slate-400">-</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                type="button"
+                                onClick={() => onToggleMerchantSettlement(s.id, !isSettled)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1 cursor-pointer ${
+                                  isSettled
+                                    ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300'
+                                    : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                                }`}
+                                title="اضغط لتغيير حالة صرف هذا الأوردر للتاجر"
+                              >
+                                {isSettled ? (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>تم الصرف</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>متبقي لم يصرف</span>
+                                  </>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1988,151 +2347,216 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
       {/* ========================================================================= */}
       {/* MODAL 1.B: RECORD ADVANCE PAYMENT / PREPAYMENT (تسجيل سلفة نقدية للتاجر)  */}
       {/* ========================================================================= */}
-      {isAdvanceModalOpen && advanceModalMerchant && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-amber-700 via-amber-800 to-slate-900 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300">
-                  <HandCoins className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-base font-black text-white flex items-center gap-2">
-                    <span>تسجيل سلفة نقدية / دفعة مقدمة</span>
-                  </h4>
-                  <p className="text-xs text-amber-200 mt-0.5">
-                    التاجر: <strong className="text-white">{advanceModalMerchant.storeName}</strong> ({advanceModalMerchant.name})
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsAdvanceModalOpen(false)}
-                className="text-amber-200 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Form */}
-            <form onSubmit={handleConfirmAdvance} className="p-6 space-y-4 text-right">
-              {/* Current Balances Context Banner */}
-              <div className="bg-amber-50/80 border border-amber-200 p-3.5 rounded-xl space-y-1.5 text-xs text-amber-950">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-amber-900">الصافي الحالي المستحق للتاجر:</span>
-                  <span className="font-mono font-black text-sm text-emerald-700">
-                    {advanceModalMerchant.dueBalance.toLocaleString()} ج.م
-                  </span>
-                </div>
-                <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
-                  ⚠️ هذه السلفة تعتبر دفعة نقدية مقدمة تحت الحساب وستُخصم فوراً وتلقائياً من "الصافي اللي ليه" للتاجر وتظهر في كشف حسابه وسجل المسحوبات والسلف.
-                </p>
-              </div>
-
-              {/* Amount Input */}
-              <div>
-                <label className="block text-xs font-black text-slate-800 mb-1.5">
-                  المبلغ المطلوب صرفه كسلفة مقدمة (ج.م) *
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={1}
-                    required
-                    autoFocus
-                    value={advanceForm.amount || ''}
-                    onChange={(e) => setAdvanceForm({ ...advanceForm, amount: Number(e.target.value) })}
-                    className="w-full px-4 py-2.5 rounded-xl border-2 border-amber-300 font-mono text-lg font-black focus:ring-2 focus:ring-amber-500 outline-none text-slate-900 bg-amber-50/20"
-                    placeholder="اكتب مبلغ السلفة مثلاً 500 أو 1000..."
-                  />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                    ج.م
-                  </span>
-                </div>
-              </div>
-
-              {/* Payment Method & Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    طريقة التسليم / الصرف *
-                  </label>
-                  <select
-                    value={advanceForm.paymentMethod}
-                    onChange={(e) => setAdvanceForm({ ...advanceForm, paymentMethod: e.target.value as any })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none bg-white cursor-pointer"
+      {isAdvanceModalOpen && (
+        (() => {
+          const currentModalMerchant = advanceModalMerchant || selectedMerchant || (merchantsList.length > 0 ? merchantsList[0] : null);
+          return (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden my-6 animate-in zoom-in-95 duration-200">
+                {/* Modal Header */}
+                <div className="bg-gradient-to-r from-amber-700 via-amber-800 to-slate-900 text-white px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300">
+                      <HandCoins className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-black text-white flex items-center gap-2">
+                        <span>تسجيل سلفة نقدية / دفعة مقدمة</span>
+                      </h4>
+                      <p className="text-xs text-amber-200 mt-0.5">
+                        {currentModalMerchant ? (
+                          <>التاجر المستفيد: <strong className="text-white">{currentModalMerchant.storeName}</strong> ({currentModalMerchant.name})</>
+                        ) : (
+                          <span>اختر التاجر المستفيد من السلفة</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAdvanceModalOpen(false)}
+                    className="text-amber-200 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                   >
-                    <option value="cash">كاش نقدياً من الخزينة</option>
-                    <option value="vodafone_cash">فودافون كاش / محفظة</option>
-                    <option value="instapay">إنستاباي (InstaPay)</option>
-                    <option value="bank_transfer">تحويل بنكي</option>
-                    <option value="other">أخرى</option>
-                  </select>
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    تاريخ السلفة *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={advanceForm.date}
-                    onChange={(e) => setAdvanceForm({ ...advanceForm, date: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-none bg-white font-mono"
-                  />
-                </div>
-              </div>
+                {/* Modal Form */}
+                <form onSubmit={handleConfirmAdvance} className="p-6 space-y-4 text-right">
+                  {/* Merchant Selector (if multiple or to switch merchant) */}
+                  {merchantsList.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-black text-slate-800 mb-1.5">
+                        التاجر / المتجر المستفيد من السلفة *
+                      </label>
+                      <select
+                        value={currentModalMerchant?.id || ''}
+                        onChange={(e) => {
+                          const found = merchantsList.find((m) => m.id === e.target.value);
+                          if (found) {
+                            setAdvanceModalMerchant(found);
+                            setAdvanceForm((prev) => ({
+                              ...prev,
+                              notes: `سلفة نقدية / دفعة مقدمة تحت الحساب للتاجر (${found.storeName})`,
+                            }));
+                          }
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl border-2 border-amber-200 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none bg-amber-50/20 cursor-pointer"
+                      >
+                        {merchantsList.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.storeName} ({m.name}) — الصافي المستحق له: {m.dueBalance.toLocaleString()} ج.م
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
-              {/* Receipt No */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  رقم الإيصال أو المرجع (اختياري)
-                </label>
-                <input
-                  type="text"
-                  value={advanceForm.receiptNo}
-                  onChange={(e) => setAdvanceForm({ ...advanceForm, receiptNo: e.target.value })}
-                  placeholder="مثال: ADV-1024 أو رقم تحويل إنستاباي"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-none"
-                />
-              </div>
+                  {/* Current Balances Context Banner */}
+                  {currentModalMerchant && (
+                    <div className="bg-amber-50/80 border border-amber-200 p-3.5 rounded-xl space-y-1.5 text-xs text-amber-950">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-amber-900">الصافي الحالي المستحق للتاجر:</span>
+                        <span className={`font-mono font-black text-sm ${currentModalMerchant.dueBalance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {currentModalMerchant.dueBalance.toLocaleString()} ج.م
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                        ⚠️ هذه السلفة تعتبر دفعة نقدية مقدمة تحت الحساب وستُخصم فوراً وتلقائياً من "الصافي اللي ليه" للتاجر وتظهر في كشف حسابه وسجل المسحوبات والسلف.
+                      </p>
+                    </div>
+                  )}
 
-              {/* Notes */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  البيان وملاحظات السلفة
-                </label>
-                <input
-                  type="text"
-                  value={advanceForm.notes}
-                  onChange={(e) => setAdvanceForm({ ...advanceForm, notes: e.target.value })}
-                  placeholder="سبب السلفة أو تفاصيل إضافية..."
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-none"
-                />
-              </div>
+                  {/* Amount Input */}
+                  <div>
+                    <label className="block text-xs font-black text-slate-800 mb-1.5">
+                      المبلغ المطلوب صرفه كسلفة مقدمة (ج.م) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={1}
+                        required
+                        autoFocus
+                        value={advanceForm.amount || ''}
+                        onChange={(e) => setAdvanceForm({ ...advanceForm, amount: Number(e.target.value) })}
+                        className="w-full px-4 py-2.5 rounded-xl border-2 border-amber-300 font-mono text-lg font-black focus:ring-2 focus:ring-amber-500 outline-none text-slate-900 bg-amber-50/20"
+                        placeholder="اكتب مبلغ السلفة مثلاً 500 أو 1000..."
+                      />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                        ج.م
+                      </span>
+                    </div>
 
-              {/* Modal Actions */}
-              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsAdvanceModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  disabled={advanceForm.amount <= 0}
-                  className="bg-amber-600 hover:bg-amber-700 active:bg-amber-800 disabled:opacity-50 text-white text-xs font-extrabold px-6 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <HandCoins className="w-4 h-4" />
-                  <span>تأكيد تسجيل السلفة وخصمها فوراً</span>
-                </button>
+                    {/* Quick Amount Buttons */}
+                    <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                      <span className="text-[10px] text-slate-500 font-bold ml-1">مبالغ سريعة:</span>
+                      {[200, 500, 1000, 2000, 5000].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setAdvanceForm({ ...advanceForm, amount: amt })}
+                          className="px-2 py-0.5 bg-amber-100/70 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-md text-[11px] font-mono font-bold transition-colors cursor-pointer"
+                        >
+                          +{amt.toLocaleString()} ج.م
+                        </button>
+                      ))}
+                      {currentModalMerchant && currentModalMerchant.dueBalance > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setAdvanceForm({ ...advanceForm, amount: currentModalMerchant.dueBalance })}
+                          className="px-2 py-0.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 rounded-md text-[11px] font-bold transition-colors cursor-pointer"
+                        >
+                          كامل المستحق ({currentModalMerchant.dueBalance.toLocaleString()} ج.م)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Payment Method & Date */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        طريقة التسليم / الصرف *
+                      </label>
+                      <select
+                        value={advanceForm.paymentMethod}
+                        onChange={(e) => setAdvanceForm({ ...advanceForm, paymentMethod: e.target.value as any })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none bg-white cursor-pointer"
+                      >
+                        <option value="cash">كاش نقدياً من الخزينة</option>
+                        <option value="vodafone_cash">فودافون كاش / محفظة</option>
+                        <option value="instapay">إنستاباي (InstaPay)</option>
+                        <option value="bank_transfer">تحويل بنكي</option>
+                        <option value="other">أخرى</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        تاريخ السلفة *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={advanceForm.date}
+                        onChange={(e) => setAdvanceForm({ ...advanceForm, date: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-none bg-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Receipt No */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      رقم الإيصال أو المرجع (اختياري)
+                    </label>
+                    <input
+                      type="text"
+                      value={advanceForm.receiptNo}
+                      onChange={(e) => setAdvanceForm({ ...advanceForm, receiptNo: e.target.value })}
+                      placeholder="مثال: ADV-1024 أو رقم تحويل إنستاباي"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      البيان وملاحظات السلفة
+                    </label>
+                    <input
+                      type="text"
+                      value={advanceForm.notes}
+                      onChange={(e) => setAdvanceForm({ ...advanceForm, notes: e.target.value })}
+                      placeholder="سبب السلفة أو تفاصيل إضافية..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Modal Actions */}
+                  <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsAdvanceModalOpen(false)}
+                      className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={advanceForm.amount <= 0 || !currentModalMerchant}
+                      className="bg-amber-600 hover:bg-amber-700 active:bg-amber-800 disabled:opacity-50 text-white text-xs font-extrabold px-6 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <HandCoins className="w-4 h-4" />
+                      <span>تأكيد تسجيل السلفة وخصمها فوراً</span>
+                    </button>
+                  </div>
+                </form>
               </div>
-            </form>
-          </div>
-        </div>
+            </div>
+          );
+        })()
       )}
 
       {/* ========================================================================= */}

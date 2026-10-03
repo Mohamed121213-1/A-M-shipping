@@ -25,7 +25,8 @@ import {
   Sliders,
   RefreshCw,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  PackageCheck
 } from 'lucide-react';
 
 interface WalletViewProps {
@@ -487,10 +488,58 @@ export const WalletView: React.FC<WalletViewProps> = ({
             </div>
           )}
 
-          {/* Wallet Summary Cards: 5 Cards for Merchant, or Admin Controls */}
+          {/* Wallet Summary Cards: 6 Cards for Merchant, or Admin Controls */}
           {!isAdmin ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+              {/* Formula Equation Bar */}
+              <div className="bg-slate-900 text-white px-4 py-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs border border-slate-800">
+                <span className="font-bold text-slate-300">معادلة حساب التاجر:</span>
+                <div className="flex items-center gap-1.5 flex-wrap font-bold font-mono">
+                  <span className="text-emerald-300 bg-emerald-950/70 px-2 py-0.5 rounded border border-emerald-800">
+                    شغلك المسلم: +{merchantFinancials.deliveredNetGoods.toLocaleString()} ج.م
+                  </span>
+                  <span className="text-slate-400 font-sans">-</span>
+                  <span className="text-red-300 bg-red-950/70 px-2 py-0.5 rounded border border-red-800">
+                    خصم شحن المرتجع: -{merchantFinancials.returnsShippingDeducted.toLocaleString()} ج.م
+                  </span>
+                  <span className="text-slate-400 font-sans">-</span>
+                  <span className="text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-800">
+                    سلف ومسحوبات: -{merchantFinancials.totalPaidOut.toLocaleString()} ج.م
+                  </span>
+                  <span className="text-slate-400 font-sans">=</span>
+                  <span className={`px-2.5 py-0.5 rounded border font-black ${
+                    merchantFinancials.netDueBalance >= 0
+                      ? 'text-emerald-300 bg-emerald-950/80 border-emerald-600'
+                      : 'text-rose-300 bg-rose-950/80 border-rose-600'
+                  }`}>
+                    الصافي اللي ليك: {merchantFinancials.netDueBalance.toLocaleString()} ج.م
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
+                {/* 0. صافي الشغل كامل بدون الشحن */}
+                <div className="bg-blue-50/70 border border-blue-200/90 rounded-2xl p-4 shadow-xs relative overflow-hidden flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-blue-900">صافي الشغل كامل</span>
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                        <PackageCheck className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <p className="text-xl font-black text-blue-950 mt-2 font-mono">
+                      {merchantFinancials.totalAllWorkNetGoods.toLocaleString()} <span className="text-xs font-bold text-blue-700">ج.م</span>
+                    </p>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-blue-200/60 flex flex-col gap-0.5 text-[10px]">
+                    <span className="text-blue-950 font-bold">
+                      بدون الشحن (كل الشحنات)
+                    </span>
+                    <span className="text-slate-500 font-mono text-[9px]">
+                      {merchantFinancials.totalAllShipmentsCount} أوردر | COD: {merchantFinancials.totalAllWorkCod.toLocaleString()} ج.م
+                    </span>
+                  </div>
+                </div>
                 {/* 1. شغل المتجر المسلم */}
                 <div className="bg-white border-2 border-emerald-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden">
                   <div className="flex items-center justify-between">
@@ -534,26 +583,28 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 </div>
 
                 {/* 3. المرتجعات */}
-                <div className="bg-white border border-rose-200 rounded-2xl p-5 shadow-xs relative overflow-hidden">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-rose-800">حساب المرتجعات</span>
-                    <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
-                      <RotateCcw className="w-4 h-4" />
+                <div className="bg-white border border-rose-200 rounded-2xl p-4 shadow-xs relative overflow-hidden flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-rose-800">حساب المرتجع</span>
+                      <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                        <RotateCcw className="w-4 h-4" />
+                      </div>
                     </div>
+                    <p className="text-xl font-black text-rose-700 mt-2 font-mono">
+                      {merchantFinancials.pendingReturnsGoodsValue.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
+                    </p>
                   </div>
-                  <p className="text-2xl font-black text-rose-700 mt-2">
-                    {merchantFinancials.returnsGoodsValue.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
-                  </p>
-                  <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[11px]">
-                    <span className="text-rose-900 font-bold">
-                      {merchantFinancials.returnsShippingDeducted > 0 ? (
-                        <>خصم شحن: <strong className="text-rose-600">-{merchantFinancials.returnsShippingDeducted.toLocaleString()} ج.م</strong></>
+                  <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[10px]">
+                    <span className="text-rose-950 font-bold">
+                      {merchantFinancials.pendingReturnsCount === 0 ? (
+                        <span className="text-emerald-700 font-bold">✅ مستلم بالكامل (0 ج.م)</span>
                       ) : (
-                        <span className="text-slate-500">شحن المرتجع: 0 ج.م (لم يخصم)</span>
+                        <span>معلق لم تستلمه: {merchantFinancials.pendingReturnsCount} أوردر</span>
                       )}
                     </span>
-                    <span className="text-slate-400">
-                      عدد: {merchantFinancials.returnsCount} شحنة مرتجعة
+                    <span className="text-red-700 font-bold">
+                      خصم شحن: -{merchantFinancials.returnsShippingDeducted.toLocaleString()} ج.م
                     </span>
                   </div>
                 </div>

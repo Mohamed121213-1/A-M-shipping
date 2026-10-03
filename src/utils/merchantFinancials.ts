@@ -36,6 +36,10 @@ export interface MerchantFinancialStats {
   returnsGoodsValue: number;      // إجمالي قيمة بضائع المرتجعات بحساب عادي (من غير الشحن)
   returnsTotalCod: number;        // إجمالي مبالغ المرتجعات بحساب عادي
   returnsShippingDeducted: number;// مصاريف شحن المرتجعات المخصومة من التاجر (تتخصم من الفلوس اللي ليه)
+  pendingReturnsCount: number;    // عدد المرتجعات المعلقة لدى الشركة التي لم يستلمها التاجر بعد
+  pendingReturnsGoodsValue: number;// حساب المرتجعات المعلقة (يصبح صفر عند استلام التاجر لكامل المرتجع)
+  deliveredToMerchantReturnsCount: number; // عدد المرتجعات التي استلمها التاجر
+  deliveredToMerchantReturnsGoodsValue: number; // قيمة المرتجعات التي استلمها التاجر
 
   // 3.أ. دفع جزء من الشحن
   partialShippingPaidCount: number;
@@ -131,6 +135,10 @@ export function calculateMerchantFinancials(
   let returnsGoodsValue = 0;
   let returnsTotalCod = 0;
   let returnsShippingDeducted = 0;
+  let pendingReturnsCount = 0;
+  let pendingReturnsGoodsValue = 0;
+  let deliveredToMerchantReturnsCount = 0;
+  let deliveredToMerchantReturnsGoodsValue = 0;
 
   let partialShippingPaidCount = 0;
   let partialShippingCollected = 0;
@@ -180,6 +188,15 @@ export function calculateMerchantFinancials(
       const goodsVal = s.refusedDetails?.originalGoodsValue ?? (orderCod > fee ? orderCod - fee : orderCod);
       const effectiveGoodsVal = (goodsVal > 0 ? goodsVal : orderCod);
       returnsGoodsValue += effectiveGoodsVal;
+
+      const isReceivedByMerchant = Boolean(s.isReturnedToMerchant);
+      if (isReceivedByMerchant) {
+        deliveredToMerchantReturnsCount += 1;
+        deliveredToMerchantReturnsGoodsValue += effectiveGoodsVal;
+      } else {
+        pendingReturnsCount += 1;
+        pendingReturnsGoodsValue += effectiveGoodsVal;
+      }
 
       let collectedShipping = 0;
       if (s.refusedDetails?.amountCollected !== undefined) {
@@ -271,6 +288,10 @@ export function calculateMerchantFinancials(
     returnsGoodsValue,
     returnsTotalCod,
     returnsShippingDeducted,
+    pendingReturnsCount,
+    pendingReturnsGoodsValue,
+    deliveredToMerchantReturnsCount,
+    deliveredToMerchantReturnsGoodsValue,
     partialShippingPaidCount,
     partialShippingCollected,
     partialShippingMerchantDeducted,

@@ -1712,15 +1712,15 @@ export default function App() {
   };
 
   // Mark Shipment Returned to Merchant Handler
-  const handleMarkReturnedToMerchant = (shipmentId: string) => {
+  const handleMarkReturnedToMerchant = (shipmentId: string, revert: boolean = false) => {
     let nextShipments: Shipment[] = [];
     setShipments((prev) => {
       nextShipments = prev.map((s) => {
         if (s.id === shipmentId) {
           return {
             ...s,
-            isReturnedToMerchant: true,
-            returnedToMerchantAt: new Date().toISOString()
+            isReturnedToMerchant: !revert,
+            returnedToMerchantAt: revert ? undefined : new Date().toISOString()
           };
         }
         return s;
@@ -1737,13 +1737,39 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         status: 'returned',
-        note: 'تم تأكيد تسليم المرتجع للتاجر',
-        extraUpdates: { isReturnedToMerchant: true, returnedToMerchantAt: new Date().toISOString() },
+        note: revert ? 'إلغاء استلام المرتجع للتاجر' : 'تم تأكيد تسليم المرتجع للتاجر',
+        extraUpdates: { isReturnedToMerchant: !revert, returnedToMerchantAt: revert ? null : new Date().toISOString() },
         senderId: syncEngine.getInstanceId(),
       }),
     }).catch((err) => console.warn('Mark returned API error:', err));
 
-    showToast('تم تأكيد تسليم المرتجع للتاجر بنجاح وحفظ البيانات بالتحليلات');
+    showToast(revert ? 'تم إلغاء استلام المرتجع وإعادته لحساب المرتجعات المعلقة' : 'تم تأكيد تسليم المرتجع للتاجر وخصمه من حساب المرتجعات بنجاح');
+  };
+
+  // Mark all pending merchant returns as received by merchant
+  const handleMarkAllMerchantReturns = (shipmentIds: string[]) => {
+    if (!shipmentIds || shipmentIds.length === 0) return;
+    const idsSet = new Set(shipmentIds);
+    let nextShipments: Shipment[] = [];
+    setShipments((prev) => {
+      nextShipments = prev.map((s) => {
+        if (idsSet.has(s.id)) {
+          return {
+            ...s,
+            isReturnedToMerchant: true,
+            returnedToMerchantAt: new Date().toISOString()
+          };
+        }
+        return s;
+      });
+      return nextShipments;
+    });
+
+    setTimeout(() => {
+      broadcastDataChange({ shipments: nextShipments });
+    }, 20);
+
+    showToast(`تم تأكيد استلام التاجر لجميع المرتجعات (${shipmentIds.length} شحنة) وتصفية حساب المرتجع بنجاح`);
   };
 
   // Delete Multiple Shipments Handler
@@ -3115,6 +3141,8 @@ export default function App() {
                     onRequestPayout={handleRequestPayout}
                     onUpdateUser={handleUpdateUser}
                     governorates={governorates}
+                    onMarkReturnedToMerchant={handleMarkReturnedToMerchant}
+                    onMarkAllMerchantReturns={handleMarkAllMerchantReturns}
                   />
                 )}
 
@@ -3258,6 +3286,8 @@ export default function App() {
                     onRequestPayout={handleRequestPayout}
                     onUpdateUser={handleUpdateUser}
                     governorates={governorates}
+                    onMarkReturnedToMerchant={handleMarkReturnedToMerchant}
+                    onMarkAllMerchantReturns={handleMarkAllMerchantReturns}
                   />
                 )}
 
