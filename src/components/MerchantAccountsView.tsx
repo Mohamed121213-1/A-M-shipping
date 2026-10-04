@@ -1526,21 +1526,38 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
             <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs mt-6">
               <div className="flex items-center gap-2">
                 <Calculator className="w-4 h-4 text-emerald-400" />
-                <span className="font-extrabold text-slate-100">معادلة حساب التاجر (الصافي اللي ليه بعد الخصم):</span>
+                <span className="font-extrabold text-slate-100">معادلة حساب التاجر:</span>
               </div>
               <div className="flex items-center gap-2 flex-wrap font-mono font-bold text-slate-300">
-                <span className="text-blue-300 bg-blue-950/70 px-2.5 py-1 rounded-lg border border-blue-800" title="قيمة البضائع المسلمة كاش للتاجر بدون الشحن">
-                  شغله المسلم: +{selectedMerchant.netGoodsAmount.toLocaleString()} ج.م
+                {/* 1. شغله المتسلم */}
+                <span className="text-blue-300 bg-blue-950/70 px-2.5 py-1 rounded-lg border border-blue-800" title="إجمالي قيمة بضائع الشغل المتسلم للشركة (المسلمة + المرتجعة للتاجر)">
+                  شغله المتسلم: +{(selectedMerchant.netGoodsAmount + selectedMerchant.deliveredToMerchantReturnsGoodsValue).toLocaleString()} ج.م
                 </span>
+
                 <span className="text-slate-400 font-sans text-base">-</span>
-                <span className="text-red-300 bg-red-950/70 px-2.5 py-1 rounded-lg border border-red-800" title="مصاريف شحن المرتجعات التي استلمها التاجر (مخصومة فورياً من الفلوس اللي ليه)">
-                  شحن المرتجع المستلم: -{selectedMerchant.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
+
+                {/* 2. شغله المرتجع */}
+                <span className="text-rose-300 bg-rose-950/70 px-2.5 py-1 rounded-lg border border-rose-800" title="قيمة بضائع شغله المرتجع التي استلمها التاجر">
+                  شغله المرتجع: -{selectedMerchant.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م
                 </span>
+
                 <span className="text-slate-400 font-sans text-base">-</span>
-                <span className="text-amber-300 bg-amber-950/70 px-2.5 py-1 rounded-lg border border-amber-800" title="السلف النقدية والدفعات المقدمة والمصروفات المسحوبة">
-                  سلف ومسحوبات: -{selectedMerchant.totalPaidOut.toLocaleString()} ج.م
+
+                {/* 3. شحن المرتجع */}
+                <span className="text-red-300 bg-red-950/70 px-2.5 py-1 rounded-lg border border-red-800" title="مصاريف شحن المرتجعات المستلمة للتاجر">
+                  شحن المرتجع: -{selectedMerchant.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
                 </span>
+
+                <span className="text-slate-400 font-sans text-base">-</span>
+
+                {/* 4. السلفة */}
+                <span className="text-amber-300 bg-amber-950/70 px-2.5 py-1 rounded-lg border border-amber-800" title="السلف النقدية والمسحوبات الصادرة للتاجر">
+                  السلفة: -{selectedMerchant.totalPaidOut.toLocaleString()} ج.م
+                </span>
+
                 <span className="text-slate-400 font-sans text-base">=</span>
+
+                {/* 5. الصافي اللي ليه */}
                 <span className={`px-3 py-1 rounded-lg border font-black text-sm ${
                   selectedMerchant.dueBalance >= 0
                     ? 'text-emerald-300 bg-emerald-950/80 border-emerald-600'
@@ -1548,9 +1565,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                 }`}>
                   الصافي اللي ليه: {selectedMerchant.dueBalance.toLocaleString()} ج.م
                 </span>
-                {selectedMerchant.pendingReturnsShippingDeducted > 0 && (
-                  <span className="text-[10px] text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/60 font-sans font-medium" title="شحنات مرتجعة لم يستلمها التاجر بعد، وتُخصم فور استلامه لها">
-                    ⏳ معلق لم يستلم: {selectedMerchant.pendingReturnsShippingDeducted.toLocaleString()} ج.م (يُخصم فور الاستلام)
+
+                {selectedMerchant.pendingReturnsCount > 0 && (
+                  <span className="text-[10px] text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/60 font-sans font-medium" title="شحنات مرتجعة لم يستلمها التاجر بعد بالمستودع، وتُخصم فور استلامه لها">
+                    ⏳ معلق لم يستلم: {selectedMerchant.pendingReturnsCount} أوردر (شحن {selectedMerchant.pendingReturnsShippingDeducted.toLocaleString()} ج.م يُخصم فور الاستلام)
                   </span>
                 )}
               </div>
@@ -1747,8 +1765,8 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                   </p>
                 </div>
                 <div className="text-[10px] mt-2 pt-1.5 border-t border-current/20 font-bold opacity-85 space-y-0.5">
-                  <p className="font-mono text-[10px]">
-                    ({selectedMerchant.netGoodsAmount.toLocaleString()} مسلم - {selectedMerchant.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} مرتجع - {selectedMerchant.totalPaidOut.toLocaleString()} سلف)
+                  <p className="font-mono text-[9px] leading-tight">
+                    ({(selectedMerchant.netGoodsAmount + selectedMerchant.deliveredToMerchantReturnsGoodsValue).toLocaleString()} متسلم - {selectedMerchant.deliveredToMerchantReturnsGoodsValue.toLocaleString()} مرتجع - {selectedMerchant.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} شحن - {selectedMerchant.totalPaidOut.toLocaleString()} سلفة)
                   </p>
                 </div>
               </div>

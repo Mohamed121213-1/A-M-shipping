@@ -530,6 +530,36 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             </div>
           </div>
 
+          {/* Live Equation Bar */}
+          <div className="bg-slate-900 text-white px-4 py-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs border border-slate-800">
+            <span className="font-bold text-slate-300">معادلة حساب التاجر:</span>
+            <div className="flex items-center gap-1.5 flex-wrap font-bold font-mono">
+              <span className="text-blue-300 bg-blue-950/70 px-2 py-0.5 rounded border border-blue-800" title="إجمالي قيمة بضائع الشغل المتسلم">
+                شغلك المتسلم: +{(merchantStats.deliveredNetGoods + merchantStats.deliveredToMerchantReturnsGoodsValue).toLocaleString()} ج.م
+              </span>
+              <span className="text-slate-400 font-sans">-</span>
+              <span className="text-rose-300 bg-rose-950/70 px-2 py-0.5 rounded border border-rose-800" title="قيمة بضائع شغلك المرتجع">
+                شغلك المرتجع: -{merchantStats.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م
+              </span>
+              <span className="text-slate-400 font-sans">-</span>
+              <span className="text-red-300 bg-red-950/70 px-2 py-0.5 rounded border border-red-800" title="مصاريف شحن المرتجعات المستلمة">
+                شحن المرتجع: -{merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
+              </span>
+              <span className="text-slate-400 font-sans">-</span>
+              <span className="text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-800" title="السلف والمسحوبات">
+                السلفة: -{merchantStats.totalPaidOut.toLocaleString()} ج.م
+              </span>
+              <span className="text-slate-400 font-sans">=</span>
+              <span className={`px-2.5 py-0.5 rounded border font-black ${
+                merchantStats.netDueBalance >= 0
+                  ? 'text-emerald-300 bg-emerald-950/80 border-emerald-600'
+                  : 'text-rose-300 bg-rose-950/80 border-rose-600'
+              }`}>
+                الصافي اللي ليك: {merchantStats.netDueBalance.toLocaleString()} ج.م
+              </span>
+            </div>
+          </div>
+
           {/* 6 Specific Merchant Financial Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             {/* 0. حساب الشغل كامل بدون الشحن */}
