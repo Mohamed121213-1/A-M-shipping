@@ -184,6 +184,19 @@ export function calculateMerchantFinancials(
       partialDeliveredCod += partialCod;
       partialDeliveredShippingFees += fee;
       partialDeliveredNetGoods += net;
+
+      // حساب الجزء المرتجع من الأوردر الجزئي يذهب لحساب المرتجع
+      const originalCod = Number(s.partialDetails?.originalCodAmount || cod) || 0;
+      const returnedGoodsVal = s.partialDetails?.remainingCodAmount ?? Math.max(0, originalCod - partialCod);
+      if (returnedGoodsVal > 0) {
+        returnsGoodsValue += returnedGoodsVal;
+        returnsTotalCod += returnedGoodsVal;
+        if (s.isReturnedToMerchant) {
+          deliveredToMerchantReturnsGoodsValue += returnedGoodsVal;
+        } else {
+          pendingReturnsGoodsValue += returnedGoodsVal;
+        }
+      }
     } else if (s.status === 'returned' || s.status === 'refused') {
       returnsCount += 1;
       const orderCod = s.refusedDetails?.originalCodAmount || cod;

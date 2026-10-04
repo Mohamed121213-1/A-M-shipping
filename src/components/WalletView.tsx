@@ -495,41 +495,39 @@ export const WalletView: React.FC<WalletViewProps> = ({
               <div className="bg-slate-900 text-white px-4 py-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs border border-slate-800">
                 <span className="font-bold text-slate-300">معادلة حساب التاجر:</span>
                 <div className="flex items-center gap-1.5 flex-wrap font-bold font-mono">
-                  {/* 1. شغلك المتسلم */}
-                  <span className="text-blue-300 bg-blue-950/70 px-2 py-0.5 rounded border border-blue-800" title="إجمالي قيمة بضائع الشغل المتسلم للشركة (المسلمة + المرتجعة)">
-                    شغلك المتسلم: +{(merchantFinancials.deliveredNetGoods + merchantFinancials.deliveredToMerchantReturnsGoodsValue).toLocaleString()} ج.م
+                  {/* 1. شغلك المتسلم (المسلم للعميل فقط) */}
+                  <span className="text-blue-300 bg-blue-950/70 px-2 py-0.5 rounded border border-blue-800" title="صافي قيمة بضائع شغلك المسلم للعميل فقط (المرتجع يذهب لحساب المرتجع)">
+                    شغلك المتسلم: +{merchantFinancials.deliveredNetGoods.toLocaleString()} ج.م
                   </span>
 
                   <span className="text-slate-400 font-sans">-</span>
 
-                  {/* 2. شغلك المرتجع */}
-                  <span className="text-rose-300 bg-rose-950/70 px-2 py-0.5 rounded border border-rose-800" title="قيمة بضائع شغلك المرتجع التي استلمتها">
-                    شغلك المرتجع: -{merchantFinancials.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م
-                  </span>
-
-                  <span className="text-slate-400 font-sans">-</span>
-
-                  {/* 3. شحن المرتجع */}
-                  <span className="text-red-300 bg-red-950/70 px-2 py-0.5 rounded border border-red-800" title="مصاريف شحن المرتجعات التي استلمتها">
+                  {/* 2. شحن المرتجع المستلم */}
+                  <span className="text-red-300 bg-red-950/70 px-2 py-0.5 rounded border border-red-800" title="مصاريف شحن المرتجعات التي استلمتها مخصومة من حسابك">
                     شحن المرتجع: -{merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
                   </span>
 
                   <span className="text-slate-400 font-sans">-</span>
 
-                  {/* 4. السلفة */}
-                  <span className="text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-800" title="السلف والمسحوبات">
+                  {/* 3. السلفة */}
+                  <span className="text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-800" title="السلف والمسحوبات الصادرة">
                     السلفة: -{merchantFinancials.totalPaidOut.toLocaleString()} ج.م
                   </span>
 
                   <span className="text-slate-400 font-sans">=</span>
 
-                  {/* 5. الصافي اللي ليك */}
+                  {/* 4. الصافي اللي ليك */}
                   <span className={`px-2.5 py-0.5 rounded border font-black ${
                     merchantFinancials.netDueBalance >= 0
                       ? 'text-emerald-300 bg-emerald-950/80 border-emerald-600'
                       : 'text-rose-300 bg-rose-950/80 border-rose-600'
                   }`}>
                     الصافي اللي ليك: {merchantFinancials.netDueBalance.toLocaleString()} ج.م
+                  </span>
+
+                  {/* حساب المرتجع يذهب للمرتجع */}
+                  <span className="text-rose-300 bg-rose-950/60 px-2 py-0.5 rounded border border-rose-800/80 text-[10px]" title="حساب بضائع المرتجعات يذهب لحساب المرتجع ولا يضاف لشغلك المسلم">
+                    📦 بضاعة المرتجع: {merchantFinancials.returnsGoodsValue.toLocaleString()} ج.م (في حساب المرتجع)
                   </span>
 
                   {merchantFinancials.pendingReturnsShippingDeducted > 0 && (

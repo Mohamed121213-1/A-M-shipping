@@ -495,6 +495,19 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
         merch.totalCodCollected += cod;
         merch.totalShippingFees += fee;
         merch.netGoodsAmount += netGoods;
+
+        // حساب الجزء المرتجع من الاستلام الجزئي يذهب لحساب المرتجع
+        const originalCod = Number(s.partialDetails?.originalCodAmount || s.financials.codAmount) || 0;
+        const returnedGoodsVal = s.partialDetails?.remainingCodAmount ?? Math.max(0, originalCod - cod);
+        if (returnedGoodsVal > 0) {
+          merch.returnsGoodsValue += returnedGoodsVal;
+          merch.returnsTotalCod += returnedGoodsVal;
+          if (Boolean(s.isReturnedToMerchant)) {
+            merch.deliveredToMerchantReturnsGoodsValue += returnedGoodsVal;
+          } else {
+            merch.pendingReturnsGoodsValue += returnedGoodsVal;
+          }
+        }
       } else if (s.status === 'returned' || s.status === 'refused') {
         if (s.status === 'returned') merch.returnedCount += 1;
         if (s.status === 'refused') merch.refusedCount += 1;
@@ -737,7 +750,7 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
   // Filtered Shipments for Selected Merchant
   const filteredSelectedShipments = useMemo(() => {
     return selectedMerchantShipments.filter((s) => {
-      if (shipmentsFilter === 'delivered') return s.status === 'delivered' || s.status === 'partial_delivery';
+      if (shipmentsFilter === 'delivered') return s.status === 'delivered';
       if (shipmentsFilter === 'full_delivered') return s.status === 'delivered';
       if (shipmentsFilter === 'partial_delivery') return s.status === 'partial_delivery';
       if (shipmentsFilter === 'partial_shipping') {
@@ -753,12 +766,12 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
         return s.status !== 'delivered' && s.status !== 'partial_delivery' && s.status !== 'returned' && s.status !== 'refused';
       }
       if (shipmentsFilter === 'pending_returns') {
-        return (s.status === 'returned' || s.status === 'refused') && !s.isReturnedToMerchant;
+        return (s.status === 'returned' || s.status === 'refused' || s.status === 'partial_delivery') && !s.isReturnedToMerchant;
       }
       if (shipmentsFilter === 'received_returns') {
-        return (s.status === 'returned' || s.status === 'refused') && Boolean(s.isReturnedToMerchant);
+        return (s.status === 'returned' || s.status === 'refused' || s.status === 'partial_delivery') && Boolean(s.isReturnedToMerchant);
       }
-      if (shipmentsFilter === 'returned') return s.status === 'returned' || s.status === 'refused';
+      if (shipmentsFilter === 'returned') return s.status === 'returned' || s.status === 'refused' || s.status === 'partial_delivery';
       if (shipmentsFilter === 'unsettled') return !s.isMerchantSettled && s.financials.paidStatus !== 'settled';
       if (shipmentsFilter === 'settled') return s.isMerchantSettled || s.financials.paidStatus === 'settled';
       return true;
@@ -1529,41 +1542,39 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                 <span className="font-extrabold text-slate-100">معادلة حساب التاجر:</span>
               </div>
               <div className="flex items-center gap-2 flex-wrap font-mono font-bold text-slate-300">
-                {/* 1. شغله المتسلم */}
-                <span className="text-blue-300 bg-blue-950/70 px-2.5 py-1 rounded-lg border border-blue-800" title="إجمالي قيمة بضائع الشغل المتسلم للشركة (المسلمة + المرتجعة للتاجر)">
-                  شغله المتسلم: +{(selectedMerchant.netGoodsAmount + selectedMerchant.deliveredToMerchantReturnsGoodsValue).toLocaleString()} ج.م
+                {/* 1. شغله المتسلم (صافي البضاعة المسلمة للعميل فقط) */}
+                <span className="text-blue-300 bg-blue-950/70 px-2.5 py-1 rounded-lg border border-blue-800" title="صافي قيمة بضائع الشغل المسلم للعميل فقط (المرتجع يذهب لحساب المرتجع)">
+                  شغله المتسلم: +{selectedMerchant.netGoodsAmount.toLocaleString()} ج.م
                 </span>
 
                 <span className="text-slate-400 font-sans text-base">-</span>
 
-                {/* 2. شغله المرتجع */}
-                <span className="text-rose-300 bg-rose-950/70 px-2.5 py-1 rounded-lg border border-rose-800" title="قيمة بضائع شغله المرتجع التي استلمها التاجر">
-                  شغله المرتجع: -{selectedMerchant.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م
-                </span>
-
-                <span className="text-slate-400 font-sans text-base">-</span>
-
-                {/* 3. شحن المرتجع */}
-                <span className="text-red-300 bg-red-950/70 px-2.5 py-1 rounded-lg border border-red-800" title="مصاريف شحن المرتجعات المستلمة للتاجر">
+                {/* 2. شحن المرتجع المستلم */}
+                <span className="text-red-300 bg-red-950/70 px-2.5 py-1 rounded-lg border border-red-800" title="مصاريف شحن المرتجعات المستلمة للتاجر (المخصومة من حسابه)">
                   شحن المرتجع: -{selectedMerchant.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
                 </span>
 
                 <span className="text-slate-400 font-sans text-base">-</span>
 
-                {/* 4. السلفة */}
+                {/* 3. السلفة */}
                 <span className="text-amber-300 bg-amber-950/70 px-2.5 py-1 rounded-lg border border-amber-800" title="السلف النقدية والمسحوبات الصادرة للتاجر">
                   السلفة: -{selectedMerchant.totalPaidOut.toLocaleString()} ج.م
                 </span>
 
                 <span className="text-slate-400 font-sans text-base">=</span>
 
-                {/* 5. الصافي اللي ليه */}
+                {/* 4. الصافي اللي ليه */}
                 <span className={`px-3 py-1 rounded-lg border font-black text-sm ${
                   selectedMerchant.dueBalance >= 0
                     ? 'text-emerald-300 bg-emerald-950/80 border-emerald-600'
                     : 'text-rose-300 bg-rose-950/80 border-rose-600'
                 }`}>
                   الصافي اللي ليه: {selectedMerchant.dueBalance.toLocaleString()} ج.م
+                </span>
+
+                {/* حساب المرتجع يذهب لحساب المرتجع */}
+                <span className="text-rose-300 bg-rose-950/60 px-2 py-0.5 rounded border border-rose-800/80 text-[11px]" title="حساب بضائع المرتجعات يذهب لحساب المرتجع ولا يضاف لشغله المسلم">
+                  📦 بضاعة المرتجع: {selectedMerchant.returnsGoodsValue.toLocaleString()} ج.م (في حساب المرتجع)
                 </span>
 
                 {selectedMerchant.pendingReturnsCount > 0 && (
@@ -1870,8 +1881,21 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                       : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
                   }`}
                 >
-                  المسلم والناجح ({selectedMerchant.deliveredCount + selectedMerchant.partialCount})
+                  المسلم ({selectedMerchant.fullDeliveredCount || selectedMerchant.deliveredCount})
                 </button>
+                {selectedMerchant.partialCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShipmentsFilter('partial_delivery')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      shipmentsFilter === 'partial_delivery'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-white text-amber-800 border border-amber-300 hover:bg-amber-50'
+                    }`}
+                  >
+                    مرتجع جزئي ({selectedMerchant.partialCount})
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShipmentsFilter('in_transit')}
@@ -1892,7 +1916,7 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                       : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'
                   }`}
                 >
-                  المرتجعات ({selectedMerchant.returnsCount})
+                  المرتجعات ({selectedMerchant.returnsCount + selectedMerchant.partialCount})
                 </button>
                 <button
                   type="button"
@@ -2152,12 +2176,26 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                             </td>
 
                             <td className="py-3 px-3 text-center">
-                              {isDelivered || isPartial ? (
+                              {isDelivered ? (
                                 <span className="font-mono font-black text-emerald-600 text-sm">
-                                  {netGoods.toLocaleString()} ج.م
+                                  +{netGoods.toLocaleString()} ج.م
                                 </span>
+                              ) : isPartial ? (
+                                <div>
+                                  <span className="font-mono font-black text-emerald-600 text-sm block">
+                                    +{netGoods.toLocaleString()} ج.م
+                                  </span>
+                                  <span className="text-[10px] text-rose-700 font-bold block mt-0.5" title="قيمة الجزء المرتجع تذهب لحساب المرتجع">
+                                    مرتجع: {((s.partialDetails?.remainingCodAmount ?? Math.max(0, (s.partialDetails?.originalCodAmount || s.financials.codAmount) - (s.partialDetails?.partialCodAmount || s.financials.codAmount)))).toLocaleString()} ج.م (في المرتجع)
+                                  </span>
+                                </div>
                               ) : isReturned ? (
-                                <span className="text-slate-400 font-mono">0 ج.م</span>
+                                <div>
+                                  <span className="text-slate-400 font-mono text-xs block">0 ج.م</span>
+                                  <span className="text-[10px] text-rose-700 font-bold block mt-0.5">
+                                    (في حساب المرتجع)
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="text-teal-700 font-mono font-bold text-[11px]">
                                   {Math.max(0, s.financials.codAmount - s.financials.shippingFee).toLocaleString()} ج.م (متوقع)
@@ -2226,6 +2264,15 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                                     </div>
                                   );
                                 })()
+                              ) : isPartial ? (
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200">
+                                    استلام جزئي 📦
+                                  </span>
+                                  <span className="text-[9px] text-slate-500 font-medium">
+                                    (الشحن محصل من المستلم)
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="text-slate-400">-</span>
                               )}
@@ -2233,19 +2280,19 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
 
                             {/* Return Received by Merchant Action */}
                             <td className="py-3 px-3 text-center">
-                              {isReturned ? (
+                              {isReturned || isPartial ? (
                                 s.isReturnedToMerchant ? (
                                   <div className="flex flex-col items-center gap-1">
                                     <span className="text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded text-[11px] font-extrabold border border-emerald-300 flex items-center gap-1">
                                       <Check className="w-3 h-3 text-emerald-600" />
-                                      <span>تم استلام التاجر (مخصوم)</span>
+                                      <span>{isPartial ? 'تم استلام الجزء المرتجع' : 'تم استلام التاجر (مخصوم)'}</span>
                                     </span>
                                     {onMarkReturnedToMerchant && (
                                       <button
                                         type="button"
                                         onClick={() => onMarkReturnedToMerchant(s.id, true)}
                                         className="text-[10px] text-slate-500 hover:text-red-600 underline font-medium cursor-pointer"
-                                        title="إلغاء استلام التاجر وإلغاء الخصم من حسابه"
+                                        title="إلغاء استلام التاجر للمرتجع"
                                       >
                                         إلغاء الاستلام
                                       </button>
@@ -2262,10 +2309,10 @@ export const MerchantAccountsView: React.FC<MerchantAccountsViewProps> = ({
                                         type="button"
                                         onClick={() => onMarkReturnedToMerchant(s.id, false)}
                                         className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-[10px] px-2.5 py-1 rounded-md shadow-xs transition-all flex items-center gap-1 cursor-pointer"
-                                        title="تأكيد استلام التاجر لهذه البضاعة المرتجعة وخصم مصاريف شحنها فوراً من الفلوس اللي ليه"
+                                        title={isPartial ? "تأكيد استلام التاجر للجزء المرتجع" : "تأكيد استلام التاجر لهذه البضاعة المرتجعة وخصم مصاريف شحنها فوراً من الفلوس اللي ليه"}
                                       >
                                         <PackageCheck className="w-3 h-3" />
-                                        <span>تأكيد استلام التاجر (خصم من حسابه)</span>
+                                        <span>{isPartial ? 'استلام الجزء المرتجع' : 'تأكيد استلام التاجر (خصم من حسابه)'}</span>
                                       </button>
                                     )}
                                   </div>
