@@ -495,46 +495,39 @@ export const WalletView: React.FC<WalletViewProps> = ({
               <div className="bg-slate-900 text-white px-4 py-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs border border-slate-800">
                 <span className="font-bold text-slate-300">معادلة حساب التاجر:</span>
                 <div className="flex items-center gap-1.5 flex-wrap font-bold font-mono">
-                  {/* 1. شغلك المتسلم */}
-                  <span className="text-blue-300 bg-blue-950/70 px-2 py-0.5 rounded border border-blue-800" title="إجمالي قيمة بضائع كل شغلك المسلم للشركة بدون الشحن">
-                    شغلك المتسلم: +{merchantFinancials.totalAllWorkNetGoods.toLocaleString()} ج.م
+                  {/* 1. شغلك المسلم (تم التسليم) */}
+                  <span className="text-blue-300 bg-blue-950/70 px-2 py-0.5 rounded border border-blue-800" title="قيمة الشغل الحقيقي المسلم للعميل (تم التسليم)">
+                    شغلك المسلم: +{merchantFinancials.deliveredNetGoods.toLocaleString()} ج.م
                   </span>
 
                   <span className="text-slate-400 font-sans">-</span>
 
-                  {/* 2. شغلك المرتجع (حساب الأوردر بدون شحن) */}
-                  <span className="text-rose-300 bg-rose-950/70 px-2 py-0.5 rounded border border-rose-800" title="حساب الأوردرات المرتجعة بدون شحن التي استلمتها (مخصومة من حسابك)">
-                    شغلك المرتجع: -{merchantFinancials.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م
+                  {/* 2. شحن المرتجع المستلم */}
+                  <span className="text-red-300 bg-red-950/70 px-2 py-0.5 rounded border border-red-800" title="مصاريف شحن المرتجعات التي استلمتها مخصومة من حسابك">
+                    شحن المرتجع المستلم: -{merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
                   </span>
 
                   <span className="text-slate-400 font-sans">-</span>
 
-                  {/* 3. شحن المرتجع (باقي الشحن المقتطع) */}
-                  <span className="text-red-300 bg-red-950/70 px-2 py-0.5 rounded border border-red-800" title="باقي حساب مصاريف الشحن المقتطعة للمرتجعات المستلمة">
-                    شحن المرتجع: -{merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
-                  </span>
-
-                  <span className="text-slate-400 font-sans">-</span>
-
-                  {/* 4. السلفة */}
+                  {/* 3. سلف ومسحوبات */}
                   <span className="text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-800" title="السلف والمسحوبات الصادرة">
-                    السلفة: -{merchantFinancials.totalPaidOut.toLocaleString()} ج.م
+                    سلف ومسحوبات: -{merchantFinancials.totalPaidOut.toLocaleString()} ج.م
                   </span>
 
                   <span className="text-slate-400 font-sans">=</span>
 
-                  {/* 5. الصافي اللي ليك */}
+                  {/* 4. الصافي اللي ليك أو عليك */}
                   <span className={`px-2.5 py-0.5 rounded border font-black ${
                     merchantFinancials.netDueBalance >= 0
                       ? 'text-emerald-300 bg-emerald-950/80 border-emerald-600'
                       : 'text-rose-300 bg-rose-950/80 border-rose-600'
                   }`}>
-                    الصافي اللي ليك: {merchantFinancials.netDueBalance.toLocaleString()} ج.م
+                    {merchantFinancials.netDueBalance >= 0 ? 'الصافي اللي ليك:' : 'عليك فلوس (مديونية):'} {merchantFinancials.netDueBalance.toLocaleString()} ج.م
                   </span>
 
                   {merchantFinancials.pendingReturnsCount > 0 && (
                     <span className="text-[10px] text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/60 font-sans font-medium" title="شحنات مرتجعة لم تستلمها بعد، وتُخصم فور استلامك لها">
-                      ⏳ معلق لم تستلمه: {merchantFinancials.pendingReturnsCount} أوردر (يُخصم {merchantFinancials.pendingReturnsGoodsValue.toLocaleString()} ج.م بضاعة + {merchantFinancials.pendingReturnsShippingDeducted.toLocaleString()} ج.م شحن فور الاستلام)
+                      ⏳ معلق لم تستلمه: {merchantFinancials.pendingReturnsCount} أوردر (شحن {merchantFinancials.pendingReturnsShippingDeducted.toLocaleString()} ج.م يُخصم فور الاستلام)
                     </span>
                   )}
                 </div>
