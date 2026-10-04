@@ -623,25 +623,33 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                   </div>
                 </div>
                 <p className="text-xl font-black text-rose-700 mt-1.5 font-mono">
-                  {merchantStats.pendingReturnsGoodsValue.toLocaleString()} <span className="text-[11px] font-bold text-slate-500">ج.م</span>
+                  {merchantStats.deliveredToMerchantReturnsShippingDeducted > 0
+                    ? `-${merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()}`
+                    : '0'}{' '}
+                  <span className="text-[11px] font-bold text-slate-500">ج.م</span>
+                </p>
+                <p className="text-[10px] font-black text-rose-800">
+                  {merchantStats.deliveredToMerchantReturnsShippingDeducted > 0
+                    ? 'مخصوم من حسابك فعلياً'
+                    : merchantStats.pendingReturnsShippingDeducted > 0
+                    ? 'معلق لم يُخصم بعد (يُخصم عند الاستلام)'
+                    : 'لا يوجد خصم مرتجع'}
                 </p>
               </div>
               <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-col gap-0.5 text-[10px]">
                 <span className="text-rose-950 font-bold">
                   {merchantStats.pendingReturnsCount === 0 ? (
-                    <span className="text-emerald-700 font-bold">✅ استلمت كافة المرتجعات (0 ج.م)</span>
+                    <span className="text-emerald-700 font-bold">✅ استلمت كافة المرتجعات وخُصمت من حسابك</span>
                   ) : (
-                    <span>معلق بالمستودع: {merchantStats.pendingReturnsCount} أوردر</span>
+                    <span>معلق بالمستودع: {merchantStats.pendingReturnsCount} أوردر ({merchantStats.pendingReturnsShippingDeducted.toLocaleString()} ج.م يُخصم فور الاستلام)</span>
                   )}
                 </span>
-                <span className="text-red-700 font-bold">
-                  مخصوم من حسابك (مستلم): -{merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
+                <span className="text-slate-600 font-bold text-[9px]">
+                  إجمالي بضائع المرتجع: {merchantStats.returnsCount} أوردر ({merchantStats.returnsGoodsValue.toLocaleString()} ج.م)
                 </span>
-                {merchantStats.pendingReturnsShippingDeducted > 0 && (
-                  <span className="text-amber-800 font-medium">
-                    معلق يُخصم عند الاستلام: {merchantStats.pendingReturnsShippingDeducted.toLocaleString()} ج.م
-                  </span>
-                )}
+                <span className="text-slate-500 text-[9px]">
+                  مستلم لمتجرك: {merchantStats.deliveredToMerchantReturnsCount} ({merchantStats.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م)
+                </span>
               </div>
             </motion.div>
 
@@ -707,8 +715,8 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                     ✅ الحساب خالص ومسدد بالكامل
                   </span>
                 )}
-                <span className="text-slate-400 text-[9px]">
-                  (شغلك المسلم - شحن المرتجع المستلم - السلف)
+                <span className="text-slate-400 text-[9px] font-mono">
+                  ({merchantStats.deliveredNetGoods.toLocaleString()} مسلم - {merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} مرتجع - {merchantStats.totalPaidOut.toLocaleString()} سلف)
                 </span>
               </div>
             </motion.div>

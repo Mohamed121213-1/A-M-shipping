@@ -597,25 +597,33 @@ export const WalletView: React.FC<WalletViewProps> = ({
                       </div>
                     </div>
                     <p className="text-xl font-black text-rose-700 mt-2 font-mono">
-                      {merchantFinancials.pendingReturnsGoodsValue.toLocaleString()} <span className="text-xs font-bold text-slate-500">ج.م</span>
+                      {merchantFinancials.deliveredToMerchantReturnsShippingDeducted > 0
+                        ? `-${merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()}`
+                        : '0'}{' '}
+                      <span className="text-xs font-bold text-slate-500">ج.م</span>
+                    </p>
+                    <p className="text-[10px] font-black text-rose-800">
+                      {merchantFinancials.deliveredToMerchantReturnsShippingDeducted > 0
+                        ? 'مخصوم من حسابك فعلياً'
+                        : merchantFinancials.pendingReturnsShippingDeducted > 0
+                        ? 'معلق لم يُخصم بعد (يُخصم عند الاستلام)'
+                        : 'لا يوجد خصم مرتجع'}
                     </p>
                   </div>
                   <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-0.5 text-[10px]">
                     <span className="text-rose-950 font-bold">
                       {merchantFinancials.pendingReturnsCount === 0 ? (
-                        <span className="text-emerald-700 font-bold">✅ مستلم بالكامل (0 ج.م)</span>
+                        <span className="text-emerald-700 font-bold">✅ استلمت كافة المرتجعات وخُصمت من حسابك</span>
                       ) : (
-                        <span>معلق لم تستلمه: {merchantFinancials.pendingReturnsCount} أوردر</span>
+                        <span>معلق لم تستلمه: {merchantFinancials.pendingReturnsCount} أوردر ({merchantFinancials.pendingReturnsShippingDeducted.toLocaleString()} ج.م يُخصم فور الاستلام)</span>
                       )}
                     </span>
-                    <span className="text-red-700 font-bold">
-                      مخصوم من حسابك (مستلم): -{merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
+                    <span className="text-slate-600 font-bold text-[9px]">
+                      إجمالي بضائع المرتجع: {merchantFinancials.returnsCount} أوردر ({merchantFinancials.returnsGoodsValue.toLocaleString()} ج.م)
                     </span>
-                    {merchantFinancials.pendingReturnsShippingDeducted > 0 && (
-                      <span className="text-amber-800 font-medium">
-                        معلق يُخصم عند الاستلام: {merchantFinancials.pendingReturnsShippingDeducted.toLocaleString()} ج.م
-                      </span>
-                    )}
+                    <span className="text-slate-500 text-[9px]">
+                      مستلم لمتجرك: {merchantFinancials.deliveredToMerchantReturnsCount} ({merchantFinancials.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م)
+                    </span>
                   </div>
                 </div>
 
@@ -669,8 +677,8 @@ export const WalletView: React.FC<WalletViewProps> = ({
                         الحساب خالص ومسدد بالكامل
                       </span>
                     )}
-                    <span className="text-slate-400 text-[10px]">
-                      بعد خصم الشحن والمرتجع والسلف
+                    <span className="text-slate-400 text-[10px] font-mono">
+                      ({merchantFinancials.deliveredNetGoods.toLocaleString()} مسلم - {merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} مرتجع - {merchantFinancials.totalPaidOut.toLocaleString()} سلف)
                     </span>
                   </div>
                 </div>
