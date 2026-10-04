@@ -495,28 +495,35 @@ export const WalletView: React.FC<WalletViewProps> = ({
               <div className="bg-slate-900 text-white px-4 py-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs border border-slate-800">
                 <span className="font-bold text-slate-300">معادلة حساب التاجر:</span>
                 <div className="flex items-center gap-1.5 flex-wrap font-bold font-mono">
-                  {/* 1. شغلك المتسلم (المسلم للعميل فقط) */}
-                  <span className="text-blue-300 bg-blue-950/70 px-2 py-0.5 rounded border border-blue-800" title="صافي قيمة بضائع شغلك المسلم للعميل فقط (المرتجع يذهب لحساب المرتجع)">
-                    شغلك المتسلم: +{merchantFinancials.deliveredNetGoods.toLocaleString()} ج.م
+                  {/* 1. شغلك المتسلم */}
+                  <span className="text-blue-300 bg-blue-950/70 px-2 py-0.5 rounded border border-blue-800" title="إجمالي قيمة بضائع كل شغلك المسلم للشركة بدون الشحن">
+                    شغلك المتسلم: +{merchantFinancials.totalAllWorkNetGoods.toLocaleString()} ج.م
                   </span>
 
                   <span className="text-slate-400 font-sans">-</span>
 
-                  {/* 2. شحن المرتجع المستلم */}
-                  <span className="text-red-300 bg-red-950/70 px-2 py-0.5 rounded border border-red-800" title="مصاريف شحن المرتجعات التي استلمتها مخصومة من حسابك">
+                  {/* 2. شغلك المرتجع (حساب الأوردر بدون شحن) */}
+                  <span className="text-rose-300 bg-rose-950/70 px-2 py-0.5 rounded border border-rose-800" title="حساب الأوردرات المرتجعة بدون شحن التي استلمتها (مخصومة من حسابك)">
+                    شغلك المرتجع: -{merchantFinancials.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م
+                  </span>
+
+                  <span className="text-slate-400 font-sans">-</span>
+
+                  {/* 3. شحن المرتجع (باقي الشحن المقتطع) */}
+                  <span className="text-red-300 bg-red-950/70 px-2 py-0.5 rounded border border-red-800" title="باقي حساب مصاريف الشحن المقتطعة للمرتجعات المستلمة">
                     شحن المرتجع: -{merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
                   </span>
 
                   <span className="text-slate-400 font-sans">-</span>
 
-                  {/* 3. السلفة */}
+                  {/* 4. السلفة */}
                   <span className="text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-800" title="السلف والمسحوبات الصادرة">
                     السلفة: -{merchantFinancials.totalPaidOut.toLocaleString()} ج.م
                   </span>
 
                   <span className="text-slate-400 font-sans">=</span>
 
-                  {/* 4. الصافي اللي ليك */}
+                  {/* 5. الصافي اللي ليك */}
                   <span className={`px-2.5 py-0.5 rounded border font-black ${
                     merchantFinancials.netDueBalance >= 0
                       ? 'text-emerald-300 bg-emerald-950/80 border-emerald-600'
@@ -525,14 +532,9 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     الصافي اللي ليك: {merchantFinancials.netDueBalance.toLocaleString()} ج.م
                   </span>
 
-                  {/* حساب المرتجع يذهب للمرتجع */}
-                  <span className="text-rose-300 bg-rose-950/60 px-2 py-0.5 rounded border border-rose-800/80 text-[10px]" title="حساب بضائع المرتجعات يذهب لحساب المرتجع ولا يضاف لشغلك المسلم">
-                    📦 بضاعة المرتجع: {merchantFinancials.returnsGoodsValue.toLocaleString()} ج.م (في حساب المرتجع)
-                  </span>
-
-                  {merchantFinancials.pendingReturnsShippingDeducted > 0 && (
+                  {merchantFinancials.pendingReturnsCount > 0 && (
                     <span className="text-[10px] text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/60 font-sans font-medium" title="شحنات مرتجعة لم تستلمها بعد، وتُخصم فور استلامك لها">
-                      ⏳ معلق لم تستلمه: {merchantFinancials.pendingReturnsShippingDeducted.toLocaleString()} ج.م (يُخصم عند الاستلام)
+                      ⏳ معلق لم تستلمه: {merchantFinancials.pendingReturnsCount} أوردر (يُخصم {merchantFinancials.pendingReturnsGoodsValue.toLocaleString()} ج.م بضاعة + {merchantFinancials.pendingReturnsShippingDeducted.toLocaleString()} ج.م شحن فور الاستلام)
                     </span>
                   )}
                 </div>
@@ -613,15 +615,15 @@ export const WalletView: React.FC<WalletViewProps> = ({
                       </div>
                     </div>
                     <p className="text-xl font-black text-rose-700 mt-2 font-mono">
-                      {merchantFinancials.deliveredToMerchantReturnsShippingDeducted > 0
-                        ? `-${merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()}`
+                      {(merchantFinancials.deliveredToMerchantReturnsGoodsValue + merchantFinancials.deliveredToMerchantReturnsShippingDeducted) > 0
+                        ? `-${(merchantFinancials.deliveredToMerchantReturnsGoodsValue + merchantFinancials.deliveredToMerchantReturnsShippingDeducted).toLocaleString()}`
                         : '0'}{' '}
                       <span className="text-xs font-bold text-slate-500">ج.م</span>
                     </p>
                     <p className="text-[10px] font-black text-rose-800">
-                      {merchantFinancials.deliveredToMerchantReturnsShippingDeducted > 0
-                        ? 'مخصوم من حسابك فعلياً'
-                        : merchantFinancials.pendingReturnsShippingDeducted > 0
+                      {(merchantFinancials.deliveredToMerchantReturnsGoodsValue + merchantFinancials.deliveredToMerchantReturnsShippingDeducted) > 0
+                        ? `مخصوم: -${merchantFinancials.deliveredToMerchantReturnsGoodsValue.toLocaleString()} بضاعة و -${merchantFinancials.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} شحن`
+                        : (merchantFinancials.pendingReturnsGoodsValue + merchantFinancials.pendingReturnsShippingDeducted) > 0
                         ? 'معلق لم يُخصم بعد (يُخصم عند الاستلام)'
                         : 'لا يوجد خصم مرتجع'}
                     </p>

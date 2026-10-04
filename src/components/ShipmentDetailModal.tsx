@@ -486,8 +486,15 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                         : 'لم يدفع شحن'}
                     </span>
                   </p>
-                  <p>المبلغ المحصل من العميل (عهدة المندوب): <span className="font-bold">{shipment.refusedDetails.amountCollected} ج.م</span></p>
-                  <p>خصم مصاريف الشحن المقتطعة من التاجر: <span className="font-bold text-rose-700">{shipment.refusedDetails.merchantDeductedAmount ?? Math.max(0, shipment.financials.shippingFee - shipment.refusedDetails.amountCollected)} ج.م</span></p>
+                  <p>المبلغ المحصل من العميل (عهدة المندوب): <span className="font-bold">{shipment.refusedDetails.amountCollected || 0} ج.م</span></p>
+                  <p>خصم حساب الأوردر بدون شحن من التاجر: <span className="font-bold text-rose-700">-{(shipment.refusedDetails.originalGoodsValue ?? Math.max(0, (shipment.refusedDetails.originalCodAmount ?? shipment.financials.codAmount) - shipment.financials.shippingFee)).toLocaleString()} ج.م</span></p>
+                  <p>خصم باقي مصاريف الشحن من التاجر: <span className="font-bold text-rose-700">-{(shipment.refusedDetails.merchantDeductedAmount ?? Math.max(0, shipment.financials.shippingFee - (shipment.refusedDetails.amountCollected || 0))).toLocaleString()} ج.م</span></p>
+                  <p className="border-t border-rose-200/80 pt-1 font-bold text-rose-900">
+                    إجمالي الخصم من التاجر: <span className="font-black text-rose-700 font-mono">-{(
+                      (shipment.refusedDetails.originalGoodsValue ?? Math.max(0, (shipment.refusedDetails.originalCodAmount ?? shipment.financials.codAmount) - shipment.financials.shippingFee)) +
+                      (shipment.refusedDetails.merchantDeductedAmount ?? Math.max(0, shipment.financials.shippingFee - (shipment.refusedDetails.amountCollected || 0)))
+                    ).toLocaleString()} ج.م</span>
+                  </p>
                   {shipment.refusedDetails.reason && <p className="text-[11px] opacity-80">السبب: {shipment.refusedDetails.reason}</p>}
                 </div>
               )}

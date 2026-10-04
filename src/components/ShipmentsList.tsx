@@ -653,15 +653,15 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                   </div>
                 </div>
                 <p className="text-xl font-black text-rose-700 mt-1.5 font-mono">
-                  {merchantStats.deliveredToMerchantReturnsShippingDeducted > 0
-                    ? `-${merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()}`
+                  {(merchantStats.deliveredToMerchantReturnsGoodsValue + merchantStats.deliveredToMerchantReturnsShippingDeducted) > 0
+                    ? `-${(merchantStats.deliveredToMerchantReturnsGoodsValue + merchantStats.deliveredToMerchantReturnsShippingDeducted).toLocaleString()}`
                     : '0'}{' '}
                   <span className="text-[11px] font-bold text-slate-500">ج.م</span>
                 </p>
                 <p className="text-[10px] font-black text-rose-800">
-                  {merchantStats.deliveredToMerchantReturnsShippingDeducted > 0
-                    ? 'مخصوم من حسابك فعلياً'
-                    : merchantStats.pendingReturnsShippingDeducted > 0
+                  {(merchantStats.deliveredToMerchantReturnsGoodsValue + merchantStats.deliveredToMerchantReturnsShippingDeducted) > 0
+                    ? `مخصوم: -${merchantStats.deliveredToMerchantReturnsGoodsValue.toLocaleString()} بضاعة و -${merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} شحن`
+                    : (merchantStats.pendingReturnsGoodsValue + merchantStats.pendingReturnsShippingDeducted) > 0
                     ? 'معلق لم يُخصم بعد (يُخصم عند الاستلام)'
                     : 'لا يوجد خصم مرتجع'}
                 </p>
