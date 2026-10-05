@@ -37,8 +37,9 @@ export interface MerchantFinancialStats {
   returnsTotalCod: number;        // إجمالي مبالغ المرتجعات بحساب عادي
   returnsShippingDeducted: number;// مصاريف شحن المرتجعات المخصومة من التاجر (تتخصم من الفلوس اللي ليه)
   pendingReturnsCount: number;    // عدد المرتجعات المعلقة لدى الشركة التي لم يستلمها التاجر بعد
-  pendingReturnsGoodsValue: number;// حساب المرتجعات المعلقة (يصبح صفر عند استلام التاجر لكامل المرتجع)
+  pendingReturnsGoodsValue: number;// حساب بضائع المرتجعات المعلقة (يصبح صفر عند استلام التاجر لكامل المرتجع)
   pendingReturnsShippingDeducted: number; // مصاريف شحن المرتجعات المعلقة (ستُخصم من الفلوس اللي ليه فور استلامه لها)
+  pendingReturnsTotalValue: number; // إجمالي حساب المرتجعات المعلقة (بضاعة + شحن) = المرتجع بكام حالياً (يصبح 0 ج.م عند استلام الكل)
   deliveredToMerchantReturnsCount: number; // عدد المرتجعات التي استلمها التاجر
   deliveredToMerchantReturnsGoodsValue: number; // قيمة المرتجعات التي استلمها التاجر
   deliveredToMerchantReturnsShippingDeducted: number; // خصم شحن المرتجعات المستلمة للتاجر (المخصومة فعلياً من حسابه)
@@ -59,10 +60,12 @@ export interface MerchantFinancialStats {
   advanceTransactions: CompanyTransaction[];
   payoutTransactions: CompanyTransaction[];
 
-  // 5. الصافي اللي ليه (حساب التاجر النهائي)
-  totalEarnedNet: number;         // إجمالي المستحق عن الشغل المنجز (صافي البضاعة المسلمة - خصم شحن المرتجع)
-  netDueBalance: number;          // الصافي اللي ليه المتبقي بعد خصم السلف والدفعات المقدمة
-  hasDebt: boolean;               // هل التاجر عليه مديونية (سحب أكثر مما تم تسليمه)
+  // 5. الصافي اللي ليه (حساب التاجر النهائي وفق نظام الدفع المقدم)
+  deliveredToMerchantReturnsTotalDeducted: number; // إجمالي المخصوم عن المرتجع (قيمة بضاعة المرتجع + شحن المرتجع)
+  advancePercentageOfTotalWork: number;            // نسبة السلفة/المقدم المأخوذ من إجمالي قيمة الشغل
+  totalEarnedNet: number;                         // إجمالي المستحق عن الشغل (شغله المتسلم - شغله المرتجع - شحن المرتجع)
+  netDueBalance: number;                          // الصافي اللي ليه المتبقي بعد خصم السلف والدفعات المقدمة (أو عليه دين)
+  hasDebt: boolean;                               // هل التاجر عليه مديونية (السلفة والخصومات أكبر من المتسلم)
 }
 
 export function isAdvanceTransaction(txn: CompanyTransaction): boolean {
@@ -288,10 +291,13 @@ export function calculateMerchantFinancials(
   }
 
   const totalPaidOut = totalAdvancePaid + totalRegularPaidOut;
-  // خصم المرتجع يتخصم من حساب التاجر (من الفلوس اللي ليه) فور استلام التاجر للمرتجع
-  const totalEarnedNet = deliveredNetGoods - deliveredToMerchantReturnsShippingDeducted;
+  // نظام الدفع المقدم:
+  // شغلك المتسلم (في حساب الشركة) ناقص شغلك المرتجع المستلم ناقص شحن المرتجع المستلم ناقص السلفة (الفلوس المقدمة)
+  const deliveredToMerchantReturnsTotalDeducted = deliveredToMerchantReturnsGoodsValue + deliveredToMerchantReturnsShippingDeducted;
+  const totalEarnedNet = deliveredNetGoods - deliveredToMerchantReturnsGoodsValue - deliveredToMerchantReturnsShippingDeducted;
   const netDueBalance = totalEarnedNet - totalPaidOut;
   const hasDebt = netDueBalance < 0;
+  const advancePercentageOfTotalWork = totalAllWorkNetGoods > 0 ? Math.round((totalPaidOut / totalAllWorkNetGoods) * 100) : 0;
 
   return {
     totalAllShipmentsCount,
@@ -321,9 +327,11 @@ export function calculateMerchantFinancials(
     pendingReturnsCount,
     pendingReturnsGoodsValue,
     pendingReturnsShippingDeducted,
+    pendingReturnsTotalValue: pendingReturnsGoodsValue + pendingReturnsShippingDeducted,
     deliveredToMerchantReturnsCount,
     deliveredToMerchantReturnsGoodsValue,
     deliveredToMerchantReturnsShippingDeducted,
+    deliveredToMerchantReturnsTotalDeducted,
     partialShippingPaidCount,
     partialShippingCollected,
     partialShippingMerchantDeducted,
@@ -334,6 +342,7 @@ export function calculateMerchantFinancials(
     totalPaidOut,
     advanceTransactions,
     payoutTransactions,
+    advancePercentageOfTotalWork,
     totalEarnedNet,
     netDueBalance,
     hasDebt,

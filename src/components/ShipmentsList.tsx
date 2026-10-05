@@ -534,11 +534,11 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
           <div className="bg-slate-900 text-white px-4 py-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs border border-slate-800">
             <span className="font-bold text-slate-300">معادلة حساب التاجر:</span>
             <div className="flex items-center gap-1.5 flex-wrap font-bold font-mono">
-              <span className="text-blue-300 bg-blue-950/70 px-2 py-0.5 rounded border border-blue-800" title="إجمالي قيمة بضائع الشغل المتسلم">
-                شغلك المتسلم: +{(merchantStats.deliveredNetGoods + merchantStats.deliveredToMerchantReturnsGoodsValue).toLocaleString()} ج.م
+              <span className="text-blue-300 bg-blue-950/70 px-2 py-0.5 rounded border border-blue-800" title="قيمة الشغل الحقيقي المسلم للعميل (تم التسليم)">
+                شغلك المسلم: +{merchantStats.deliveredNetGoods.toLocaleString()} ج.م
               </span>
               <span className="text-slate-400 font-sans">-</span>
-              <span className="text-rose-300 bg-rose-950/70 px-2 py-0.5 rounded border border-rose-800" title="قيمة بضائع شغلك المرتجع">
+              <span className="text-rose-300 bg-rose-950/70 px-2 py-0.5 rounded border border-rose-800" title="قيمة بضائع شغلك المرتجع المستلم لمتجرك">
                 شغلك المرتجع: -{merchantStats.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م
               </span>
               <span className="text-slate-400 font-sans">-</span>
@@ -546,7 +546,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                 شحن المرتجع: -{merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} ج.م
               </span>
               <span className="text-slate-400 font-sans">-</span>
-              <span className="text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-800" title="السلف والمسحوبات">
+              <span className="text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-800" title="السلف والمسحوبات والدفعات المقدمة">
                 السلفة: -{merchantStats.totalPaidOut.toLocaleString()} ج.م
               </span>
               <span className="text-slate-400 font-sans">=</span>
@@ -555,7 +555,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                   ? 'text-emerald-300 bg-emerald-950/80 border-emerald-600'
                   : 'text-rose-300 bg-rose-950/80 border-rose-600'
               }`}>
-                الصافي اللي ليك: {merchantStats.netDueBalance.toLocaleString()} ج.م
+                {merchantStats.netDueBalance >= 0 ? 'الصافي اللي ليك:' : 'عليك فلوس (مديونية):'} {merchantStats.netDueBalance.toLocaleString()} ج.م
               </span>
             </div>
           </div>
@@ -643,42 +643,46 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
             {/* 3. مرتجع بكام */}
             <motion.div 
               whileHover={{ y: -2 }}
-              className="bg-white border border-rose-200/80 rounded-2xl p-3.5 shadow-xs relative overflow-hidden group hover:border-rose-300 transition-all flex flex-col justify-between"
+              className={`rounded-2xl p-3.5 shadow-xs relative overflow-hidden group transition-all flex flex-col justify-between border ${
+                merchantStats.pendingReturnsCount > 0
+                  ? 'bg-amber-50/70 border-amber-300'
+                  : 'bg-emerald-50/70 border-emerald-300'
+              }`}
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black text-rose-800">حساب المرتجع</span>
+                  <span className="text-[11px] font-black text-slate-900">حساب المرتجعات</span>
                   <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
                     <RotateCcw className="w-3.5 h-3.5" />
                   </div>
                 </div>
-                <p className="text-xl font-black text-rose-700 mt-1.5 font-mono">
-                  {(merchantStats.deliveredToMerchantReturnsGoodsValue + merchantStats.deliveredToMerchantReturnsShippingDeducted) > 0
-                    ? `-${(merchantStats.deliveredToMerchantReturnsGoodsValue + merchantStats.deliveredToMerchantReturnsShippingDeducted).toLocaleString()}`
+                {/* Big Number: Current Pending Returns Balance (المرتجع بكام - يصفر عند استلام الكل) */}
+                <p className={`text-xl font-black mt-1.5 font-mono ${
+                  merchantStats.pendingReturnsCount > 0 ? 'text-amber-900' : 'text-emerald-700'
+                }`}>
+                  {merchantStats.pendingReturnsCount > 0
+                    ? merchantStats.pendingReturnsTotalValue.toLocaleString()
                     : '0'}{' '}
                   <span className="text-[11px] font-bold text-slate-500">ج.م</span>
                 </p>
-                <p className="text-[10px] font-black text-rose-800">
-                  {(merchantStats.deliveredToMerchantReturnsGoodsValue + merchantStats.deliveredToMerchantReturnsShippingDeducted) > 0
-                    ? `مخصوم: -${merchantStats.deliveredToMerchantReturnsGoodsValue.toLocaleString()} بضاعة و -${merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} شحن`
-                    : (merchantStats.pendingReturnsGoodsValue + merchantStats.pendingReturnsShippingDeducted) > 0
-                    ? 'معلق لم يُخصم بعد (يُخصم عند الاستلام)'
-                    : 'لا يوجد خصم مرتجع'}
+                <p className={`text-[10px] font-extrabold ${
+                  merchantStats.pendingReturnsCount > 0 ? 'text-amber-800' : 'text-emerald-800'
+                }`}>
+                  {merchantStats.pendingReturnsCount > 0
+                    ? `معلق لم يستلم: ${merchantStats.pendingReturnsCount} أوردر (يُخصم فور الاستلام)`
+                    : '✅ رصيد المرتجعات صفر: استلمت كل مرتجعاتك وخُصمت (تبدأ دورة جديدة)'}
                 </p>
               </div>
-              <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-col gap-0.5 text-[10px]">
-                <span className="text-rose-950 font-bold">
+              <div className="mt-2 pt-1.5 border-t border-slate-200/80 flex flex-col gap-0.5 text-[10px]">
+                <span className="font-bold text-slate-700">
                   {merchantStats.pendingReturnsCount === 0 ? (
-                    <span className="text-emerald-700 font-bold">✅ استلمت كافة المرتجعات وخُصمت من حسابك</span>
+                    <span className="text-emerald-800 font-black">🎉 تم استلام كافة المرتجعات وخصمها بالكامل</span>
                   ) : (
-                    <span>معلق بالمستودع: {merchantStats.pendingReturnsCount} أوردر ({merchantStats.pendingReturnsShippingDeducted.toLocaleString()} ج.م يُخصم فور الاستلام)</span>
+                    <span className="text-amber-950 font-bold">بالمستودع: {merchantStats.pendingReturnsGoodsValue.toLocaleString()} ج.م بضاعة + {merchantStats.pendingReturnsShippingDeducted.toLocaleString()} ج.م شحن</span>
                   )}
                 </span>
-                <span className="text-slate-600 font-bold text-[9px]">
-                  إجمالي بضائع المرتجع: {merchantStats.returnsCount} أوردر ({merchantStats.returnsGoodsValue.toLocaleString()} ج.م)
-                </span>
-                <span className="text-slate-500 text-[9px]">
-                  مستلم لمتجرك: {merchantStats.deliveredToMerchantReturnsCount} ({merchantStats.deliveredToMerchantReturnsGoodsValue.toLocaleString()} ج.م)
+                <span className="text-slate-600 text-[9px] font-medium">
+                  مستلم ومخصوم: -{merchantStats.deliveredToMerchantReturnsTotalDeducted.toLocaleString()} ج.م ({merchantStats.deliveredToMerchantReturnsCount} أوردر)
                 </span>
               </div>
             </motion.div>
@@ -746,7 +750,7 @@ export const ShipmentsList: React.FC<ShipmentsListProps> = ({
                   </span>
                 )}
                 <span className="text-slate-400 text-[9px] font-mono">
-                  ({merchantStats.deliveredNetGoods.toLocaleString()} مسلم - {merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} مرتجع - {merchantStats.totalPaidOut.toLocaleString()} سلف)
+                  ({merchantStats.deliveredNetGoods.toLocaleString()} مسلم - {merchantStats.deliveredToMerchantReturnsGoodsValue.toLocaleString()} بضاعة مرتجع - {merchantStats.deliveredToMerchantReturnsShippingDeducted.toLocaleString()} شحن مرتجع - {merchantStats.totalPaidOut.toLocaleString()} سلف)
                 </span>
               </div>
             </motion.div>
